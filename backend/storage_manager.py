@@ -81,20 +81,35 @@ def _get_bytes(rel_path: str) -> Optional[bytes]:
 
 
 def save_original(customer_id: str, album_id: str, filename: str, data: bytes) -> dict:
+    """Stores the untouched original plus resized JPEG derivatives (thumbnail / preview / print)."""
+    from image_processor import make_derivatives
+
     ensure_dirs(customer_id, album_id)
     ext = os.path.splitext(filename)[1].lower() or ".jpg"
-    key = f"{uuid.uuid4().hex}{ext}"
+    base = uuid.uuid4().hex
+    key = f"{base}{ext}"
+    jpg_key = f"{base}.jpg"
     rel = f"clickbook/customers/{customer_id}/albums/{album_id}"
     content_type = "image/jpeg" if ext in (".jpg", ".jpeg") else "image/png" if ext == ".png" else "image/webp" if ext == ".webp" else "application/octet-stream"
-    for sub in ("originals", "thumbnails", "previews", "print"):
-        _put(f"{rel}/{sub}/{key}", data, content_type)
+    derivs = make_derivatives(data)
+    _put(f"{rel}/originals/{key}", data, content_type)
+    _put(f"{rel}/thumbnails/{jpg_key}", derivs["thumbnail"], "image/jpeg")
+    _put(f"{rel}/previews/{jpg_key}", derivs["preview"], "image/jpeg")
+    _put(f"{rel}/print/{jpg_key}", derivs["print"], "image/jpeg")
     return {
         "storage_key": key,
         "original_path": f"{rel}/originals/{key}",
-        "thumbnail_path": f"{rel}/thumbnails/{key}",
-        "preview_path": f"{rel}/previews/{key}",
-        "print_path": f"{rel}/print/{key}",
+        "thumbnail_path": f"{rel}/thumbnails/{jpg_key}",
+        "preview_path": f"{rel}/previews/{jpg_key}",
+        "print_path": f"{rel}/print/{jpg_key}",
         "size_bytes": len(data),
+        "width": derivs["width"],
+        "height": derivs["height"],
+        "derivative_bytes": {
+            "thumbnail": len(derivs["thumbnail"]),
+            "preview": len(derivs["preview"]),
+            "print": len(derivs["print"]),
+        },
     }
 
 

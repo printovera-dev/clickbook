@@ -1,11 +1,27 @@
-import { useState } from "react";
-import { View, Modal, ActivityIndicator, Text, Pressable, StyleSheet } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { View, Modal, ActivityIndicator, Text, Pressable, StyleSheet, Platform } from "react-native";
 import { WebView } from "react-native-webview";
 import Feather from "@react-native-vector-icons/feather";
 import { api } from "@/src/api";
-import { colors, spacing, radius, fonts } from "@/src/theme";
+import { colors, spacing, fonts } from "@/src/theme";
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
+const RZP_SCRIPT = "https://checkout.razorpay.com/v1/checkout.js";
+
+type RzpPayload = { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string };
+
+// Web: react-native-webview has no browser implementation, so load Razorpay Standard Checkout directly.
+function loadRazorpayWeb(): Promise<any> {
+  const w = window as any;
+  if (w.Razorpay) return Promise.resolve(w.Razorpay);
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = RZP_SCRIPT;
+    s.onload = () => resolve(w.Razorpay);
+    s.onerror = () => reject(new Error("Could not load Razorpay"));
+    document.body.appendChild(s);
+  });
+}
 
 type Props = {
   visible: boolean;
@@ -20,6 +36,37 @@ export function RazorpayCheckout({ visible, clickbookOrderId, onClose, onSuccess
   const [loading, setLoading] = useState(false);
   const [provider, setProvider] = useState<"mock" | "razorpay">("mock");
   const [verifying, setVerifying] = useState(false);
+  const rzRef = useRef<any>(null);
+
+  const handleSuccess = async (p: RzpPayload) => {
+    setVerifying(true);
+    try {
+      await api.verifyRazorpay(p);
+      onSuccess(p.razorpay_payment_id);
+    } catch (e: any) {
+      onError(e.message || "Payment verification failed");
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const openWeb = async (r: { key_id: string; amount: number; razorpay_order_id: string }) => {
+    const Razorpay = await loadRazorpayWeb();
+    const rz = new Razorpay({
+      key: r.key_id,
+      amount: r.amount,
+      currency: "INR",
+      name: "ClickBook",
+      description: "ClickBook photo album",
+      order_id: r.razorpay_order_id,
+      theme: { color: colors.brandPrimary },
+      handler: (p: RzpPayload) => handleSuccess(p),
+      modal: { ondismiss: onClose },
+    });
+    rz.on("payment.failed", (e: any) => onError(e?.error?.description || "Payment failed. Please try again."));
+    rzRef.current = rz;
+    rz.open();
+  };
 
   const start = async () => {
     setLoading(true);
@@ -31,6 +78,8 @@ export function RazorpayCheckout({ visible, clickbookOrderId, onClose, onSuccess
         // No Razorpay keys yet — simulate success and mark paid via /orders/pay for demo continuity.
         await api.payOrder(clickbookOrderId);
         onSuccess(`MOCK_${r.razorpay_order_id}`);
+      } else if (Platform.OS === "web") {
+        await openWeb(r);
       }
     } catch (e: any) {
       onError(e.message || "Could not start payment");
@@ -39,27 +88,22 @@ export function RazorpayCheckout({ visible, clickbookOrderId, onClose, onSuccess
     }
   };
 
-  useState(() => { if (visible) start(); });
-  // trigger start on open
-  if (visible && !rpOrderId && !loading) start();
+  useEffect(() => {
+    if (visible) {
+      start();
+    } else {
+      setRpOrderId(null);
+    }
+    // Razorpay appends its own iframe to document.body on web; remove it when the modal goes away.
+    return () => { rzRef.current?.close?.(); rzRef.current = null; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
   const onMessage = async (event: any) => {
     let msg: any;
     try { msg = JSON.parse(event.nativeEvent.data); } catch { return; }
     if (msg.type === "success") {
-      setVerifying(true);
-      try {
-        await api.verifyRazorpay({
-          razorpay_order_id: msg.payload.razorpay_order_id,
-          razorpay_payment_id: msg.payload.razorpay_payment_id,
-          razorpay_signature: msg.payload.razorpay_signature,
-        });
-        onSuccess(msg.payload.razorpay_payment_id);
-      } catch (e: any) {
-        onError(e.message || "Payment verification failed");
-      } finally {
-        setVerifying(false);
-      }
+      await handleSuccess(msg.payload);
     } else if (msg.type === "failed") {
       onError(msg.payload?.description || "Payment failed. Please try again.");
     } else if (msg.type === "dismissed") {
@@ -79,11 +123,11 @@ export function RazorpayCheckout({ visible, clickbookOrderId, onClose, onSuccess
           <Text style={{ fontFamily: fonts.text, color: colors.onSurface, fontSize: 14 }}>Secure Checkout</Text>
           <View style={{ width: 22 }} />
         </View>
-        {loading || verifying || provider === "mock" ? (
+        {loading || verifying || provider === "mock" || Platform.OS === "web" ? (
           <View style={styles.loadingWrap}>
             <ActivityIndicator size="large" color={colors.brandPrimary} />
             <Text style={{ marginTop: spacing.md, fontFamily: fonts.text, color: colors.onSurfaceTertiary }}>
-              {verifying ? "Verifying payment..." : provider === "mock" ? "Processing test payment..." : "Loading Razorpay..."}
+              {verifying ? "Verifying payment..." : provider === "mock" ? "Processing test payment..." : Platform.OS === "web" && rpOrderId ? "Complete your payment in the Razorpay window" : "Loading Razorpay..."}
             </Text>
           </View>
         ) : checkoutUrl ? (

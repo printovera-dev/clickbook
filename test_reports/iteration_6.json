@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 6 targeted retest of the two Razorpay fixes in /app/frontend/src/components/razorpay-checkout.tsx on web preview (390x844). BOTH FIXES VERIFIED PASS. Flow: login 9876501234 -> OTP scraped inline (dev_hint 'Use XXXXXX to continue') -> home shows 2 drafts -> clicked home-draft-3e7f30eb3a2f48a7b1de07add7a41a73 -> editor -> navigated to /album/{id}/checkout -> price loaded ₹1062 (10 sheets * ₹90 + 18% GST) -> filled name/line1/city/state/pin -> tapped 'Pay ₹1062 securely'. RESULTS: (1) EXACTLY ONE POST /api/payments/razorpay/order per Pay click captured via page.on('request') hook (count=1 after first click; previously in iter5 it was 2). useEffect([visible]) refactor confirmed working — no StrictMode double-fire. (2) checkout.razorpay.com/v1/checkout.js loaded (1 request), window.Razorpay opened and appended a .razorpay-container iframe to document.body with src=https://api.razorpay.com/v1/checkout/public?...&checkout_v2=1&new_session=1&unified_session_id=TaevMbPziSNV7o. Razorpay Secure Checkout modal is visible ON TOP of the app with 'Test Mode' banner, 'ClickBook' brand, Total Amount 1062 and Contact details form (Enter mobile number to continue). The old 'React Native WebView does not support this platform.' text is NO LONGER present in DOM. Key rzp_test_TaeOBeX1L1gDcd is sent as options.key. (3) Dismiss via Escape closed the app-side RN Modal (setPayingOrderId(null)) and we saw the underlying screen re-render; tapping Pay a second time re-opened a Razorpay Contact-details iframe (verified via querySelectorAll('iframe').src containing 'razorpay'). Zero page errors, zero red screens, zero uncaught pageerrors. Deprecated packages: none newly introduced. Note: I did NOT attempt to complete a real payment (per instructions — only sandbox modal visibility asserted).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/tmp/rzp_checkout_page.png",
+    "/tmp/rzp_pay1.png",
+    "/tmp/rzp_dismissed.png",
+    "/tmp/rzp_pay2.png"
+  ],
+  "action_items": [
+    "OPTIONAL / MINOR: On dismiss (ondismiss -> onClose), the Razorpay-appended .razorpay-container node remains in document.body as an orphan iframe/overlay after the RN Modal unmounts. It is not user-blocking (a 2nd Pay tap successfully re-opens Razorpay's fresh contact-details view), but consider calling rz.close() explicitly in a cleanup effect (return () => { try { rz.close(); } catch {} }) or removing '.razorpay-container' nodes from document.body when onClose fires, to avoid stacking overlays across repeated open/close cycles.",
+    "OPTIONAL: After Escape on the Razorpay overlay, the underlying app view sometimes shows the album editor instead of the checkout screen (routing artifact from history state). Not blocking, but consider stopping Escape propagation while the payment modal is open to keep the user anchored on /checkout."
+  ],
+  "critical_code_review_comments": [
+    "razorpay-checkout.tsx now correctly loads https://checkout.razorpay.com/v1/checkout.js at runtime on web via a promise-cached script injection and calls new Razorpay(options).open() — this is the standard Razorpay Standard Checkout web integration, no WebView required. options.handler wires success -> POST /api/payments/razorpay/verify via api.verifyRazorpay(); options.modal.ondismiss wires cancellation -> onClose. Both are correct.",
+    "start() is now invoked from a single useEffect(() => { if (visible) start(); else setRpOrderId(null); }, [visible]) — StrictMode double-fire eliminated. Verified by observing exactly 1 POST /api/payments/razorpay/order on Pay tap.",
+    "Platform branch (Platform.OS === 'web') keeps the native WebView path intact via the else branch; native builds still use the backend-hosted /api/payments/razorpay/checkout/{rp_order_id} + WebView.postMessage bridge.",
+    "Minor: process.env.EXPO_PUBLIC_BACKEND_URL is used for BASE in the WebView URL — Expo convention. Consistent with the rest of the codebase.",
+    "Cosmetic: consider useRef for the injected Razorpay instance so a cleanup effect can call rz.close() on unmount and drop the orphan .razorpay-container after dismiss."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested this iteration (per instructions)", "frontend": "2/2 targeted fixes PASS (single POST order per Pay click; checkout.razorpay.com loads and modal visible with key rzp_test_TaeOBeX1L1gDcd)"},
+  "seed_data_creation": "Reused customer 9876501234 and existing draft album 3e7f30eb3a2f48a7b1de07add7a41a73 (10 sheets). No new payments completed; a Razorpay test order was allocated by POST /api/payments/razorpay/order.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Both iter5 blockers are fixed. Reproduction path: login 9876501234 -> OTP inline -> home-draft-<id> -> editor -> /album/<id>/checkout -> fill address -> tap checkout-pay-button. Verify with page.on('request'): filter req.method=='POST' && url.includes('/api/payments/razorpay/order') -> len should be 1 per tap. Verify Razorpay window with document.querySelectorAll('.razorpay-container').length >= 1 AND any iframe.src.includes('api.razorpay.com'). Do NOT press Escape from the app side if you need to keep dismiss testing clean — use the Razorpay overlay's own X close or click backdrop. The orphan .razorpay-container after dismiss is cosmetic-only.",
+  "rca_of_issue": "Iter5 root causes (WebView-on-web + double order POST) are both eliminated by the current razorpay-checkout.tsx: (a) Web path uses loadRazorpayWeb() -> script tag inject -> new Razorpay(opts).open(); (b) start() is fired from a single useEffect keyed on [visible]. Observed behavior on web preview matches spec: 1 POST /razorpay/order per tap; checkout.js + api.razorpay.com iframe visible; no 'WebView not supported' string."
+}

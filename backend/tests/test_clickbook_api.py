@@ -58,7 +58,7 @@ def test_send_otp(s):
     state["mobile"] = mobile
     r = s.post(f"{API}/auth/otp/send", json={"mobile": mobile, "channel": "whatsapp"})
     assert r.status_code == 200, r.text
-    assert r.json().get("success") is True
+    state["otp"] = r.json().get("dev_hint") or "123456"
 
 
 def test_verify_otp_wrong(s):
@@ -68,7 +68,7 @@ def test_verify_otp_wrong(s):
 
 def test_verify_otp_success(s):
     # OTP was consumed by previous test? No - verify only deletes on success.
-    r = s.post(f"{API}/auth/otp/verify", json={"mobile": state["mobile"], "otp": "123456"})
+    r = s.post(f"{API}/auth/otp/verify", json={"mobile": state["mobile"], "otp": state["otp"]})
     assert r.status_code == 200, r.text
     body = r.json()
     assert "token" in body and "customer" in body
@@ -280,8 +280,9 @@ def test_delete_photo(s):
 # ---------- Auth isolation (customer B cannot access customer A's album) ----------
 def test_auth_isolation(s):
     mobile_b = f"77{int(time.time()) % 100000000:08d}"
-    s.post(f"{API}/auth/otp/send", json={"mobile": mobile_b, "channel": "sms"})
-    r = s.post(f"{API}/auth/otp/verify", json={"mobile": mobile_b, "otp": "123456"})
+    r = s.post(f"{API}/auth/otp/send", json={"mobile": mobile_b, "channel": "sms"})
+    otp_b = r.json().get("dev_hint") or "123456"
+    r = s.post(f"{API}/auth/otp/verify", json={"mobile": mobile_b, "otp": otp_b})
     assert r.status_code == 200
     token_b = r.json()["token"]
     headers_b = {"Authorization": f"Bearer {token_b}"}

@@ -1,0 +1,56 @@
+{
+  "summary": "Iteration 5 REGRESSION pass on web preview (390x844) after backend refactor (routers split) + server-side Pillow image derivatives + Razorpay test-mode keys. Backend NOT re-tested per instructions. All customer flows verified end-to-end except Razorpay checkout on web (see key finding). PASSES: (1) Login: mobile 9876501234 -> verify screen shows dev_hint inline 'Use XXXXXX to continue' (regex-scraped) -> lands on Home. (2) Create: home-create-hero -> cover pick -> /create/upload -> Playwright file chooser uploads 3 JPGs (test_photo_1/2/3) -> '3 photos' counter -> 3 thumbnail wrappers -> img src ends with /thumbnails/<uuid>.jpg -> 3/3 thumbnail HTTP 200. (3) Auto-generate: reached /album/{id}/preview -> flipping pages loads /previews/<uuid>.jpg 200 (3/3). Server-side compression VERIFIED on disk: thumbnails ~2-3KB, previews ~10-14KB, originals ~22KB — distinct byte sizes prove real Pillow resize (iter4 minor is FIXED). (4) Review -> checkout: review-confirm-check + review-continue-button -> /checkout screen; toggled checkout-gift-wrap-toggle (total went 1062 -> 1239, +150 gift wrap +18% GST, correct); filled name/email/line1/city/state/pin. GET /api/payments/config returns provider=razorpay,key=rzp_test_TaeOBeX1L1gDcd. POST /api/payments/razorpay/order returns 200 (Razorpay test order created). (5) Admin: admin/clickbook@2026 -> dashboard (29 orders, ₹12779.4 revenue, 40 customers, 28 drafts); /admin/orders list renders with real orders; /admin/pricing form loads with current values (90/18/10/75/150). (6) Profile: /profile shows name+email, 4 policy links (privacy/terms/refund/shipping) all navigate to /policy/{key} and render markdown. KEY FINDING: Razorpay checkout WebView is unrenderable on web preview — the Modal opens with 'React Native WebView does not support this platform.' text and never loads checkout.razorpay.com. Root cause: /app/frontend/src/components/razorpay-checkout.tsx imports WebView from react-native-webview which has no web implementation. Cannot be exercised on web preview; would work on Expo Go / native build. Zero page errors, zero red screens. Deprecated packages detected: react-native-vector-icons vs @react-native-vector-icons/feather (already using scoped variant, OK); ImagePicker.MediaTypeOptions deprecation was already fixed in iter4 (upload.tsx now uses mediaTypes: ['images']).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Checkout -> Razorpay Pay (web preview)",
+        "issue": "Tapping 'Pay ₹1239 securely' opens the RazorpayCheckout Modal but the body renders 'React Native WebView does not support this platform.' because /app/frontend/src/components/razorpay-checkout.tsx line 3 imports { WebView } from 'react-native-webview' which has NO web implementation. The Razorpay order IS created (POST /api/payments/razorpay/order -> 200, twice due to StrictMode double-invocation of the useState-as-effect trick at line 42-44) but the hosted checkout page /api/payments/razorpay/checkout/{rp_order_id} is never rendered. On web this blocks the entire payment step. Works on native builds only. Recommendation: platform-branch (Platform.OS === 'web') and render an <iframe src=checkoutUrl> or use the Razorpay Standard Checkout JS SDK (rzp = new Razorpay(options); rzp.open()) for web.",
+        "affected_testIDs": ["checkout-pay-button", "razorpay-webview", "razorpay-close"]
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": [
+      {
+        "component": "react-native-webview on web",
+        "issue": "razorpay-checkout.tsx uses <WebView /> from react-native-webview which is not supported on web (renders 'React Native WebView does not support this platform.'). Reference: /app/frontend/src/components/razorpay-checkout.tsx:3,90-99. Needs a Platform.OS==='web' branch (iframe or Razorpay JS SDK)."
+      },
+      {
+        "component": "razorpay-checkout.tsx useState-as-effect anti-pattern",
+        "issue": "Line 42 useState(() => { if (visible) start(); }) and line 44 fallback both attempt to trigger start on open — this fires twice in React 18 StrictMode (observed: 2 identical POST /api/payments/razorpay/order calls in devtools). Should be replaced by a proper useEffect([visible]) to avoid duplicate order creation."
+      }
+    ]
+  },
+  "test_report_links": [
+    "/tmp/checkout_filled.png",
+    "/tmp/razorpay_open.png",
+    "/tmp/admin_dash.png",
+    "/tmp/admin_orders.png",
+    "/tmp/admin_pricing.png",
+    "/tmp/preview_flipped.png",
+    "/tmp/profile.png",
+    "/tmp/policy.png"
+  ],
+  "action_items": [
+    "HIGH: Make Razorpay checkout work on web. In /app/frontend/src/components/razorpay-checkout.tsx add a Platform.OS==='web' branch that either (a) embeds an <iframe src={checkoutUrl} /> instead of <WebView /> and receives postMessage from the backend-hosted checkout page, or (b) uses the Razorpay Standard Checkout JS SDK directly (script src=https://checkout.razorpay.com/v1/checkout.js, new Razorpay({ key: rzp_test_TaeOBeX1L1gDcd, order_id, handler }).open()). Current behaviour on web is a dead-end message 'React Native WebView does not support this platform.'.",
+    "MEDIUM: Replace the useState-as-effect at razorpay-checkout.tsx:42-44 with useEffect(() => { if (visible && !rpOrderId && !loading) start(); }, [visible]) — the current pattern fires twice in StrictMode and creates two Razorpay orders per Pay click (observed in network capture).",
+    "LOW/OPTIONAL: Consider WebView.canGoBack handling on native so the Razorpay 'x' close returns cleanly."
+  ],
+  "critical_code_review_comments": [
+    "Image compression correctly implemented in /app/backend/image_processor.py — EXIF-transpose + LANCZOS thumbnail (400/1200/3000 max, quality 80/85/92, progressive JPEG). On-disk verification confirms 3 distinct byte sizes per photo (iter4 duplicate-bytes bug is FIXED).",
+    "storage_manager.save_original correctly wires make_derivatives and returns derivative_bytes metrics; content_type inference for original is correct.",
+    "razorpay-checkout.tsx: no useEffect used — uses useState(() => start()) plus an inline if(...) start() which double-fires. Two POST /api/payments/razorpay/order requests observed per open on web.",
+    "verify.tsx correctly renders devHint inline when provider==='aoc' — regex 'Use (\\\\d{6}) to continue' matched reliably in E2E."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested this iteration (per instructions)", "frontend": "6/7 flows PASS (login, create/upload+thumbnails, auto-generate+previews, review, admin dashboard/orders/pricing, profile+policies). 1/7 FAIL: Razorpay checkout WebView unusable on web preview."},
+  "seed_data_creation": "Reused customer 9876501234 (customer id e5c60fc7927749539b67886d633d7d49) and created a new album a86ccd1689e44eaeae04a002b461798b with 3 photos + 2 pages. Left in place as evidence; safe to delete. Also touched pending order flow (order creation attempted from checkout — Razorpay order id was allocated).",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Login flow: mobile 9876501234, OTP scraped inline from verify screen with regex 'Use (\\\\d{6}) to continue'. Sample JPGs at /app/backend/tests/assets/test_photo_[1-3].jpg. Correct testIDs: login-send-otp-BUTTON (not login-send-otp), admin-username-input + admin-login-BUTTON, review-confirm-check (checkbox) + review-continue-button, checkout-gift-wrap-toggle, checkout-pay-button. Preview screen uses preview-continue-button to go to /review. Razorpay web bug: the Modal renders 'React Native WebView does not support this platform.' — confirm with Platform.OS==='web' fix. On native build the flow would render the backend-hosted /api/payments/razorpay/checkout/{rp_order_id} page. Server-side image derivatives are functional; verified by different byte sizes for thumbnail/preview/original in /app/backend/storage/clickbook/customers/<cid>/albums/<aid>/.",
+  "rca_of_issue": "Razorpay Pay on web preview fails silently to the user: (1) User taps checkout-pay-button. (2) Backend creates an order (POST /api/orders returns 200) and RazorpayCheckout Modal is opened. (3) Modal auto-invokes start() which calls POST /api/payments/razorpay/order — returns 200 with razorpay_order_id and provider=razorpay. (4) Component tries to render <WebView source={{ uri: `${BASE}/api/payments/razorpay/checkout/${rpOrderId}` }} /> from react-native-webview. (5) react-native-webview has no web implementation — the RN-web shim renders a Text node 'React Native WebView does not support this platform.'. (6) checkout.razorpay.com JS SDK is therefore never loaded, key rzp_test_TaeOBeX1L1gDcd never appears in the DOM, and the user is stuck on the Secure Checkout modal with only the 'x' close button. Mitigation: Platform.OS==='web' branch to render an <iframe src={checkoutUrl}> (backend page already exists and would work in an iframe) OR to load Razorpay Standard Checkout JS SDK directly (script + new Razorpay(opts).open()). Both approaches keep the existing native WebView flow intact via a simple Platform.select."
+}

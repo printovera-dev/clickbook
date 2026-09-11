@@ -91,7 +91,8 @@ def test_customer_auth(s):
     state["mobile"] = mobile
     r = s.post(f"{API}/auth/otp/send", json={"mobile": mobile, "channel": "sms"})
     assert r.status_code == 200
-    r = s.post(f"{API}/auth/otp/verify", json={"mobile": mobile, "otp": "123456"})
+    otp = r.json().get("dev_hint") or "123456"
+    r = s.post(f"{API}/auth/otp/verify", json={"mobile": mobile, "otp": otp})
     assert r.status_code == 200, r.text
     state["auth"] = {"Authorization": f"Bearer {r.json()['token']}"}
 

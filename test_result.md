@@ -101,3 +101,10 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+## Iteration 5 (main agent, 2026-09-11)
+- Razorpay test-mode keys configured in backend/.env (provider now "razorpay", not mock).
+- Server-side image derivatives via Pillow (image_processor.py): thumbnail 400px / preview 1200px / print 3000px JPEGs; original kept untouched.
+- server.py split into core.py + seed.py + routers/{auth,catalog,albums,orders,payments,admin,files}.py. Route table identical (49 routes).
+- Backend suites: 89/89 passing (test_iteration3_features.py must run with -n 0, it restarts the backend).
+- Frontend unchanged; needs regression pass of upload -> generate -> preview -> editor -> checkout (Razorpay WebView opens).
+- Fix after iteration_5 report: razorpay-checkout.tsx now loads Razorpay Standard Checkout JS directly on web (Platform.OS==="web"), native keeps WebView; start() moved to useEffect([visible]) to stop double order creation.

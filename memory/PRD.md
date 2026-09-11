@@ -50,5 +50,11 @@ ClickBook is a premium photo-album service that lets customers create beautifull
 - **Policies mirror (Privacy / Terms / Refund / Shipping)**: `GET /policies` + `GET /policies/{key}`. Content mirrors clickbook.world (Terms + Privacy + Shipping fetched live; Refund/Cancellation composed from Terms). Accessible from the Profile tab and from a legal footer on the checkout screen — this is what Razorpay expects for account activation.
 - **Critical fix**: moved `load_dotenv()` above provider imports so env vars are honored on cold start.
 
+## Feature updates (2026-09-11, iteration 5)
+- **Razorpay live keys configured** (test-mode key `rzp_test_TaeOBeX1L1gDcd` + secret + webhook secret in `backend/.env`). `GET /payments/config` now reports `provider: razorpay`; real orders are created on Razorpay; forged signatures are rejected (400). Webhook URL for dashboard: `https://clickbook.world/api/payments/razorpay/webhook`.
+- **Server-side image derivatives** (`image_processor.py`, Pillow + pillow-heif): every upload stores the untouched original plus EXIF-corrected JPEG derivatives — thumbnail ≤400px (q80, editor grid), preview ≤1200px (q85, 3D book), print ≤3000px (q92, PDF). A 12MP/11.7MB upload → 16KB thumb / 389KB preview / 4.3MB print. Processing runs in a threadpool; invalid files return 400. Photo docs now include `width`, `height`, `derivative_bytes`.
+- **Backend refactor**: `server.py` (1050 lines) → thin app assembly + `core.py` (env, db, auth deps, settings) + `seed.py` + `routers/{auth,catalog,albums,orders,payments,admin,files}.py`. Route table verified identical (49 routes). `/api/files` responses carry immutable cache headers.
+- Test suites updated for random OTP (`dev_hint`) and live Razorpay mode; 89/89 passing. Note: `test_iteration3_features.py` restarts the backend, run it with `-n 0` separately from the other suites.
+
 ## Deferred (roadmap)
-- Real WhatsApp/SMS provider (playbook-driven), real Razorpay integration, ML-driven auto-layout selection (currently rhythm-based), image cropping/zoom inside placeholders, 3+ photo layouts, print-resolution image processing (currently the same file is copied to preview/print — swap in Pillow resize when needed), Lottie process-bot animations.
+- Real WhatsApp/SMS provider (playbook-driven), real Razorpay integration, ML-driven auto-layout selection (currently rhythm-based), image cropping/zoom inside placeholders, 3+ photo layouts, Lottie process-bot animations.
