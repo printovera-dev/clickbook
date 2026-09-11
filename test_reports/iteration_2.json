@@ -1,0 +1,37 @@
+{
+  "summary": "Tested only the 2 NEW features (14 pytest cases, 13 passed, 1 failed = 93%). Feature 1 (photo rearrangement): PUT /api/albums/{id}/pages correctly persists swapped photo_ids across pages AND reversed photo_ids within a 2-photo page - verified via GET on the album. Feature 2 (gift wrap): GET /api/settings exposes gift_wrap_fee=150 (with lazy default-backfill); pricing verified exactly - gift_wrap:true sheets=10 -> subtotal 900/fee 150/taxable 1050/gst 189/total 1239; gift_wrap:false -> fee 0/taxable 900/gst 162/total 1062; gift_wrap+WELCOME2026 -> discount 90/taxable 960/gst 172.8/total 1132.8. Orders persist gift_wrap flag and price breakdown correctly (verified via GET). Admin PUT settings gift_wrap_fee 200 -> pricing reflects 200 (taxable 1100/gst 198/total 1298) -> reverted to 150. ONE BUG: legacy orders created before the feature lack the 'gift_wrap' key entirely in GET /api/admin/orders (new orders include it fine).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/admin/orders", "issue": "Legacy orders (created before gift wrap feature, e.g. order CB2609119948) have no 'gift_wrap' key at all - field is absent (not false) and price.gift_wrap_fee is also absent. New orders include both correctly. Admin UI reading order.gift_wrap on old orders will see undefined. Backend should normalize (e.g. o.setdefault('gift_wrap', False) / price.setdefault('gift_wrap_fee', 0)) when serializing, or backfill the DB.", "priority": "MINOR"}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_giftwrap_and_rearrange.py",
+    "/app/test_reports/pytest/pytest_results_giftwrap.xml"
+  ],
+  "action_items": [
+    "Normalize gift_wrap/gift_wrap_fee for legacy orders in GET /api/admin/orders (and customer GET /api/orders/{id} for consistency) - default missing values to false/0, or run a one-time MongoDB backfill.",
+    "Frontend: when rendering gift wrap badge/row in admin or customer order views, treat missing gift_wrap as false until backfill lands."
+  ],
+  "critical_code_review_comments": [
+    "get_settings_doc() lazily backfills gift_wrap_fee=150 on read and writes it to DB - safe, keeps old settings docs working.",
+    "Pricing applies coupon discount to subtotal only, then adds gift_wrap_fee to taxable - matches spec (gift wrap not discountable). GST rounds to 2dp (172.8, 189) - verified.",
+    "server.py is now 873 lines, past the 700-line soft cap - strongly recommend splitting into routers (auth, albums, orders, admin, catalog) before further features."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_giftwrap_and_rearrange.py (new)"
+  ],
+  "success_rate": {"backend": "93% (13/14)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "One ephemeral customer (unique mobile), one 'TEST GiftWrap Album' with 4 generated JPEGs auto-generated into pages, two orders (one gift_wrap+coupon, one plain). Admin gift_wrap_fee toggled 200 then reverted to 150 - verified final value is 150. No production/seed data harmed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "New suite at /app/backend/tests/test_giftwrap_and_rearrange.py (ordered tests, shared state dict) plus existing regression test_clickbook_api.py. Run with default pytest ordering against EXPO_PUBLIC_BACKEND_URL. The strict admin-orders assertion will keep failing until legacy orders are normalized/backfilled - treat that single failure as the known bug, not a regression.",
+  "rca_of_issue": "Bug: GET /api/admin/orders omits 'gift_wrap' on legacy orders. Repro: query admin orders and check orders created before the feature (order_no CB2609119948) - 'gift_wrap' key absent; new orders CB2609111638 (true/fee 150) and CB2609114286 (false/fee 0) have it. Root cause: order documents store gift_wrap only at creation time (server.py ~line 547 stores payload.gift_wrap); the admin list endpoint returns raw documents with no normalization and no DB migration was run for pre-existing orders. Mitigation: in the admin orders serializer (and customer order GET), default missing gift_wrap to False and missing price.gift_wrap_fee to 0, or run a one-time update_many({gift_wrap: {$exists: false}}, {$set: {gift_wrap: false, 'price.gift_wrap_fee': 0}})."
+}

@@ -70,7 +70,7 @@ export default function AdminOrders() {
               <Text style={s.h1}>{selected?.order_no}</Text>
               <Pressable onPress={() => setSelected(null)} testID="admin-order-close"><Feather name="x" size={22} color={colors.onSurface} /></Pressable>
             </View>
-            <Text style={s.bodyMuted}>Status: {selected?.production_status?.replace(/_/g, " ")}</Text>
+            <Text style={s.bodyMuted}>Status: {selected?.production_status?.replace(/_/g, " ")}{selected?.gift_wrap ? " · 🎁 Gift wrap" : ""}</Text>
             <Text style={[s.label, { marginTop: spacing.lg }]}>Update status</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, paddingBottom: spacing.md }} style={{ maxHeight: 56, marginTop: spacing.sm }}>
               {STATUSES.map((st) => (

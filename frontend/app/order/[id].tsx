@@ -82,6 +82,7 @@ export default function OrderTracking() {
           <Text style={s.label}>Order summary</Text>
           <View style={styles.summaryRow}><Text style={s.body}>Subtotal</Text><Text style={s.body}>₹{order?.price?.subtotal}</Text></View>
           {order?.price?.discount ? <View style={styles.summaryRow}><Text style={{ color: colors.success, fontFamily: fonts.text }}>Discount</Text><Text style={{ color: colors.success, fontFamily: fonts.text }}>−₹{order.price.discount}</Text></View> : null}
+          {order?.gift_wrap ? <View style={styles.summaryRow}><Text style={s.body}>Gift wrap</Text><Text style={s.body}>₹{order?.price?.gift_wrap_fee}</Text></View> : null}
           <View style={styles.summaryRow}><Text style={s.body}>GST</Text><Text style={s.body}>₹{order?.price?.gst}</Text></View>
           <View style={[styles.summaryRow, { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.md, marginTop: spacing.sm }]}>
             <Text style={s.h2}>Total paid</Text>

@@ -25,7 +25,7 @@ export default function Review() {
       </View>
       <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 200 }}>
         <Text style={s.h1}>Review your ClickBook</Text>
-        <Text style={[s.bodyMuted, { marginTop: 4 }]}>Flip through every page. Once ordered, we'll print exactly what you see.</Text>
+        <Text style={[s.bodyMuted, { marginTop: 4 }]}>Flip through every page. Once ordered, we&#39;ll print exactly what you see.</Text>
         <View style={{ marginTop: spacing.xl, alignItems: "center" }}>
           {album ? <BookPreview cover={album.cover_snapshot} pages={album.pages || []} photos={album.photos || []} albumName={album.name} /> : null}
         </View>

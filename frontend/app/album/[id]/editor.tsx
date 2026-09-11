@@ -10,7 +10,7 @@ import { Button, s } from "@/src/ui";
 import { colors, spacing, radius, fonts } from "@/src/theme";
 import Feather from "@react-native-vector-icons/feather";
 
-type Tool = "background" | "layout" | "pages" | "text";
+type Tool = "background" | "layout" | "pages" | "text" | "photos";
 
 export default function Editor() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -20,6 +20,7 @@ export default function Editor() {
   const [tool, setTool] = useState<Tool>("background");
   const [history, setHistory] = useState<any[]>([]);
   const [redoStack, setRedoStack] = useState<any[]>([]);
+  const [sel, setSel] = useState<{ pi: number; slot: number } | null>(null);
 
   const q = useQuery({ queryKey: ["album", id], queryFn: () => api.getAlbum(String(id)), enabled: !!id });
   const bgsQ = useQuery({ queryKey: ["backgrounds"], queryFn: () => api.listBackgrounds() });
@@ -29,6 +30,7 @@ export default function Editor() {
   const pages: any[] = album?.pages || [];
   const backgrounds = bgsQ.data?.backgrounds || [];
   const layouts = layoutsQ.data?.layouts || [];
+  const photosById: Record<string, any> = Object.fromEntries((album?.photos || []).map((p: any) => [p.id, p]));
 
   const currentPage = pages[pageIdx];
 
@@ -94,6 +96,26 @@ export default function Editor() {
     commit(next);
   };
 
+  // Photo rearrangement: tap a photo slot to select, tap another slot (any page) to swap.
+  const onSlotPress = (pi: number, slot: number) => {
+    if (!sel) {
+      setSel({ pi, slot });
+      setPageIdx(pi);
+      return;
+    }
+    if (sel.pi === pi && sel.slot === slot) {
+      setSel(null);
+      return;
+    }
+    const next = pages.map((p, i) => ({ ...p, photo_ids: [...p.photo_ids] }));
+    const a = next[sel.pi].photo_ids[sel.slot];
+    next[sel.pi].photo_ids[sel.slot] = next[pi].photo_ids[slot];
+    next[pi].photo_ids[slot] = a;
+    setSel(null);
+    setPageIdx(pi);
+    commit(next);
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface, paddingTop: insets.top }}>
       <View style={styles.topbar}>
@@ -119,9 +141,9 @@ export default function Editor() {
       </View>
 
       <View style={styles.toolTabs}>
-        {(["background", "layout", "pages", "text"] as Tool[]).map((t) => (
+        {(["background", "layout", "pages", "photos", "text"] as Tool[]).map((t) => (
           <Pressable key={t} testID={`editor-tool-${t}`} onPress={() => setTool(t)} style={[styles.toolTab, tool === t && styles.toolTabActive]}>
-            <Feather name={t === "background" ? "droplet" : t === "layout" ? "grid" : t === "pages" ? "layers" : "type"} size={16} color={tool === t ? colors.onBrandPrimary : colors.onSurface} />
+            <Feather name={t === "background" ? "droplet" : t === "layout" ? "grid" : t === "pages" ? "layers" : t === "photos" ? "image" : "type"} size={16} color={tool === t ? colors.onBrandPrimary : colors.onSurface} />
             <Text style={{ marginLeft: 6, color: tool === t ? colors.onBrandPrimary : colors.onSurface, fontFamily: fonts.text, fontSize: 12, textTransform: "capitalize" }}>{t}</Text>
           </Pressable>
         ))}
@@ -177,6 +199,48 @@ export default function Editor() {
             </View>
           </>
         )}
+        {tool === "photos" && (
+          <>
+            <Text style={s.label}>Rearrange photos</Text>
+            <Text style={[s.bodyMuted, { marginTop: 4, marginBottom: spacing.md }]}>
+              Tap a photo to select it, then tap any other photo slot (same or another page) to swap.
+            </Text>
+            <View style={{ gap: spacing.md }}>
+              {pages.map((p, pi) => (
+                <View key={p.id} style={[styles.pageRow, pi === pageIdx && { borderColor: colors.brandPrimary, borderWidth: 2 }]} testID={`photos-page-${pi}`}>
+                  <View style={[styles.pageChip, { backgroundColor: p.background }]}>
+                    <Text style={{ color: p.background === "#1C1917" ? "#FFF" : colors.onSurface, fontFamily: fonts.text, fontSize: 11 }}>{pi + 1}</Text>
+                  </View>
+                  <View style={{ flex: 1, flexDirection: "row", gap: spacing.sm, marginLeft: spacing.md }}>
+                    {p.photo_ids.map((pid: string, slot: number) => {
+                      const photo = photosById[pid];
+                      const isSel = sel?.pi === pi && sel?.slot === slot;
+                      return (
+                        <Pressable
+                          key={`${pi}-${slot}`}
+                          testID={`photos-slot-${pi}-${slot}`}
+                          onPress={() => onSlotPress(pi, slot)}
+                          style={[styles.slotThumb, isSel && styles.slotThumbSelected]}
+                        >
+                          {photo?.thumbnail_url ? (
+                            <Image source={{ uri: photo.thumbnail_url }} style={{ flex: 1 }} contentFit="cover" />
+                          ) : (
+                            <View style={{ flex: 1, backgroundColor: colors.surfaceTertiary }} />
+                          )}
+                          {isSel ? (
+                            <View style={styles.slotSelBadge}>
+                              <Feather name="check" size={12} color="#FFF" />
+                            </View>
+                          ) : null}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
         {tool === "text" && (
           <>
             <Text style={s.label}>Add text to page {pageIdx + 1}</Text>
@@ -215,6 +279,9 @@ const styles = StyleSheet.create({
   layoutBox: { flex: 1, backgroundColor: colors.borderStrong, borderRadius: 2 },
   pageRow: { flexDirection: "row", alignItems: "center", padding: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surfaceSecondary, gap: spacing.sm },
   pageChip: { width: 36, height: 36, borderRadius: radius.sm, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
+  slotThumb: { width: 64, height: 64, borderRadius: radius.sm, overflow: "hidden", backgroundColor: colors.surfaceTertiary, borderWidth: 1, borderColor: colors.border },
+  slotThumbSelected: { borderColor: colors.brandPrimary, borderWidth: 3 },
+  slotSelBadge: { position: "absolute", top: 2, right: 2, width: 18, height: 18, borderRadius: 9, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
   iconBtn: { padding: 6, borderRadius: radius.sm, backgroundColor: colors.surfaceTertiary },
   textInput: { marginTop: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, minHeight: 90, fontFamily: fonts.text, color: colors.onSurface, backgroundColor: colors.surfaceSecondary, textAlignVertical: "top" },
   footer: { position: "absolute", left: 0, right: 0, bottom: 0, padding: spacing.md, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },

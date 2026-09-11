@@ -16,6 +16,7 @@ export default function AdminPricing() {
   const [gst, setGst] = useState("");
   const [minSheets, setMinSheets] = useState("");
   const [maxSheets, setMaxSheets] = useState("");
+  const [giftWrapFee, setGiftWrapFee] = useState("");
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -24,6 +25,7 @@ export default function AdminPricing() {
       setGst(String(q.data.settings.gst_percent));
       setMinSheets(String(q.data.settings.min_sheets));
       setMaxSheets(String(q.data.settings.max_sheets));
+      setGiftWrapFee(String(q.data.settings.gift_wrap_fee ?? 150));
     }
   }, [q.data]);
 
@@ -33,6 +35,7 @@ export default function AdminPricing() {
       gst_percent: Number(gst),
       min_sheets: Number(minSheets),
       max_sheets: Number(maxSheets),
+      gift_wrap_fee: Number(giftWrapFee),
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
@@ -57,6 +60,8 @@ export default function AdminPricing() {
       <TextInput testID="pricing-min" value={minSheets} onChangeText={setMinSheets} keyboardType="numeric" style={styles.input} />
       <Text style={[s.label, { marginTop: spacing.md }]}>Max sheets</Text>
       <TextInput testID="pricing-max" value={maxSheets} onChangeText={setMaxSheets} keyboardType="numeric" style={styles.input} />
+      <Text style={[s.label, { marginTop: spacing.md }]}>Gift wrap add-on fee (₹)</Text>
+      <TextInput testID="pricing-gift-wrap" value={giftWrapFee} onChangeText={setGiftWrapFee} keyboardType="numeric" style={styles.input} />
 
       <Button testID="pricing-save" label={saved ? "Saved ✓" : "Save"} onPress={save} style={{ marginTop: spacing.xl }} />
     </ScrollView>

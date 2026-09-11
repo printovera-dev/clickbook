@@ -14,7 +14,7 @@ from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel, Field
 from typing import List, Optional, Any, Dict
 
-from storage_manager import save_original, resolve_path, public_url, save_pdf, STORAGE_BASE
+from storage_manager import save_original, resolve_path, public_url, save_pdf, get_file_bytes, STORAGE_BASE
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -371,8 +371,12 @@ async def get_settings_doc() -> dict:
     s = await db.settings.find_one({"id": "default"}, {"_id": 0})
     if not s:
         s = {"id": "default", "price_per_sheet": 90, "gst_percent": 18,
-             "min_sheets": 10, "max_sheets": 75, "size": "8x8"}
+             "min_sheets": 10, "max_sheets": 75, "size": "8x8",
+             "gift_wrap_fee": 150}
         await db.settings.insert_one(dict(s))
+    if "gift_wrap_fee" not in s:
+        s["gift_wrap_fee"] = 150
+        await db.settings.update_one({"id": "default"}, {"$set": {"gift_wrap_fee": 150}})
     return s
 
 
@@ -386,6 +390,7 @@ class SettingsUpdate(BaseModel):
     gst_percent: Optional[float] = None
     min_sheets: Optional[int] = None
     max_sheets: Optional[int] = None
+    gift_wrap_fee: Optional[float] = None
 
 
 @api.put("/admin/settings")
@@ -399,12 +404,14 @@ async def update_settings(payload: SettingsUpdate, admin: dict = Depends(get_cur
 class PriceRequest(BaseModel):
     sheets: int
     coupon_code: Optional[str] = None
+    gift_wrap: bool = False
 
 
-async def _compute_price(sheets: int, coupon_code: Optional[str]) -> dict:
+async def _compute_price(sheets: int, coupon_code: Optional[str], gift_wrap: bool = False) -> dict:
     settings = await get_settings_doc()
     price_per_sheet = settings["price_per_sheet"]
     gst_percent = settings["gst_percent"]
+    gift_wrap_fee = float(settings.get("gift_wrap_fee", 0) or 0)
     subtotal = round(sheets * price_per_sheet, 2)
     discount = 0.0
     coupon_applied: Optional[dict] = None
@@ -431,7 +438,8 @@ async def _compute_price(sheets: int, coupon_code: Optional[str]) -> dict:
                     discount = min(discount, float(offer["max_discount"]))
                 discount = min(discount, subtotal)
                 coupon_applied = offer
-    taxable = max(0, subtotal - discount)
+    applied_gift_fee = gift_wrap_fee if gift_wrap else 0.0
+    taxable = max(0, subtotal - discount) + applied_gift_fee
     gst = round(taxable * gst_percent / 100, 2)
     total = round(taxable + gst, 2)
     return {
@@ -442,6 +450,8 @@ async def _compute_price(sheets: int, coupon_code: Optional[str]) -> dict:
         "discount": discount,
         "coupon": coupon_applied,
         "coupon_error": error,
+        "gift_wrap": gift_wrap,
+        "gift_wrap_fee": applied_gift_fee,
         "taxable": taxable,
         "gst": gst,
         "total": total,
@@ -450,7 +460,7 @@ async def _compute_price(sheets: int, coupon_code: Optional[str]) -> dict:
 
 @api.post("/pricing/calculate")
 async def calculate_price(payload: PriceRequest):
-    return await _compute_price(payload.sheets, payload.coupon_code)
+    return await _compute_price(payload.sheets, payload.coupon_code, payload.gift_wrap)
 
 
 @api.get("/offers")
@@ -509,6 +519,7 @@ async def update_offer(offer_id: str, payload: OfferIn, admin: dict = Depends(ge
 class OrderCreate(BaseModel):
     album_id: str
     coupon_code: Optional[str] = None
+    gift_wrap: bool = False
     address: Dict[str, Any]
 
 
@@ -520,7 +531,7 @@ async def create_order(payload: OrderCreate, customer: dict = Depends(get_curren
     if not album.get("pages"):
         raise HTTPException(400, "Album not designed yet")
     sheets = album.get("sheets") or ((len(album["pages"]) + 1) // 2)
-    price = await _compute_price(sheets, payload.coupon_code)
+    price = await _compute_price(sheets, payload.coupon_code, payload.gift_wrap)
     if price.get("coupon_error"):
         raise HTTPException(400, price["coupon_error"])
 
@@ -533,6 +544,7 @@ async def create_order(payload: OrderCreate, customer: dict = Depends(get_curren
         "album_snapshot": album,  # design version freeze
         "sheets": sheets,
         "cover_snapshot": album.get("cover_snapshot"),
+        "gift_wrap": payload.gift_wrap,
         "price": price,
         "address": payload.address,
         "payment_status": "pending",
@@ -584,10 +596,15 @@ async def get_order(order_id: str, customer: dict = Depends(get_current_customer
 
 @api.get("/files/{full_path:path}")
 async def serve_file(full_path: str):
+    # local driver: serve from disk; s3 driver: stream bytes
     p = resolve_path(full_path)
-    if not p:
+    if p:
+        return FileResponse(str(p))
+    data = get_file_bytes(full_path)
+    if data is None:
         raise HTTPException(404, "File not found")
-    return FileResponse(str(p))
+    ct = "application/pdf" if full_path.endswith(".pdf") else "image/jpeg"
+    return Response(content=data, media_type=ct)
 
 
 # ---------------- Admin ----------------
@@ -723,16 +740,18 @@ async def generate_pdf(order_id: str, admin: dict = Depends(get_current_admin)):
             photo = photos_by_id.get(pid)
             if not photo:
                 continue
-            p = resolve_path(photo.get("print_path", ""))
-            if not p:
+            img_bytes = get_file_bytes(photo.get("print_path", ""))
+            if not img_bytes:
                 continue
             try:
+                from reportlab.lib.utils import ImageReader
+                img = ImageReader(io.BytesIO(img_bytes))
                 if n == 1:
-                    c.drawImage(str(p), 0.5 * inch, 0.5 * inch, 7 * inch, 7 * inch, preserveAspectRatio=True, anchor="c")
+                    c.drawImage(img, 0.5 * inch, 0.5 * inch, 7 * inch, 7 * inch, preserveAspectRatio=True, anchor="c")
                 elif n == 2:
                     x = 0.5 * inch
                     y = 0.5 * inch + (3.5 * inch * i)
-                    c.drawImage(str(p), x, y, 7 * inch, 3.2 * inch, preserveAspectRatio=True, anchor="c")
+                    c.drawImage(img, x, y, 7 * inch, 3.2 * inch, preserveAspectRatio=True, anchor="c")
             except Exception as e:
                 logger.warning(f"pdf draw err: {e}")
         c.showPage()

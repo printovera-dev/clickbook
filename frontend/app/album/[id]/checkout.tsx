@@ -18,6 +18,7 @@ export default function Checkout() {
   const [coupon, setCoupon] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [couponErr, setCouponErr] = useState("");
+  const [giftWrap, setGiftWrap] = useState(false);
   const [price, setPrice] = useState<any>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -30,9 +31,9 @@ export default function Checkout() {
 
   useEffect(() => {
     if (album?.sheets) {
-      api.calculatePrice(album.sheets, appliedCoupon || undefined).then(setPrice).catch(() => {});
+      api.calculatePrice(album.sheets, appliedCoupon || undefined, giftWrap).then(setPrice).catch(() => {});
     }
-  }, [album?.sheets, appliedCoupon]);
+  }, [album?.sheets, appliedCoupon, giftWrap]);
 
   useEffect(() => {
     if (meQ.data?.customer) {
@@ -44,7 +45,7 @@ export default function Checkout() {
   const applyCoupon = async () => {
     setCouponErr("");
     if (!coupon.trim() || !album?.sheets) return;
-    const res = await api.calculatePrice(album.sheets, coupon.trim());
+    const res = await api.calculatePrice(album.sheets, coupon.trim(), giftWrap);
     if (res.coupon_error) {
       setCouponErr(res.coupon_error);
     } else {
@@ -64,6 +65,7 @@ export default function Checkout() {
       const { order } = await api.createOrder({
         album_id: String(id),
         coupon_code: appliedCoupon,
+        gift_wrap: giftWrap,
         address: { name, email, line1, city, state, pin },
       });
       await api.updateMe({ name, email });
@@ -93,12 +95,26 @@ export default function Checkout() {
             {price?.discount ? (
               <View style={styles.row}><Text style={{ color: colors.success, fontFamily: fonts.text }}>Discount ({appliedCoupon})</Text><Text style={{ color: colors.success, fontFamily: fonts.text }}>−₹{price.discount}</Text></View>
             ) : null}
+            {giftWrap && price?.gift_wrap_fee ? (
+              <View style={styles.row}><Text style={s.body}>Gift wrap</Text><Text style={s.body}>₹{price.gift_wrap_fee}</Text></View>
+            ) : null}
             <View style={styles.row}><Text style={s.bodyMuted}>GST {price?.gst_percent}%</Text><Text style={s.bodyMuted}>₹{price?.gst}</Text></View>
             <View style={[styles.row, { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.md, marginTop: spacing.sm }]}>
               <Text style={s.h2}>Total</Text>
               <Text style={s.h2}>₹{price?.total ?? "…"}</Text>
             </View>
           </View>
+
+          <Pressable testID="checkout-gift-wrap-toggle" onPress={() => setGiftWrap(!giftWrap)} style={[styles.giftCard, giftWrap && styles.giftCardActive]}>
+            <Feather name="gift" size={22} color={giftWrap ? colors.onBrandPrimary : colors.brandPrimary} />
+            <View style={{ flex: 1, marginLeft: spacing.md }}>
+              <Text style={{ fontFamily: fonts.text, fontWeight: "500", fontSize: 15, color: giftWrap ? colors.onBrandPrimary : colors.onSurface }}>Gift wrap it</Text>
+              <Text style={{ fontFamily: fonts.text, fontSize: 13, color: giftWrap ? colors.onBrandPrimary : colors.muted }}>Ribbon + handwritten note, ready to gift.</Text>
+            </View>
+            <View style={[styles.checkbox, giftWrap && { backgroundColor: colors.onBrandPrimary, borderColor: colors.onBrandPrimary }]}>
+              {giftWrap && <Feather name="check" size={14} color={colors.brandPrimary} />}
+            </View>
+          </Pressable>
 
           <Text style={[s.label, { marginTop: spacing.xxl }]}>Have a coupon?</Text>
           <View style={styles.couponRow}>
@@ -136,5 +152,8 @@ const styles = StyleSheet.create({
   couponRow: { flexDirection: "row", marginTop: spacing.sm, gap: spacing.md },
   couponInput: { flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, fontFamily: fonts.text, color: colors.onSurface, backgroundColor: colors.surfaceSecondary, letterSpacing: 1 },
   applyBtn: { justifyContent: "center", paddingHorizontal: spacing.lg, borderWidth: 1, borderColor: colors.brandPrimary, borderRadius: radius.md },
+  giftCard: { flexDirection: "row", alignItems: "center", marginTop: spacing.xl, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surfaceSecondary },
+  giftCardActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
+  checkbox: { width: 22, height: 22, borderRadius: 4, borderWidth: 1.5, borderColor: colors.borderStrong, alignItems: "center", justifyContent: "center" },
   footer: { position: "absolute", left: 0, right: 0, bottom: 0, padding: spacing.xl, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
 });

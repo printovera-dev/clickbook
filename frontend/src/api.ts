@@ -113,8 +113,8 @@ export const api = {
   },
 
   // Pricing / Orders
-  calculatePrice: (sheets: number, coupon_code?: string) =>
-    request<any>("/pricing/calculate", { method: "POST", body: { sheets, coupon_code: coupon_code || null } }),
+  calculatePrice: (sheets: number, coupon_code?: string, gift_wrap = false) =>
+    request<any>("/pricing/calculate", { method: "POST", body: { sheets, coupon_code: coupon_code || null, gift_wrap } }),
   createOrder: (data: any) => request<any>("/orders", { method: "POST", body: data }),
   payOrder: (order_id: string) =>
     request<any>("/orders/pay", { method: "POST", body: { order_id, payment_method: "mock" } }),

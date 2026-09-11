@@ -34,5 +34,10 @@ ClickBook is a premium photo-album service that lets customers create beautifull
 - Frontend: Expo Router, React Query, Reanimated (page flip), Gesture Handler, expo-image-picker, expo-image, expo-linear-gradient, `@react-native-vector-icons/feather`.
 - Backend: FastAPI, motor (MongoDB), reportlab (PDF), pillow.
 
+## Feature updates (2026-09-11, iteration 2)
+- **Photo rearrangement in editor**: new "Photos" tool tab — tap a photo slot to select, tap any other slot (same or different page) to swap; swaps persist via `PUT /albums/{id}/pages`.
+- **Gift wrap add-on**: `gift_wrap_fee` in settings (₹150 default), toggle card on checkout, server-side price calc adds fee before GST, order stores `gift_wrap` flag, gift wrap line shown in checkout/order summary/admin orders, editable in Admin → Pricing.
+- **Storage abstraction upgrade**: `STORAGE_DRIVER` env — `local` (VPS-style, default) or `s3` (Emergent Object Storage / any S3-compatible bucket, set `S3_ACCESS_KEY/S3_SECRET_KEY/S3_BUCKET`/`S3_ENDPOINT`).
+
 ## Deferred (roadmap)
 - Real WhatsApp/SMS provider (playbook-driven), real Razorpay integration, ML-driven auto-layout selection (currently rhythm-based), image cropping/zoom inside placeholders, 3+ photo layouts, print-resolution image processing (currently the same file is copied to preview/print — swap in Pillow resize when needed), Lottie process-bot animations.
