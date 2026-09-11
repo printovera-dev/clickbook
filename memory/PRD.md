@@ -1,0 +1,38 @@
+# ClickBook — Product Requirements Document
+
+## Overview
+ClickBook is a premium photo-album service that lets customers create beautifully printed 8×8 inch photobooks in ~60 seconds — upload, auto-design, edit, review in 3D, order, and track. This is the React Native (Expo) + FastAPI mobile MVP built on the ClickBook.world brand.
+
+## MVP Scope (Delivered)
+### Customer flow
+- Mobile-first login with mock **WhatsApp OTP** (`123456`) — provider abstraction ready to plug WhatsApp/SMS.
+- Home dashboard with hero CTA, drafts, active order, and public offers.
+- Create flow: Choose cover (3 options) → Upload photos (gallery, multi-select) → Auto-generate album → 3D page-flip preview.
+- Editor: change background color, layout (1-photo / 2-photo), page order (move / delete), text captions, undo/redo — live preview updates immediately.
+- Final review with "I have reviewed my ClickBook" gate.
+- Checkout: coupon apply, delivery address, transparent price breakdown (₹90/sheet + 18% GST, server-side recalculated).
+- Mock "Pay Now" flow that creates a real order and freezes the design version.
+- Order tracking with 5-stage timeline (Processing → Printing → Packaging → Out for Delivery → Delivered) and editable **process bot** messages per stage.
+
+### Admin console (in-app, admin/clickbook@2026)
+- Dashboard KPIs (orders, revenue, customers, drafts, by-status).
+- Orders: filter by status, update production status, add tracking number + note, **generate print PDF** (8×8″).
+- Covers CRUD, Offers CRUD (percentage/fixed, min order, max cap, end date, active), Pricing settings, Process Bots message editor, Customers list.
+
+### Backend
+- FastAPI + MongoDB, all routes under `/api/*`.
+- **VPS-style local storage** at `/app/backend/storage/clickbook/customers/{cid}/albums/{aid}/{originals,thumbnails,previews,print,pdf}/`, served via `/api/files/{path}`. Base path via `STORAGE_BASE` env.
+- Design versioning (every generate/edit creates a version snapshot).
+- Server-side price calc (never trusted from client), customer isolation (can't access others' albums).
+- Seeded: 3 covers, 2 layouts, 6 backgrounds, 3 coupons (WELCOME2026 / COUPLE20 / FLAT200), 5 process bots, admin account, pricing settings.
+- Backend regression suite: **47/47 tests passing**.
+
+## Design language
+- "Editorial Mobile LIGHT" — ivory `#FAFAF8`, charcoal `#1C1917`, terracotta `#C56A47`, serif display + system sans body. Photography-first, magazine-like spacing, 1px borders (no shadows).
+
+## Tech
+- Frontend: Expo Router, React Query, Reanimated (page flip), Gesture Handler, expo-image-picker, expo-image, expo-linear-gradient, `@react-native-vector-icons/feather`.
+- Backend: FastAPI, motor (MongoDB), reportlab (PDF), pillow.
+
+## Deferred (roadmap)
+- Real WhatsApp/SMS provider (playbook-driven), real Razorpay integration, ML-driven auto-layout selection (currently rhythm-based), image cropping/zoom inside placeholders, 3+ photo layouts, print-resolution image processing (currently the same file is copied to preview/print — swap in Pillow resize when needed), Lottie process-bot animations.

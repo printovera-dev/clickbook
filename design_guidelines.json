@@ -1,0 +1,188 @@
+{
+  "app_name": "ClickBook",
+  "personality": "3 Editorial Mobile LIGHT",
+  "personality_one_liner": "A premium, photography-first editorial layout that feels like a high-end printed magazine, prioritizing warm emotional memories.",
+  "color": {
+    "surface": "#FAFAF8",
+    "onSurface": "#1C1917",
+    "surfaceSecondary": "#FFFFFF",
+    "onSurfaceSecondary": "#1C1917",
+    "surfaceTertiary": "#F0EFEA",
+    "onSurfaceTertiary": "#44403C",
+    "surfaceInverse": "#1C1917",
+    "onSurfaceInverse": "#FAFAF8",
+    "brand": "#C56A47",
+    "onBrand": "#FFFFFF",
+    "brandPrimary": "#C56A47",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#D48B6F",
+    "onBrandSecondary": "#1C1917",
+    "brandTertiary": "#F2D8CE",
+    "onBrandTertiary": "#7A3E27",
+    "success": "#4A7c59",
+    "onSuccess": "#FFFFFF",
+    "warning": "#D99A29",
+    "onWarning": "#FFFFFF",
+    "error": "#B94A48",
+    "onError": "#FFFFFF",
+    "info": "#4A6C7C",
+    "onInfo": "#FFFFFF",
+    "border": "#E6E4DD",
+    "borderStrong": "#C2C0B8",
+    "divider": "#E6E4DD",
+    "muted": "#78716C"
+  },
+  "typography": {
+    "displayFontFamily": "Playfair Display",
+    "textFontFamily": "Geist",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous magazine-like vertical rhythm. Let typography and photos breathe. Do not cramp elements.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 4,
+    "md": 8,
+    "lg": 16,
+    "pill": 999
+  },
+  "shadow_tier": "0",
+  "navigation": "bottom_tabs",
+  "icon_set": "Feather",
+  "glassmorphism": {
+    "enabled": false,
+    "do's": [
+      "Use only if strictly required for sticky bottom CTA floating over a busy photo grid"
+    ],
+    "dont's": [
+      "Avoid glassmorphism on general UI elements to maintain the flat, printed paper editorial feel."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Onboarding & Login",
+      "purpose": "Evoke emotion and trust while capturing the user's mobile number via OTP.",
+      "states": {
+        "loading": "Subtle activity indicator near the button.",
+        "empty": "N/A",
+        "error": "Inline red text below the mobile/OTP input field."
+      },
+      "layout": "Full-bleed photography hero image (top 60%) showcasing beautiful memories. A vertical gradient scrim (transparent to surfaceInverse) ensures bottom area blends. The bottom 40% houses a white (surfaceSecondary) sheet with large Playfair Display heading, standard text input for mobile, and a full-width brandPrimary CTA button for WhatsApp/SMS OTP."
+    },
+    {
+      "name": "Home Dashboard",
+      "purpose": "Central hub for the customer to start a new album or view past orders/drafts.",
+      "states": {
+        "loading": "Skeleton blocks matching the editorial cards.",
+        "empty": "Empty state illustration of a blank polaroid or vintage camera, inviting them to create their first book.",
+        "error": "Simple text message with a 'Retry' text link."
+      },
+      "layout": "Header with 'ClickBook' wordmark (Playfair). Large featured hero card 'Create a new ClickBook' with a premium background image. Below, horizontal scrollable sections for 'My Drafts' and 'Previous Orders'. Cards use sharp/sm radius with 1px border and no shadow."
+    },
+    {
+      "name": "Create Flow (Cover & Upload)",
+      "purpose": "Select book properties and upload photos seamlessly.",
+      "states": {
+        "loading": "Full-screen minimal loader: 'Designing your album...' with a subtle fade animation.",
+        "empty": "Grid shows large 'Add Photos' dropzone.",
+        "error": "Toast or inline message for upload failures."
+      },
+      "layout": "Step 1: Horizontal carousel of large cover option cards (Linen, Hardcover). Step 2: Photo upload grid (3-column) with a sticky 'Next' CTA anchored to the bottom. Step 3: Loading screen transitioning to the 3D Preview."
+    },
+    {
+      "name": "Editor & 3D Preview",
+      "purpose": "Review the auto-generated layout and tweak properties before ordering.",
+      "states": {
+        "loading": "Skeleton inside the preview area.",
+        "empty": "N/A",
+        "error": "Error loading high-res images fallback to low-res."
+      },
+      "layout": "Top 60% of screen: Sticky live preview area (Reanimated page flip). Bottom 40%: Gorhom Bottom Sheet. Top of the sheet has an icon row (Background, Layout, Pages, Text). Tapping one expands its options (e.g., color swatches) within the sheet."
+    },
+    {
+      "name": "Checkout & Order Tracking",
+      "purpose": "Summarize cost, accept coupons, and track delivery with playful process bots.",
+      "states": {
+        "loading": "Payment processing overlay.",
+        "empty": "N/A",
+        "error": "Coupon invalid inline error."
+      },
+      "layout": "Checkout: Clean editorial receipt style. Line items for sheets (₹90 * count) and GST. Inline coupon field. Sticky 'Pay Now' button. Tracking: Vertical timeline on surfaceTertiary. Nodes are active/inactive circles. Uses 'process bots' (Feather icons like 'printer', 'package', 'truck' inside brandTertiary circles) for active stages."
+    },
+    {
+      "name": "Admin Dashboard & Management",
+      "purpose": "Manage business operations, orders, and app settings.",
+      "states": {
+        "loading": "Table skeleton rows.",
+        "empty": "No orders or items found.",
+        "error": "Failed to fetch admin data."
+      },
+      "layout": "Utilitarian yet clean list layouts. Top row of KPI cards (border, surfaceSecondary). Tabular lists for Orders, Covers, Layouts, Offers. Each list item taps into a detail/edit screen with standard form fields."
+    }
+  ],
+  "images": {
+    "onboarding_hero": {
+      "url": "https://images.unsplash.com/photo-1676883344224-2fa5de6025db?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzZ8MHwxfHNlYXJjaHwxfHxwcmVtaXVtJTIwaGFyZGNvdmVyJTIwcGhvdG8lMjBib29rJTIwYWxidW18ZW58MHx8fHwxNzg5MDk2NjU1fDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Person holding a premium photo book open to a wedding picture"
+    },
+    "home_create_hero": {
+      "url": "https://images.unsplash.com/photo-1646645732912-380a54b73484?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzZ8MHwxfHNlYXJjaHw0fHxwcmVtaXVtJTIwaGFyZGNvdmVyJTIwcGhvdG8lMjBib29rJTIwYWxidW18ZW58MHx8fHwxNzg5MDk2NjU1fDA&ixlib=rb-4.1.0&q=85",
+      "alt": "An open premium photo book sitting on top of a white table"
+    },
+    "empty_state_polaroids": {
+      "url": "https://images.unsplash.com/photo-1613250233108-fd8ee3578855?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzF8MHwxfHNlYXJjaHwzfHxoYXBweSUyMGZhbWlseSUyMGJlYXV0aWZ1bCUyMG1lbW9yeSUyMHBvbGFyb2lkJTIwcGhvdG9ncmFwaHl8ZW58MHx8fHwxNzg5MDk2NjU0fDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Polaroid photos hanging"
+    },
+    "editor_preview_placeholder": {
+      "url": "https://images.unsplash.com/photo-1662108052701-29c0d7fd0456?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDZ8MHwxfHNlYXJjaHwxfHxwcmVtaXVtJTIwb3BlbiUyMGJsYW5rJTIwcGhvdG8lMjBib29rJTIwYWxidW0lMjB0ZW1wbGF0ZXxlbnwwfHx8fDE3ODkwOTY2NjJ8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Open blank photo book layout template"
+    },
+    "vintage_camera_iconic": {
+      "url": "https://images.unsplash.com/photo-1605722625766-a4c989c747a4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzh8MHwxfHNlYXJjaHwxfHx2aW50YWdlJTIwY2FtZXJhJTIwcG9sYXJvaWQlMjBkZXNrfGVufDB8fHx8MTc4OTA5NjY2Mnww&ixlib=rb-4.1.0&q=85",
+      "alt": "Vintage polaroid camera on desk"
+    }
+  },
+  "haptics": {
+    "button_press": "impactLight",
+    "photo_reorder_drag": "impactMedium",
+    "photo_reorder_drop": "impactHeavy",
+    "editor_tool_select": "selection",
+    "page_flip_3d": "impactLight",
+    "success_checkout": "notificationSuccess"
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow the '3 Editorial Mobile LIGHT' personality rules. The layout must feel like a premium printed magazine.",
+    "Do NOT use any blue, indigo, purple, or generic SaaS colors. Anchor the UI in warm ivory (FAFAF8), charcoal (1C1917), and terracotta (C56A47).",
+    "Enforce typography: Use Playfair Display for all Display Headings (Title, Hero text, Section headers) and Geist for body, forms, and metadata. Max font weight is 500.",
+    "Editor layout must be implemented precisely: Top portion is a sticky Reanimated preview, and the bottom is a Gorhom Bottom Sheet housing the tools.",
+    "For 'Process Bots' in the order tracking timeline, utilize Feather icons wrapped in brandTertiary circular containers. They should pulse or slightly animate to indicate active stages.",
+    "Ensure the price calculation is transparent: (sheets * 90) + 18% GST. Emphasize the final amount.",
+    "All full-bleed images with text overlays must have a vertical gradient scrim from transparent to surfaceInverse at the bottom (opacity 70%+) to guarantee WCAG readability.",
+    "No drop shadows on cards. Use 1px borders (#E6E4DD) to separate sections, staying true to the editorial flat-paper vibe."
+  ]
+}

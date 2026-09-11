@@ -1,0 +1,39 @@
+{
+  "summary": "Comprehensive ClickBook backend testing - all 47 pytest cases passed (100%). Covered: health, mock OTP auth + session, /me get/update, catalog (covers/layouts/backgrounds/offers/settings), pricing (subtotal 900 + gst 162 = total 1062 verified, WELCOME2026 10% discount verified, COUPLE20 min-order rejection verified, invalid coupon error), full album flow (create -> photo upload -> auto-generate -> pages update -> delete photo), auth isolation (customer B gets 404 on customer A's album), full order + mock payment flow, PDF generation (valid %PDF header), admin login + dashboard KPIs, all 5 production status transitions, invalid status rejection, admin settings mutation + revert, offers CRUD, process-bot update, admin customers list, admin auth required. Verified no MongoDB _id leaks in any response. File serving via /api/files/{path} works for uploaded photos and generated PDFs. Uses EXPO_PUBLIC_BACKEND_URL against the public preview endpoint.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/auth/otp/verify", "issue": "Successful verify deletes the OTP record, so if a client hits verify twice (e.g. after a network retry) the second call returns 400 'OTP not found' instead of a friendly 'already verified / please request new OTP'. Not blocking but consider a clearer error."},
+      {"endpoint": "POST /api/orders", "issue": "Order stores full album_snapshot (including base64-free photo metadata) which can grow large across many photos. Consider snapshotting only referenced photo IDs + minimal metadata to keep documents small."},
+      {"endpoint": "POST /api/admin/offers", "issue": "No uniqueness check on offer 'code' - creating two offers with same code is allowed. Consider a unique index / 409 response."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_clickbook_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "None blocking. Optional: return friendlier error when verify OTP is called twice; slim down album_snapshot inside orders; enforce unique offer.code."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 853 lines - approaching the 700-line soft cap. Consider splitting into routers (auth, albums, orders, admin, catalog) before adding more features.",
+    "Admin token is stored on the admin document itself (single-session): logging in from a second device invalidates the first. Fine for a single-admin app but worth calling out.",
+    "get_settings_doc() writes default settings on read; that write happens on every startup path too - benign but slightly surprising.",
+    "Photo upload validates extension via filename suffix only (no content-type / magic bytes) - acceptable for a mock, but a malicious filename ending in .jpg containing non-image bytes could pass through and fail later during PDF rendering."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_clickbook_api.py (new)"
+  ],
+  "success_rate": {"backend": "100% (47/47)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "Tests create ephemeral customers (unique mobile per run), one album with 4 test JPEGs, one paid order, one TESTDEAL offer. All prefixed 'TEST_' where user-visible. No production data modified beyond seeded settings which are toggled and reverted.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Reusable regression suite at /app/backend/tests/test_clickbook_api.py runs against EXPO_PUBLIC_BACKEND_URL. Tests are order-dependent within a single module (share `state` dict) - run with default pytest ordering. Requires Pillow (installed) for image generation.",
+  "rca_of_issue": "N/A - no bugs found."
+}
