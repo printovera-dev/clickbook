@@ -18,12 +18,12 @@ export default function AlbumPreview() {
     <View style={{ flex: 1, backgroundColor: colors.surface, paddingTop: insets.top }}>
       <View style={styles.topbar}>
         <Pressable onPress={() => router.replace("/(tabs)/home")} testID="preview-close"><Feather name="x" size={22} color={colors.onSurface} /></Pressable>
-        <Text style={s.label}>Your ClickBook</Text>
+        <Text style={s.label}>3D Preview</Text>
         <View style={{ width: 22 }} />
       </View>
       <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 140 }}>
         <Text style={s.h1}>{album?.name}</Text>
-        <Text style={[s.bodyMuted, { marginTop: 4 }]}>Swipe or use arrows to flip pages.</Text>
+        <Text style={[s.bodyMuted, { marginTop: 4 }]}>Drag a page from its edge, or use the arrows, to turn the pages of your book.</Text>
         <View style={{ marginTop: spacing.xl, alignItems: "center" }}>
           {album ? (
             <BookPreview

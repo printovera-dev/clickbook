@@ -122,6 +122,7 @@ export default function Editor() {
         <Pressable onPress={() => router.back()} testID="editor-back"><Feather name="arrow-left" size={22} color={colors.onSurface} /></Pressable>
         <Text style={s.label}>Edit ClickBook</Text>
         <View style={{ flexDirection: "row", gap: spacing.md }}>
+          <Pressable onPress={() => router.push({ pathname: "/album/[id]/preview", params: { id: String(id) } })} testID="editor-3d-preview"><Feather name="book-open" size={20} color={colors.brandPrimary} /></Pressable>
           <Pressable onPress={undo} testID="editor-undo"><Feather name="corner-up-left" size={20} color={history.length ? colors.onSurface : colors.muted} /></Pressable>
           <Pressable onPress={redo} testID="editor-redo"><Feather name="corner-up-right" size={20} color={redoStack.length ? colors.onSurface : colors.muted} /></Pressable>
         </View>
@@ -134,7 +135,7 @@ export default function Editor() {
             pages={pages}
             photos={album.photos || []}
             albumName={album.name}
-            size={260}
+            size={300}
           />
         ) : null}
         <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>Editing page {pageIdx + 1} of {pages.length}</Text>

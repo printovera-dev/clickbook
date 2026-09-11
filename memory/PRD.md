@@ -58,3 +58,7 @@ ClickBook is a premium photo-album service that lets customers create beautifull
 
 ## Deferred (roadmap)
 - Real WhatsApp/SMS provider (playbook-driven), real Razorpay integration, ML-driven auto-layout selection (currently rhythm-based), image cropping/zoom inside placeholders, 3+ photo layouts, Lottie process-bot animations.
+
+## Feature updates (2026-09-11, iteration 6 — 3D preview rebuilt)
+- `BookPreview` is now a real two-page open book: leaves pivot around the spine with perspective (front face rotates 0→-90°, back face lands on the left -90°→-180°), drag-to-turn follows the finger with snap/velocity, arrow controls, cast shadows, spine gradient, page-block thickness and a slight book tilt. Faces = cover, pages, (blank filler), back cover.
+- Entry points: after auto-generate (`/album/[id]/preview`), Home drafts (opens preview when the album has pages), editor header book icon (`editor-3d-preview`), review screen.

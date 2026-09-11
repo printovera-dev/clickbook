@@ -102,7 +102,7 @@ export default function Home() {
                 key={a.id}
                 testID={`home-draft-${a.id}`}
                 style={styles.draftCard}
-                onPress={() => router.push({ pathname: "/album/[id]/editor", params: { id: a.id } })}
+                onPress={() => router.push({ pathname: a.pages?.length ? "/album/[id]/preview" : "/album/[id]/editor", params: { id: a.id } })}
               >
                 <Image
                   source={{ uri: a.cover_snapshot?.image_url }}
