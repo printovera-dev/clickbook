@@ -39,6 +39,9 @@ ClickBook is a premium photo-album service that lets customers create beautifull
 - **Gift wrap add-on**: `gift_wrap_fee` in settings (₹150 default), toggle card on checkout, server-side price calc adds fee before GST, order stores `gift_wrap` flag, gift wrap line shown in checkout/order summary/admin orders, editable in Admin → Pricing.
 - **Storage abstraction upgrade**: `STORAGE_DRIVER` env — `local` (VPS-style, default) or `s3` (Emergent Object Storage / any S3-compatible bucket, set `S3_ACCESS_KEY/S3_SECRET_KEY/S3_BUCKET`/`S3_ENDPOINT`).
 
+## Feature updates (2026-09-11, iteration 4 — bug fix)
+- **Fixed "images not uploading" on web preview**: `expo-image-picker` returns `blob:` URIs in browsers and RN's `{uri,name,type}` FormData shim is native-only. `api.uploadPhoto` now uses a real `File`/`Blob` on web (via `asset.file` or `fetch(uri).blob()`) and keeps the native shim on iOS/Android. Errors surface in the UI instead of being swallowed. Also fixed deprecated `ImagePicker.MediaTypeOptions` → `["images"]`, and the auto-generate screen now shows a retry button on failure instead of silently navigating back. Verified end-to-end by testing agent (3 JPGs uploaded through the real picker path on web, 100% pass).
+
 ## Feature updates (2026-09-11, iteration 3)
 - **Multi-Photo Layouts (3 & 4 photo)**: seeded in DB; auto-generator uses a `[2,1,3,2,4,1,2]` rhythm and gracefully falls back to smaller layouts for short albums. Editor "Layout" tab shows correct thumbnails for all 4 layouts. BookPreview and PDF renderer both handle 1/2/3/4-photo pages.
 - **Gift Note Preview**: checkout now shows a live handwritten-style gift-card preview when gift wrap is enabled; note is stored on order (max 160 chars), shown to customer on order tracking and to admin in order detail.

@@ -1,0 +1,42 @@
+{
+  "summary": "Bug fix VERIFIED: 'not uploading images' on web is fixed. Backend pytest 9/9 passed (OTP login -> create album -> 3 multipart uploads -> persistence GET -> preview/thumbnail/original URLs all HTTP 200 image/jpeg bytes -> auto-generate produces non-empty pages containing all 3 photos -> final GET consistent). Web E2E passed end-to-end: login (9876501234, OTP from inline dev_hint since WHATSAPP_PROVIDER=aoc with unapproved template) -> home-create-hero -> first cover -> /create/upload?albumId=... -> Playwright file chooser uploaded 3 JPGs via expo-image-picker -> NO error banner -> '3 photos' counter -> 3 thumbnails (upload-photo-*) -> 'Design my album (3 photos)' enabled -> auto-generate -> landed on /album/{id}/preview with working 3D preview. The UI-created album (3e7f30eb3a2f48a7b1de07add7a41a73) was also verified via API: photos=3, pages=2, all 9 file URLs return 200 image/jpeg. The api.uploadPhoto web fix (real File/Blob instead of RN {uri} shim) works correctly on the web preview.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/albums/{id}/photos", "issue": "storage_manager.save_original (storage_manager.py:83-98) writes the SAME full-resolution bytes to originals/, thumbnails/, previews/ and print/ — no actual resizing. Thumbnails served to the upload grid are full 1200x900 files; with real phone photos (3-8MB each) the grid and preview will be very slow and storage is 4x bloated. Not part of this bug, but worth a follow-up."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "expo-image-picker MediaTypeOptions", "issue": "Deprecated API warning in console: ImagePicker.MediaTypeOptions is deprecated, use ImagePicker.MediaType or an array of ImagePicker.MediaType. Reference: /app/frontend/app/create/upload.tsx:29"}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_photo_upload_flow.py",
+    "/app/test_reports/pytest/pytest_results_upload_fix.xml",
+    "/app/.screenshots/upload_success.png",
+    "/app/.screenshots/preview.png"
+  ],
+  "action_items": [
+    "MINOR: Migrate ImagePicker.MediaTypeOptions.Images to the new ImagePicker.MediaType API in /app/frontend/app/create/upload.tsx:29 to silence deprecation warning (expo-image-picker).",
+    "MINOR (follow-up, not blocking): Generate real resized derivatives in storage_manager.save_original (e.g. ~300px thumbnail, ~1200px preview) instead of duplicating full-res bytes into all 4 folders."
+  ],
+  "critical_code_review_comments": [
+    "api.uploadPhoto web fix is correct: uses asset.file when present, falls back to fetch(uri).blob() -> new File(...), keeps native {uri,name,type} shim for mobile only. Upload errors are now surfaced in the UI (upload.tsx err state) instead of silently swallowed.",
+    "upload.tsx deletePhoto (removePhoto) does not handle errors and does not set any loading state — a failed delete leaves stale UI until refetch. Minor.",
+    "generating.tsx silently router.back()s on autoGenerate failure with no user-facing error — user just bounces back to upload screen with no explanation. Consider surfacing the error."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_photo_upload_flow.py (new)",
+    "/app/backend/tests/assets/test_photo_1.jpg, test_photo_2.jpg, test_photo_3.jpg (new, PIL-generated)"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% (all E2E steps passed)"},
+  "seed_data_creation": "Pytest run: ephemeral customer (random 98######## mobile) + album 'TEST Upload Bug Regression' with 3 photos, generated pages. E2E run: reused customer 9876501234, album 'My ClickBook Sep 11' (id 3e7f30eb3a2f48a7b1de07add7a41a73) with 3 photos + 2 pages — left in place as evidence of the UI flow; safe to delete.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run backend suite with: cd /app/backend && EXPO_PUBLIC_BACKEND_URL=$(grep '^EXPO_PUBLIC_BACKEND_URL' /app/frontend/.env | cut -d= -f2) python3 -m pytest tests/test_photo_upload_flow.py -v -n0. NOTE: must use -n0 — pytest.ini addopts force xdist which breaks the class-level sequential state. Backend currently runs WHATSAPP_PROVIDER=aoc with unapproved template, so send returns success:false with OTP in dev_hint; verify screen shows it inline. On web E2E, expo-image-picker opens a native file chooser — use page.expect_file_chooser around clicking upload-pick-button. Cover cards load async — wait for [data-testid^=cover-] card, not just cover-continue.",
+  "rca_of_issue": "Original bug: on web, expo-image-picker returns blob: URIs; React Native's FormData {uri,name,type} shim is a no-op in browsers, so the multipart body had no real file and uploads failed silently (errors were swallowed). Fix verified working: api.uploadPhoto now uses a real File/Blob on Platform.OS==='web' and surfaces upload failures via an error banner in upload.tsx. Confirmed via both direct multipart curl-style pytest (9/9) and full web-preview E2E through the actual expo-image-picker file chooser."
+}

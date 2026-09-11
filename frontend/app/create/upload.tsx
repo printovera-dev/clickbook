@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -26,22 +26,31 @@ export default function UploadStep() {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) { setErr("Photo permission required"); return; }
       const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ["images"],
         allowsMultipleSelection: true,
         quality: 0.85,
         selectionLimit: 30,
       });
       if (res.canceled) return;
       setUploading(true);
+      let failed = 0;
+      let lastError = "";
       for (const asset of res.assets) {
         const name = asset.fileName || `photo_${Date.now()}.jpg`;
         try {
-          await api.uploadPhoto(String(albumId), asset.uri, name);
+          await api.uploadPhoto(String(albumId), asset.uri, name, (asset as any).file);
         } catch (e: any) {
+          failed += 1;
+          lastError = e?.message || "upload failed";
           console.warn("upload failed", e);
         }
       }
       await q.refetch();
+      if (failed > 0) {
+        setErr(failed === res.assets.length
+          ? `Upload failed: ${lastError}`
+          : `${failed} of ${res.assets.length} photos failed to upload. Please retry.`);
+      }
     } catch (e: any) {
       setErr(e.message || "Upload failed");
     } finally {
@@ -68,7 +77,7 @@ export default function UploadStep() {
       </View>
       <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 140 }}>
         <Text style={s.h1}>Upload your photos</Text>
-        <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>Pick from your gallery. We'll design the album automatically.</Text>
+        <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>Pick from your gallery. We&apos;ll design the album automatically.</Text>
 
         <Pressable testID="upload-pick-button" onPress={pickAndUpload} style={styles.dropzone}>
           {uploading ? (

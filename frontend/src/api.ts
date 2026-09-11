@@ -1,5 +1,6 @@
 // API client for ClickBook backend
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
 
@@ -98,17 +99,32 @@ export const api = {
     request(`/albums/${albumId}/photos/${photoId}`, { method: "DELETE" }),
 
   // Upload
-  uploadPhoto: async (albumId: string, uri: string, filename: string) => {
+  uploadPhoto: async (albumId: string, uri: string, filename: string, webFile?: any) => {
     const token = await getToken();
     const form = new FormData();
-    // @ts-ignore React Native FormData
-    form.append("file", { uri, name: filename, type: "image/jpeg" });
+    if (Platform.OS === "web") {
+      // Web: FormData needs a real File/Blob, not the RN {uri} shim
+      let file: any = webFile;
+      if (!file) {
+        const resp = await fetch(uri);
+        const blob = await resp.blob();
+        file = new File([blob], filename, { type: blob.type || "image/jpeg" });
+      }
+      form.append("file", file);
+    } else {
+      // @ts-ignore React Native FormData file shim
+      form.append("file", { uri, name: filename, type: "image/jpeg" });
+    }
     const res = await fetch(`${BASE}/api/albums/${albumId}/photos`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
       body: form as any,
     });
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try { msg = JSON.parse(await res.text()).detail || msg; } catch {}
+      throw new Error(msg);
+    }
     return res.json();
   },
 
