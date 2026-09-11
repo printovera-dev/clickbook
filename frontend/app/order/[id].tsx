@@ -78,6 +78,20 @@ export default function OrderTracking() {
           {order?.tracking_number ? <Text style={[s.body, { marginTop: spacing.sm }]}>Tracking: {order.tracking_number}</Text> : null}
         </View>
 
+        {order?.gift_wrap ? (
+          <View style={styles.giftCardPreview} testID="order-gift-note-preview">
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Feather name="gift" size={18} color={colors.onBrandTertiary} />
+              <Text style={{ marginLeft: 8, fontFamily: fonts.text, fontSize: 12, color: colors.onBrandTertiary, textTransform: "uppercase", letterSpacing: 0.6 }}>Gift wrapped</Text>
+            </View>
+            {order?.gift_note ? (
+              <Text style={styles.giftCardNote}>&ldquo;{order.gift_note}&rdquo;</Text>
+            ) : (
+              <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>No note added.</Text>
+            )}
+          </View>
+        ) : null}
+
         <View style={styles.section}>
           <Text style={s.label}>Order summary</Text>
           <View style={styles.summaryRow}><Text style={s.body}>Subtotal</Text><Text style={s.body}>₹{order?.price?.subtotal}</Text></View>
@@ -105,6 +119,8 @@ const styles = StyleSheet.create({
   nodeInactive: { backgroundColor: colors.surface },
   rail: { flex: 1, width: 2, backgroundColor: colors.border, marginVertical: 2 },
   botBubble: { marginTop: spacing.sm, padding: spacing.md, backgroundColor: colors.brandTertiary, borderRadius: radius.md },
+  giftCardPreview: { marginTop: spacing.xxl, padding: spacing.lg, backgroundColor: colors.brandTertiary, borderRadius: radius.md, borderWidth: 1, borderColor: colors.brandSecondary },
+  giftCardNote: { marginTop: spacing.sm, fontFamily: fonts.display, fontSize: 16, color: colors.onBrandTertiary, fontStyle: "italic", lineHeight: 22 },
   section: { marginTop: spacing.xxl, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surfaceSecondary },
   summaryRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4, marginTop: spacing.sm },
 });

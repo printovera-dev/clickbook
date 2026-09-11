@@ -1,0 +1,46 @@
+{
+  "summary": "Tested 3 NEW features + gift_note regression (19 pytest cases, 18 passed, 1 failed = 94.7%). (1) Policies API: GET /api/policies returns {policies:[...]} with all 4 keys {privacy, terms, refund, shipping} each having title+updated; GET /api/policies/{key} returns {policy:{key,title,updated,body}} with substantial body content; unknown key returns 404. (2) OTP provider abstraction: in mock mode, /auth/otp/send returns provider=mock + dev_hint=123456, and /auth/otp/verify with 123456 returns token+customer; endpoint stores OTP in DB, doesn't crash. HOWEVER a CRITICAL BUG discovered: even when /app/backend/.env has WHATSAPP_PROVIDER=aoc, the backend still returns provider=mock and never invokes the aoc-portal call — root cause is a load_dotenv() timing bug in server.py (otp_provider imported at line 18, load_dotenv called at line 23), so the module-level `PROVIDER = os.environ.get('WHATSAPP_PROVIDER', 'mock')` never sees the .env value and defaults to 'mock'. Same structural bug affects razorpay_provider (module-level env reads happen before load_dotenv). (3) Razorpay payments: /payments/config returns {provider:'mock', razorpay_key_id:''}; /payments/razorpay/order returns razorpay_order_id with `order_mock_` prefix, amount in paise, provider=mock, empty key_id, checkout_url path; /payments/razorpay/checkout/{id} returns 200 text/html containing 'ClickBook' and the razorpay checkout.js script; /payments/razorpay/verify accepts any non-empty signature in mock mode, marks order paid, sets payment_method=razorpay, and rejects empty sig with 400. Legacy /orders/pay still works and prefixes payment_id with 'MOCK_'. (4) gift_note regression: creating an order with gift_wrap:true, gift_note:'Happy Birthday!' correctly persists gift_note on the order (verified via GET). WHATSAPP_PROVIDER restored to 'aoc' in .env after tests.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/auth/otp/send (and any code path in otp_provider.py / razorpay_provider.py that reads env at module load)",
+        "issue": "load_dotenv timing bug: server.py imports otp_provider (line 18) and razorpay_provider (line 19) BEFORE calling load_dotenv() at line 23. Since the OS environment does NOT contain WHATSAPP_PROVIDER/WHATSAPP_API_KEY/RAZORPAY_KEY_ID (they live only in /app/backend/.env), the module-level constants read as None and fall back to the mock defaults. Result: even with WHATSAPP_PROVIDER=\"aoc\" and a real API key configured, /auth/otp/send returns provider=\"mock\" and never calls api.aoc-portal.com — the whole provider abstraction is a no-op. Verified: after os.environ manually set, `from otp_provider import PROVIDER` correctly reads 'aoc', proving the ordering is the sole issue. Same latent bug in razorpay_provider (harmless right now only because no keys are set, but the moment keys are pasted into .env the same import order will break it). Fix: move `load_dotenv(ROOT_DIR / '.env')` ABOVE the `from otp_provider import ...` and `import razorpay_provider as rzp` lines in server.py.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration3_features.py",
+    "/app/test_reports/pytest/pytest_results_iteration3.xml"
+  ],
+  "action_items": [
+    "CRITICAL: Fix load_dotenv() ordering in /app/backend/server.py — move `load_dotenv(ROOT_DIR / '.env')` above the imports of otp_provider and razorpay_provider (currently lines 18-19 import before line 23 load_dotenv). Without this fix, WHATSAPP_PROVIDER, WHATSAPP_API_KEY, WHATSAPP_API_URL, RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET from .env are all invisible to those modules and they always fall back to mock defaults.",
+    "After the fix, re-run /app/backend/tests/test_iteration3_features.py — the single failing test (test_otp_send_with_aoc_provider_no_crash) will start passing and correctly assert provider='aoc'."
+  ],
+  "critical_code_review_comments": [
+    "server.py load_dotenv is called AFTER the provider imports — classic timing bug that silently disables real integrations. Recommend also having otp_provider/razorpay_provider read env inside a function (or via a lazy accessor) rather than at import time, so future refactors are resilient to import order.",
+    "otp_provider.send_otp endpoint hardcodes success=True in the response even when the provider fails (line 92 in server.py). The internal `result['success']` from the provider is ignored, so if aoc-portal is unreachable, the API still tells the client success. Fine for dev but should be reconsidered for prod — at least log a warning and surface an accurate response flag.",
+    "razorpay_provider.get_client() caches the client in a module global — after a hot key rotation the app must be restarted. Acceptable for now, but note it.",
+    "server.py has grown to 1053 lines — well past the 700-line soft cap. Splitting into routers (auth, albums, orders, payments, admin, policies) is overdue.",
+    "policies.py uses in-code static content — good for now, but consider moving to a CMS-style Mongo collection if content editing frequency increases."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration3_features.py (new)"
+  ],
+  "success_rate": {
+    "backend": "94.7% (18/19)",
+    "frontend": "not tested (backend-only request)"
+  },
+  "seed_data_creation": "One ephemeral customer (unique mobile 98########), one album 'TEST Iter3 Razorpay Album' with 4 generated JPEGs, three orders (one gift_wrap+gift_note+paid-via-razorpay-mock, one paid-via-legacy-pay, one intermediate for empty-sig test). WHATSAPP_PROVIDER in /app/backend/.env was flipped mock → aoc during the run and restored to aoc at teardown. No production/seed data harmed.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Suite at /app/backend/tests/test_iteration3_features.py runs sequentially and flips WHATSAPP_PROVIDER=mock in /app/backend/.env mid-run (via sudo supervisorctl restart backend) then restores to aoc at teardown. Requires PIL, requests, sudo. Run with default pytest ordering. The one failing test (test_otp_send_with_aoc_provider_no_crash) will keep failing until the load_dotenv-timing bug in server.py is fixed — don't treat it as a regression, treat it as the tracker for that CRITICAL bug.",
+  "rca_of_issue": "BUG: /auth/otp/send always reports provider='mock' even when WHATSAPP_PROVIDER=aoc is set in .env. Reproduction: (1) ensure /app/backend/.env contains `WHATSAPP_PROVIDER=\"aoc\"` and a real WHATSAPP_API_KEY; (2) `sudo supervisorctl restart backend`; (3) `curl -X POST $EXPO_PUBLIC_BACKEND_URL/api/auth/otp/send -H 'Content-Type: application/json' -d '{\"mobile\":\"9876543210\",\"channel\":\"whatsapp\"}'`; (4) response is `{\"success\":true,\"provider\":\"mock\",\"message\":\"OTP delivered (mock)\",\"dev_hint\":\"123456\"}` — provider should be 'aoc'. Root cause: /app/backend/server.py imports `from otp_provider import send_otp as provider_send_otp, generate_otp` at line 18 and `import razorpay_provider as rzp` at line 19, but `load_dotenv(ROOT_DIR / '.env')` runs only at line 23. Both provider modules read their config at module load with `os.environ.get(...)`; since the .env has not been loaded yet at import time and the OS shell doesn't export WHATSAPP_PROVIDER, they read None and fall back to `PROVIDER='mock'`. Verified by manually exporting `WHATSAPP_PROVIDER=aoc` before importing — module-level PROVIDER correctly reads 'aoc'. Mitigation: move `load_dotenv(ROOT_DIR / '.env')` to the very top of server.py (right after the initial `from dotenv import load_dotenv`) and BEFORE any imports from otp_provider / razorpay_provider. Optional hardening: convert PROVIDER/API_KEY/etc. in both provider modules from module-level constants to `os.environ.get(...)` calls performed inside each function so import order can't break them."
+}

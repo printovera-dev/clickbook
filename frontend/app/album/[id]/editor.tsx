@@ -168,7 +168,30 @@ export default function Editor() {
               {layouts.map((l: any) => (
                 <Pressable key={l.id} testID={`layout-${l.id}`} onPress={() => setLayout(l)} style={[styles.layoutRow, currentPage?.layout_id === l.id && { borderColor: colors.brandPrimary, borderWidth: 2 }]}>
                   <View style={styles.layoutIcon}>
-                    {l.photo_count === 1 ? <View style={styles.layoutBox} /> : <><View style={[styles.layoutBox, { flex: 1, marginBottom: 3 }]} /><View style={[styles.layoutBox, { flex: 1 }]} /></>}
+                    {l.photo_count === 1 ? (
+                      <View style={styles.layoutBox} />
+                    ) : l.photo_count === 2 ? (
+                      <><View style={[styles.layoutBox, { flex: 1, marginBottom: 3 }]} /><View style={[styles.layoutBox, { flex: 1 }]} /></>
+                    ) : l.photo_count === 3 ? (
+                      <>
+                        <View style={[styles.layoutBox, { flex: 1.3, marginBottom: 3 }]} />
+                        <View style={{ flex: 1, flexDirection: "row", gap: 3 }}>
+                          <View style={[styles.layoutBox, { flex: 1 }]} />
+                          <View style={[styles.layoutBox, { flex: 1 }]} />
+                        </View>
+                      </>
+                    ) : (
+                      <>
+                        <View style={{ flex: 1, flexDirection: "row", gap: 3, marginBottom: 3 }}>
+                          <View style={[styles.layoutBox, { flex: 1 }]} />
+                          <View style={[styles.layoutBox, { flex: 1 }]} />
+                        </View>
+                        <View style={{ flex: 1, flexDirection: "row", gap: 3 }}>
+                          <View style={[styles.layoutBox, { flex: 1 }]} />
+                          <View style={[styles.layoutBox, { flex: 1 }]} />
+                        </View>
+                      </>
+                    )}
                   </View>
                   <View style={{ marginLeft: spacing.md, flex: 1 }}>
                     <Text style={s.h2}>{l.name}</Text>

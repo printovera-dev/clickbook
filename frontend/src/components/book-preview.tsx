@@ -156,14 +156,34 @@ function CoverFace({ cover, albumName }: { cover: any; albumName?: string }) {
 
 function PageFace({ page, photosById, pageNumber }: { page: Page; photosById: Record<string, Photo>; pageNumber: number }) {
   const photos = page.photo_ids.map((id) => photosById[id]).filter(Boolean);
+  const n = photos.length;
   return (
     <View style={[styles.face, { backgroundColor: page.background || "#FFF", padding: 12 }]}>
-      {photos.length === 1 && photos[0]?.preview_url ? (
+      {n === 1 && photos[0]?.preview_url ? (
         <Image source={{ uri: photos[0].preview_url }} style={{ flex: 1, borderRadius: 2 }} contentFit="cover" />
-      ) : photos.length >= 2 ? (
+      ) : n === 2 ? (
         <View style={{ flex: 1, gap: 8 }}>
           <Image source={{ uri: photos[0]?.preview_url }} style={{ flex: 1, borderRadius: 2 }} contentFit="cover" />
           <Image source={{ uri: photos[1]?.preview_url }} style={{ flex: 1, borderRadius: 2 }} contentFit="cover" />
+        </View>
+      ) : n === 3 ? (
+        <View style={{ flex: 1, gap: 8 }}>
+          <Image source={{ uri: photos[0]?.preview_url }} style={{ flex: 1.35, borderRadius: 2 }} contentFit="cover" />
+          <View style={{ flex: 1, flexDirection: "row", gap: 8 }}>
+            <Image source={{ uri: photos[1]?.preview_url }} style={{ flex: 1, borderRadius: 2 }} contentFit="cover" />
+            <Image source={{ uri: photos[2]?.preview_url }} style={{ flex: 1, borderRadius: 2 }} contentFit="cover" />
+          </View>
+        </View>
+      ) : n >= 4 ? (
+        <View style={{ flex: 1, gap: 8 }}>
+          <View style={{ flex: 1, flexDirection: "row", gap: 8 }}>
+            <Image source={{ uri: photos[0]?.preview_url }} style={{ flex: 1, borderRadius: 2 }} contentFit="cover" />
+            <Image source={{ uri: photos[1]?.preview_url }} style={{ flex: 1, borderRadius: 2 }} contentFit="cover" />
+          </View>
+          <View style={{ flex: 1, flexDirection: "row", gap: 8 }}>
+            <Image source={{ uri: photos[2]?.preview_url }} style={{ flex: 1, borderRadius: 2 }} contentFit="cover" />
+            <Image source={{ uri: photos[3]?.preview_url }} style={{ flex: 1, borderRadius: 2 }} contentFit="cover" />
+          </View>
         </View>
       ) : (
         <View style={{ flex: 1, backgroundColor: colors.surfaceTertiary, borderRadius: 2 }} />

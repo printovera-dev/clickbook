@@ -71,9 +71,9 @@ async function request<T = any>(
 }
 
 export const api = {
-  // Auth
+  // update api signature
   sendOtp: (mobile: string, channel = "whatsapp") =>
-    request("/auth/otp/send", { method: "POST", body: { mobile, channel } }),
+    request<{ success: boolean; provider?: string; dev_hint?: string }>("/auth/otp/send", { method: "POST", body: { mobile, channel } }),
   verifyOtp: (mobile: string, otp: string) =>
     request<{ token: string; customer: any }>("/auth/otp/verify", { method: "POST", body: { mobile, otp } }),
   me: () => request<{ customer: any }>("/me"),
@@ -118,8 +118,16 @@ export const api = {
   createOrder: (data: any) => request<any>("/orders", { method: "POST", body: data }),
   payOrder: (order_id: string) =>
     request<any>("/orders/pay", { method: "POST", body: { order_id, payment_method: "mock" } }),
+  paymentsConfig: () => request<{ provider: string; razorpay_key_id: string }>("/payments/config"),
+  createRazorpayOrder: (order_id: string) =>
+    request<any>("/payments/razorpay/order", { method: "POST", body: { order_id } }),
+  verifyRazorpay: (data: any) => request<any>("/payments/razorpay/verify", { method: "POST", body: data }),
   listMyOrders: () => request<{ orders: any[] }>("/orders"),
   getOrder: (id: string) => request<{ order: any; process_bots: any[] }>(`/orders/${id}`),
+
+  // Policies
+  listPolicies: () => request<{ policies: any[] }>("/policies"),
+  getPolicy: (key: string) => request<{ policy: any }>(`/policies/${key}`),
 
   // Admin
   adminLogin: (username: string, password: string) =>

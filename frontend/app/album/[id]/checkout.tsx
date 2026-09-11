@@ -7,6 +7,7 @@ import { api } from "@/src/api";
 import { Button, s } from "@/src/ui";
 import { colors, spacing, radius, fonts } from "@/src/theme";
 import Feather from "@react-native-vector-icons/feather";
+import { RazorpayCheckout } from "@/src/components/razorpay-checkout";
 
 export default function Checkout() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -19,6 +20,7 @@ export default function Checkout() {
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [couponErr, setCouponErr] = useState("");
   const [giftWrap, setGiftWrap] = useState(false);
+  const [giftNote, setGiftNote] = useState("");
   const [price, setPrice] = useState<any>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -28,6 +30,10 @@ export default function Checkout() {
   const [pin, setPin] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [payingOrderId, setPayingOrderId] = useState<string | null>(null);
+  const [paymentsCfg, setPaymentsCfg] = useState<{ provider: string; razorpay_key_id: string } | null>(null);
+
+  useEffect(() => { api.paymentsConfig().then(setPaymentsCfg).catch(() => {}); }, []);
 
   useEffect(() => {
     if (album?.sheets) {
@@ -66,16 +72,27 @@ export default function Checkout() {
         album_id: String(id),
         coupon_code: appliedCoupon,
         gift_wrap: giftWrap,
+        gift_note: giftWrap ? giftNote : "",
         address: { name, email, line1, city, state, pin },
       });
       await api.updateMe({ name, email });
-      await api.payOrder(order.id);
-      router.replace({ pathname: "/order/[id]", params: { id: order.id, celebrate: "1" } });
+      // Open Razorpay checkout (or mock fallback)
+      setPayingOrderId(order.id);
     } catch (e: any) {
       setErr(e.message || "Order failed");
     } finally {
       setBusy(false);
     }
+  };
+
+  const onPaymentSuccess = () => {
+    const oid = payingOrderId;
+    setPayingOrderId(null);
+    if (oid) router.replace({ pathname: "/order/[id]", params: { id: oid, celebrate: "1" } });
+  };
+  const onPaymentError = (msg: string) => {
+    setPayingOrderId(null);
+    setErr(msg);
   };
 
   return (
@@ -116,6 +133,26 @@ export default function Checkout() {
             </View>
           </Pressable>
 
+          {giftWrap ? (
+            <View style={styles.giftNoteWrap} testID="checkout-gift-note-wrap">
+              <Text style={s.label}>Your handwritten note</Text>
+              <View style={styles.giftCardPreview}>
+                <Text style={styles.giftCardHeader}>To</Text>
+                <TextInput
+                  testID="checkout-gift-note-input"
+                  value={giftNote}
+                  onChangeText={(t) => setGiftNote(t.slice(0, 160))}
+                  placeholder="Happy Birthday! Every memory here is a piece of us. Love, —"
+                  placeholderTextColor={colors.muted}
+                  multiline
+                  style={styles.giftCardText}
+                />
+                <Text style={styles.giftCardCount}>{giftNote.length}/160</Text>
+              </View>
+              <Text style={[s.bodyMuted, { marginTop: 6, fontSize: 12 }]}>Preview above shows how it&apos;ll appear on the gift card.</Text>
+            </View>
+          ) : null}
+
           <Text style={[s.label, { marginTop: spacing.xxl }]}>Have a coupon?</Text>
           <View style={styles.couponRow}>
             <TextInput testID="checkout-coupon-input" value={coupon} onChangeText={setCoupon} placeholder="e.g. WELCOME2026" placeholderTextColor={colors.muted} autoCapitalize="characters" style={styles.couponInput} />
@@ -135,11 +172,39 @@ export default function Checkout() {
           <TextInput testID="checkout-pin-input" value={pin} onChangeText={setPin} placeholder="PIN code" placeholderTextColor={colors.muted} keyboardType="number-pad" maxLength={6} style={styles.input} />
 
           {err ? <Text style={{ color: colors.error, marginTop: spacing.md }}>{err}</Text> : null}
+
+          <View style={styles.legalBar}>
+            <Text style={s.bodyMuted}>By continuing you agree to our</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 4 }}>
+              <Pressable testID="checkout-legal-terms" onPress={() => router.push({ pathname: "/policy/[key]", params: { key: "terms" } })}><Text style={styles.link}>Terms</Text></Pressable>
+              <Text style={s.bodyMuted}> · </Text>
+              <Pressable testID="checkout-legal-privacy" onPress={() => router.push({ pathname: "/policy/[key]", params: { key: "privacy" } })}><Text style={styles.link}>Privacy</Text></Pressable>
+              <Text style={s.bodyMuted}> · </Text>
+              <Pressable testID="checkout-legal-refund" onPress={() => router.push({ pathname: "/policy/[key]", params: { key: "refund" } })}><Text style={styles.link}>Refunds</Text></Pressable>
+              <Text style={s.bodyMuted}> · </Text>
+              <Pressable testID="checkout-legal-shipping" onPress={() => router.push({ pathname: "/policy/[key]", params: { key: "shipping" } })}><Text style={styles.link}>Shipping</Text></Pressable>
+            </View>
+          </View>
         </ScrollView>
         <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
-          <Button testID="checkout-pay-button" label={busy ? "Processing..." : `Pay ₹${price?.total ?? "…"} (Mock)`} onPress={placeOrder} loading={busy} />
+          <Button
+            testID="checkout-pay-button"
+            label={busy ? "Preparing..." : paymentsCfg?.provider === "razorpay" ? `Pay ₹${price?.total ?? "…"} securely` : `Pay ₹${price?.total ?? "…"} (Test)`}
+            onPress={placeOrder}
+            loading={busy}
+          />
         </View>
       </KeyboardAvoidingView>
+
+      {payingOrderId ? (
+        <RazorpayCheckout
+          visible={!!payingOrderId}
+          clickbookOrderId={payingOrderId}
+          onClose={() => setPayingOrderId(null)}
+          onSuccess={onPaymentSuccess}
+          onError={onPaymentError}
+        />
+      ) : null}
     </View>
   );
 }
@@ -154,6 +219,13 @@ const styles = StyleSheet.create({
   applyBtn: { justifyContent: "center", paddingHorizontal: spacing.lg, borderWidth: 1, borderColor: colors.brandPrimary, borderRadius: radius.md },
   giftCard: { flexDirection: "row", alignItems: "center", marginTop: spacing.xl, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surfaceSecondary },
   giftCardActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
+  giftNoteWrap: { marginTop: spacing.md },
+  giftCardPreview: { marginTop: spacing.sm, padding: spacing.lg, backgroundColor: colors.brandTertiary, borderRadius: radius.md, borderWidth: 1, borderColor: colors.brandSecondary },
+  giftCardHeader: { fontFamily: fonts.display, fontSize: 20, color: colors.onBrandTertiary, fontStyle: "italic" },
+  giftCardText: { marginTop: spacing.sm, minHeight: 90, fontFamily: fonts.display, fontSize: 16, color: colors.onBrandTertiary, textAlignVertical: "top", fontStyle: "italic" },
+  giftCardCount: { textAlign: "right", fontFamily: fonts.text, fontSize: 11, color: colors.onBrandTertiary, opacity: 0.7 },
   checkbox: { width: 22, height: 22, borderRadius: 4, borderWidth: 1.5, borderColor: colors.borderStrong, alignItems: "center", justifyContent: "center" },
+  legalBar: { marginTop: spacing.xxl, alignItems: "center" },
+  link: { color: colors.brandPrimary, fontFamily: fonts.text, textDecorationLine: "underline", fontSize: 13 },
   footer: { position: "absolute", left: 0, right: 0, bottom: 0, padding: spacing.xl, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
 });

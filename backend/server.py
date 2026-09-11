@@ -14,10 +14,14 @@ from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel, Field
 from typing import List, Optional, Any, Dict
 
-from storage_manager import save_original, resolve_path, public_url, save_pdf, get_file_bytes, STORAGE_BASE
-
+# MUST load .env before importing modules that read env at import time.
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
+
+from storage_manager import save_original, resolve_path, public_url, save_pdf, get_file_bytes, STORAGE_BASE
+from otp_provider import send_otp as provider_send_otp, generate_otp
+import razorpay_provider as rzp
+from policies import POLICIES
 
 mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
@@ -77,15 +81,24 @@ async def get_current_admin(authorization: Optional[str] = Header(None)) -> dict
 async def send_otp(payload: OTPRequest):
     if not payload.mobile or len(payload.mobile) < 8:
         raise HTTPException(400, "Invalid mobile")
-    # Mock provider abstraction - always uses fixed OTP 123456
+    otp = generate_otp()
+    result = await provider_send_otp(payload.mobile, otp, payload.channel)
     await db.otps.update_one(
         {"mobile": payload.mobile},
-        {"$set": {"mobile": payload.mobile, "otp": "123456", "channel": payload.channel,
-                  "created_at": now_utc().isoformat(), "expires_at": (now_utc() + timedelta(minutes=10)).isoformat()}},
+        {"$set": {"mobile": payload.mobile, "otp": otp, "channel": payload.channel,
+                  "created_at": now_utc().isoformat(),
+                  "expires_at": (now_utc() + timedelta(minutes=10)).isoformat()}},
         upsert=True,
     )
-    logger.info(f"[MOCK OTP] {payload.channel} to {payload.mobile}: 123456")
-    return {"success": True, "message": f"OTP sent via {payload.channel}", "dev_hint": "123456"}
+    resp = {
+        "success": bool(result.get("success")),
+        "provider": result.get("provider"),
+        "message": result.get("message", "OTP sent"),
+    }
+    # Expose OTP for demo/dev in two cases: mock provider, or provider failure (so testers aren't stuck).
+    if result.get("provider") == "mock" or not result.get("success"):
+        resp["dev_hint"] = otp
+    return resp
 
 
 @api.post("/auth/otp/verify")
@@ -281,34 +294,34 @@ async def auto_generate(album_id: str, customer: dict = Depends(get_current_cust
     bgs = await db.backgrounds.find({"active": True}, {"_id": 0}).to_list(100)
     default_bg = bgs[0]["color"] if bgs else "#FFFFFF"
 
-    # Simple algorithm: pair up when possible with a rhythm - alternate 2-photo then 1-photo
+    # Simple algorithm: use a rhythm mixing 1/2/3/4 photo layouts based on availability
     pages = []
     i = 0
     idx = 0
+    rhythm = [2, 1, 3, 2, 4, 1, 2]  # repeats
     while i < len(photos):
-        use_two = two and (idx % 3 != 0) and (i + 1 < len(photos))
-        if use_two:
-            pages.append({
-                "id": new_id(),
-                "layout_id": two["id"],
-                "layout_photo_count": 2,
-                "photo_ids": [photos[i]["id"], photos[i + 1]["id"]],
-                "background": default_bg,
-                "text": "",
-                "order": idx,
-            })
-            i += 2
+        want = rhythm[idx % len(rhythm)]
+        # fall back to smaller layout if we don't have enough remaining photos or that layout doesn't exist
+        chosen = None
+        for count in [want, 2, 1]:
+            if count <= (len(photos) - i) and layouts_by_count.get(count):
+                chosen = layouts_by_count[count]
+                break
+        if not chosen:
+            chosen = layouts_by_count.get(1) or one or two
+            count = 1
         else:
-            pages.append({
-                "id": new_id(),
-                "layout_id": one["id"] if one else "",
-                "layout_photo_count": 1,
-                "photo_ids": [photos[i]["id"]],
-                "background": default_bg,
-                "text": "",
-                "order": idx,
-            })
-            i += 1
+            count = chosen["photo_count"]
+        pages.append({
+            "id": new_id(),
+            "layout_id": chosen["id"] if chosen else "",
+            "layout_photo_count": count,
+            "photo_ids": [photos[i + k]["id"] for k in range(count)],
+            "background": default_bg,
+            "text": "",
+            "order": idx,
+        })
+        i += count
         idx += 1
 
     # sheet count: 2 pages per sheet (double sided), minimum from settings
@@ -520,6 +533,7 @@ class OrderCreate(BaseModel):
     album_id: str
     coupon_code: Optional[str] = None
     gift_wrap: bool = False
+    gift_note: Optional[str] = None
     address: Dict[str, Any]
 
 
@@ -545,6 +559,7 @@ async def create_order(payload: OrderCreate, customer: dict = Depends(get_curren
         "sheets": sheets,
         "cover_snapshot": album.get("cover_snapshot"),
         "gift_wrap": payload.gift_wrap,
+        "gift_note": (payload.gift_note or "").strip()[:200] if payload.gift_wrap else "",
         "price": price,
         "address": payload.address,
         "payment_status": "pending",
@@ -564,6 +579,8 @@ class PaymentConfirm(BaseModel):
 
 @api.post("/orders/pay")
 async def pay_order(payload: PaymentConfirm, customer: dict = Depends(get_current_customer)):
+    """Mock instant-pay: creates a Razorpay/mock provider order, marks paid, returns success.
+    Used as a fallback when Razorpay isn't configured OR from admin/test flows."""
     order = await db.orders.find_one({"id": payload.order_id, "customer_id": customer["id"]}, {"_id": 0})
     if not order:
         raise HTTPException(404, "Order not found")
@@ -575,6 +592,139 @@ async def pay_order(payload: PaymentConfirm, customer: dict = Depends(get_curren
     )
     await db.albums.update_one({"id": order["album_id"]}, {"$set": {"status": "ordered"}})
     return {"success": True, "payment_id": payment_id, "message": "Payment successful (mock)"}
+
+
+class RazorpayOrderCreate(BaseModel):
+    order_id: str  # our internal ClickBook order id
+
+
+@api.get("/payments/config")
+async def payments_config():
+    return {"provider": "razorpay" if rzp.is_configured() else "mock",
+            "razorpay_key_id": rzp.public_key_id() if rzp.is_configured() else ""}
+
+
+@api.post("/payments/razorpay/order")
+async def create_razorpay_order(payload: RazorpayOrderCreate, customer: dict = Depends(get_current_customer)):
+    order = await db.orders.find_one({"id": payload.order_id, "customer_id": customer["id"]}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order not found")
+    if order.get("payment_status") == "paid":
+        raise HTTPException(400, "Order already paid")
+    amount_paise = int(round(float(order["price"]["total"]) * 100))
+    rp = rzp.create_order(amount_paise, receipt=order["order_no"],
+                          notes={"clickbook_order_id": order["id"], "customer_id": customer["id"]})
+    await db.orders.update_one(
+        {"id": order["id"]},
+        {"$set": {"razorpay_order_id": rp["id"], "payment_provider": rp["provider"], "amount_paise": amount_paise,
+                  "updated_at": now_utc().isoformat()}},
+    )
+    return {
+        "razorpay_order_id": rp["id"],
+        "amount": amount_paise,
+        "currency": "INR",
+        "key_id": rzp.public_key_id(),
+        "provider": rp["provider"],
+        "checkout_url": f"/api/payments/razorpay/checkout/{rp['id']}",
+    }
+
+
+class RazorpayVerify(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+
+
+@api.post("/payments/razorpay/verify")
+async def verify_razorpay_payment(payload: RazorpayVerify, customer: dict = Depends(get_current_customer)):
+    order = await db.orders.find_one({"razorpay_order_id": payload.razorpay_order_id,
+                                       "customer_id": customer["id"]}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order not found")
+    if not rzp.verify_signature(payload.razorpay_order_id, payload.razorpay_payment_id, payload.razorpay_signature):
+        raise HTTPException(400, "Invalid payment signature")
+    await db.orders.update_one(
+        {"id": order["id"], "payment_status": {"$ne": "paid"}},
+        {"$set": {"payment_status": "paid", "payment_id": payload.razorpay_payment_id,
+                  "razorpay_payment_id": payload.razorpay_payment_id,
+                  "razorpay_signature": payload.razorpay_signature,
+                  "payment_method": "razorpay",
+                  "paid_at": now_utc().isoformat(), "updated_at": now_utc().isoformat()}},
+    )
+    await db.albums.update_one({"id": order["album_id"]}, {"$set": {"status": "ordered"}})
+    return {"success": True, "payment_id": payload.razorpay_payment_id, "order_id": order["id"]}
+
+
+@api.get("/payments/razorpay/checkout/{rzp_order_id}", include_in_schema=False)
+async def razorpay_checkout_shell(rzp_order_id: str):
+    """HTML shell loaded by the WebView. Exposes only key_id + amount + order_id."""
+    order = await db.orders.find_one({"razorpay_order_id": rzp_order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Order unavailable")
+    amount = int(order.get("amount_paise") or round(float(order["price"]["total"]) * 100))
+    key_id = rzp.public_key_id() or "rzp_test_placeholder"
+    name = "ClickBook"
+    desc = f"Order {order['order_no']}"
+    prefill_name = (order.get("customer_snapshot") or {}).get("name", "") or ""
+    prefill_email = (order.get("customer_snapshot") or {}).get("email", "") or ""
+    prefill_contact = (order.get("customer_snapshot") or {}).get("mobile", "") or ""
+    html = f"""<!doctype html>
+<html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ClickBook Checkout</title>
+<style>body{{margin:0;background:#FAFAF8;font-family:-apple-system,system-ui,sans-serif;color:#1C1917;text-align:center;padding:32px}}</style>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script></head>
+<body>
+<p id="status">Opening secure checkout…</p>
+<script>
+(function () {{
+  function send(v) {{ if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(v)); }}
+  var options = {{
+    key: {key_id!r},
+    amount: {amount},
+    currency: "INR",
+    name: {name!r},
+    description: {desc!r},
+    order_id: {rzp_order_id!r},
+    prefill: {{ name: {prefill_name!r}, email: {prefill_email!r}, contact: {prefill_contact!r} }},
+    theme: {{ color: "#C56A47" }},
+    handler: function (r) {{ send({{type: "success", payload: r}}); }},
+    modal: {{ ondismiss: function () {{ send({{type: "dismissed"}}); }} }}
+  }};
+  var rp = new Razorpay(options);
+  rp.on("payment.failed", function (r) {{ send({{type: "failed", payload: r.error || {{}}}}); }});
+  rp.open();
+}})();
+</script></body></html>"""
+    return Response(content=html, media_type="text/html")
+
+
+@api.post("/payments/razorpay/webhook", include_in_schema=False)
+async def razorpay_webhook(request: Request):
+    raw = await request.body()
+    sig = request.headers.get("x-razorpay-signature", "")
+    if not rzp.verify_webhook(raw, sig):
+        raise HTTPException(400, "Invalid webhook signature")
+    payload = await request.json()
+    event = payload.get("event", "")
+    entity = ((payload.get("payload") or {}).get("payment") or {}).get("entity") or {}
+    rzp_order_id = entity.get("order_id")
+    payment_id = entity.get("id")
+    if rzp_order_id and event in {"payment.captured", "order.paid"}:
+        await db.orders.update_one(
+            {"razorpay_order_id": rzp_order_id, "payment_status": {"$ne": "paid"}},
+            {"$set": {"payment_status": "paid", "payment_id": payment_id,
+                      "razorpay_payment_id": payment_id, "payment_method": "razorpay",
+                      "paid_at": now_utc().isoformat(), "updated_at": now_utc().isoformat()}},
+        )
+        o = await db.orders.find_one({"razorpay_order_id": rzp_order_id}, {"_id": 0})
+        if o:
+            await db.albums.update_one({"id": o["album_id"]}, {"$set": {"status": "ordered"}})
+    elif rzp_order_id and event == "payment.failed":
+        await db.orders.update_one(
+            {"razorpay_order_id": rzp_order_id, "payment_status": {"$ne": "paid"}},
+            {"$set": {"payment_status": "failed", "updated_at": now_utc().isoformat()}},
+        )
+    return {"received": True}
 
 
 @api.get("/orders")
@@ -752,6 +902,18 @@ async def generate_pdf(order_id: str, admin: dict = Depends(get_current_admin)):
                     x = 0.5 * inch
                     y = 0.5 * inch + (3.5 * inch * i)
                     c.drawImage(img, x, y, 7 * inch, 3.2 * inch, preserveAspectRatio=True, anchor="c")
+                elif n == 3:
+                    if i == 0:
+                        c.drawImage(img, 0.5 * inch, 3.6 * inch, 7 * inch, 3.9 * inch, preserveAspectRatio=True, anchor="c")
+                    else:
+                        x = 0.5 * inch + ((i - 1) * 3.6 * inch)
+                        c.drawImage(img, x, 0.5 * inch, 3.4 * inch, 3.0 * inch, preserveAspectRatio=True, anchor="c")
+                elif n >= 4:
+                    col = i % 2
+                    row = i // 2
+                    x = 0.5 * inch + col * 3.6 * inch
+                    y = 4.1 * inch - row * 3.6 * inch
+                    c.drawImage(img, x, y, 3.4 * inch, 3.4 * inch, preserveAspectRatio=True, anchor="c")
             except Exception as e:
                 logger.warning(f"pdf draw err: {e}")
         c.showPage()
@@ -786,16 +948,28 @@ async def seed():
         ]
         await db.covers.insert_many(covers)
     # Layouts
-    if await db.layouts.count_documents({}) == 0:
-        await db.layouts.insert_many([
-            {"id": new_id(), "name": "One Photo", "photo_count": 1, "active": True,
-             "positions": [{"x": 0.05, "y": 0.05, "w": 0.9, "h": 0.9}]},
-            {"id": new_id(), "name": "Two Photos", "photo_count": 2, "active": True,
-             "positions": [
-                 {"x": 0.05, "y": 0.05, "w": 0.9, "h": 0.44},
-                 {"x": 0.05, "y": 0.51, "w": 0.9, "h": 0.44},
-             ]},
-        ])
+    existing_counts = set(l["photo_count"] for l in await db.layouts.find({}, {"_id": 0, "photo_count": 1}).to_list(50))
+    layouts_to_add = []
+    if 1 not in existing_counts:
+        layouts_to_add.append({"id": new_id(), "name": "One Photo", "photo_count": 1, "active": True,
+             "positions": [{"x": 0.05, "y": 0.05, "w": 0.9, "h": 0.9}]})
+    if 2 not in existing_counts:
+        layouts_to_add.append({"id": new_id(), "name": "Two Photos", "photo_count": 2, "active": True,
+             "positions": [{"x": 0.05, "y": 0.05, "w": 0.9, "h": 0.44},
+                           {"x": 0.05, "y": 0.51, "w": 0.9, "h": 0.44}]})
+    if 3 not in existing_counts:
+        layouts_to_add.append({"id": new_id(), "name": "Three Photos", "photo_count": 3, "active": True,
+             "positions": [{"x": 0.05, "y": 0.05, "w": 0.9, "h": 0.55},
+                           {"x": 0.05, "y": 0.63, "w": 0.44, "h": 0.32},
+                           {"x": 0.51, "y": 0.63, "w": 0.44, "h": 0.32}]})
+    if 4 not in existing_counts:
+        layouts_to_add.append({"id": new_id(), "name": "Four Photos", "photo_count": 4, "active": True,
+             "positions": [{"x": 0.05, "y": 0.05, "w": 0.44, "h": 0.44},
+                           {"x": 0.51, "y": 0.05, "w": 0.44, "h": 0.44},
+                           {"x": 0.05, "y": 0.51, "w": 0.44, "h": 0.44},
+                           {"x": 0.51, "y": 0.51, "w": 0.44, "h": 0.44}]})
+    if layouts_to_add:
+        await db.layouts.insert_many(layouts_to_add)
     # Backgrounds
     if await db.backgrounds.count_documents({}) == 0:
         await db.backgrounds.insert_many([
@@ -859,6 +1033,18 @@ async def on_shutdown():
 @api.get("/health")
 async def health():
     return {"ok": True, "service": "clickbook", "time": now_utc().isoformat()}
+
+
+@api.get("/policies")
+async def list_policies():
+    return {"policies": [{"key": k, "title": v["title"], "updated": v["updated"]} for k, v in POLICIES.items()]}
+
+
+@api.get("/policies/{key}")
+async def get_policy(key: str):
+    if key not in POLICIES:
+        raise HTTPException(404, "Policy not found")
+    return {"policy": {"key": key, **POLICIES[key]}}
 
 
 app.include_router(api)

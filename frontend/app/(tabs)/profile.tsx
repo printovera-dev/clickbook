@@ -66,6 +66,28 @@ export default function Profile() {
       <Button testID="profile-save-button" label={saved ? "Saved ✓" : "Save"} onPress={save} style={{ marginTop: spacing.xl }} />
 
       <View style={{ height: 1, backgroundColor: colors.border, marginVertical: spacing.xxl }} />
+      <Text style={s.label}>Legal</Text>
+      <View style={{ marginTop: spacing.sm, gap: spacing.sm }}>
+        {[
+          { key: "privacy", label: "Privacy Policy" },
+          { key: "terms", label: "Terms & Conditions" },
+          { key: "refund", label: "Refund & Cancellation" },
+          { key: "shipping", label: "Shipping Policy" },
+        ].map((p) => (
+          <Pressable
+            key={p.key}
+            testID={`profile-policy-${p.key}`}
+            onPress={() => router.push({ pathname: "/policy/[key]", params: { key: p.key } })}
+            style={styles.legalRow}
+          >
+            <Feather name="file-text" size={18} color={colors.brandPrimary} />
+            <Text style={{ marginLeft: spacing.md, flex: 1, fontFamily: fonts.text, color: colors.onSurface }}>{p.label}</Text>
+            <Feather name="chevron-right" size={18} color={colors.muted} />
+          </Pressable>
+        ))}
+      </View>
+
+      <View style={{ height: 1, backgroundColor: colors.border, marginVertical: spacing.xxl }} />
       <Pressable testID="profile-logout" onPress={logout} style={styles.row}>
         <Feather name="log-out" size={20} color={colors.error} />
         <Text style={{ marginLeft: spacing.md, color: colors.error, fontFamily: fonts.text, fontSize: 16 }}>Log out</Text>
@@ -87,4 +109,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceSecondary,
   },
   row: { flexDirection: "row", alignItems: "center", padding: spacing.md },
+  legalRow: { flexDirection: "row", alignItems: "center", padding: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surfaceSecondary },
 });

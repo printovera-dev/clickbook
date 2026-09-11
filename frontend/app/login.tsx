@@ -26,8 +26,8 @@ export default function Login() {
     }
     setLoading(true);
     try {
-      await api.sendOtp(mobile, "whatsapp");
-      router.push({ pathname: "/verify", params: { mobile } });
+      const r = await api.sendOtp(mobile, "whatsapp");
+      router.push({ pathname: "/verify", params: { mobile, provider: r.provider || "mock", devHint: r.dev_hint || "" } });
     } catch (e: any) {
       setErr(e.message || "Failed to send OTP");
     } finally {
@@ -58,7 +58,7 @@ export default function Login() {
           <Text style={[s.displayHero, { marginTop: spacing.sm }]}>Your most beautiful memories,</Text>
           <Text style={[s.displayHero, { fontStyle: "italic", color: colors.brandPrimary }]}>beautifully preserved.</Text>
           <Text style={[s.bodyMuted, { marginTop: spacing.md }]}>
-            Sign in with your mobile number. We'll send a passcode over WhatsApp.
+            Sign in with your mobile number. We&apos;ll send a passcode over WhatsApp.
           </Text>
           <View style={styles.inputRow}>
             <Text style={styles.prefix}>+91</Text>

@@ -39,5 +39,13 @@ ClickBook is a premium photo-album service that lets customers create beautifull
 - **Gift wrap add-on**: `gift_wrap_fee` in settings (₹150 default), toggle card on checkout, server-side price calc adds fee before GST, order stores `gift_wrap` flag, gift wrap line shown in checkout/order summary/admin orders, editable in Admin → Pricing.
 - **Storage abstraction upgrade**: `STORAGE_DRIVER` env — `local` (VPS-style, default) or `s3` (Emergent Object Storage / any S3-compatible bucket, set `S3_ACCESS_KEY/S3_SECRET_KEY/S3_BUCKET`/`S3_ENDPOINT`).
 
+## Feature updates (2026-09-11, iteration 3)
+- **Multi-Photo Layouts (3 & 4 photo)**: seeded in DB; auto-generator uses a `[2,1,3,2,4,1,2]` rhythm and gracefully falls back to smaller layouts for short albums. Editor "Layout" tab shows correct thumbnails for all 4 layouts. BookPreview and PDF renderer both handle 1/2/3/4-photo pages.
+- **Gift Note Preview**: checkout now shows a live handwritten-style gift-card preview when gift wrap is enabled; note is stored on order (max 160 chars), shown to customer on order tracking and to admin in order detail.
+- **Razorpay integration (WebView)**: `POST /payments/razorpay/order`, hosted HTML checkout shell at `/payments/razorpay/checkout/{id}`, `POST /payments/razorpay/verify` with HMAC-SHA256 signature check, `/payments/razorpay/webhook` with signature verification and idempotency. Falls back to mock provider when keys aren't configured. Frontend uses `react-native-webview` (works in Expo Go).
+- **WhatsApp OTP live**: provider abstraction (`otp_provider.py`) with aoc-portal HTTP driver; env-configurable (`WHATSAPP_PROVIDER`, `WHATSAPP_API_KEY`, `WHATSAPP_FROM`, `WHATSAPP_TEMPLATE`). When provider fails (e.g. template not yet approved), backend exposes the generated OTP as `dev_hint` so tests aren't blocked; front verify screen surfaces this in a small dev message.
+- **Policies mirror (Privacy / Terms / Refund / Shipping)**: `GET /policies` + `GET /policies/{key}`. Content mirrors clickbook.world (Terms + Privacy + Shipping fetched live; Refund/Cancellation composed from Terms). Accessible from the Profile tab and from a legal footer on the checkout screen — this is what Razorpay expects for account activation.
+- **Critical fix**: moved `load_dotenv()` above provider imports so env vars are honored on cold start.
+
 ## Deferred (roadmap)
 - Real WhatsApp/SMS provider (playbook-driven), real Razorpay integration, ML-driven auto-layout selection (currently rhythm-based), image cropping/zoom inside placeholders, 3+ photo layouts, print-resolution image processing (currently the same file is copied to preview/print — swap in Pillow resize when needed), Lottie process-bot animations.

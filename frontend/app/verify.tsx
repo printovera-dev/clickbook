@@ -7,7 +7,7 @@ import { Button, s } from "@/src/ui";
 import { colors, fonts, spacing, radius } from "@/src/theme";
 
 export default function Verify() {
-  const { mobile } = useLocalSearchParams<{ mobile: string }>();
+  const { mobile, provider, devHint } = useLocalSearchParams<{ mobile: string; provider?: string; devHint?: string }>();
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -42,7 +42,13 @@ export default function Verify() {
           </Pressable>
           <Text style={[s.h1, { marginTop: spacing.xl }]}>Enter your passcode</Text>
           <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>
-            Sent a 6-digit code to +91 {mobile}. Use <Text style={{ color: colors.brandPrimary }}>123456</Text> (demo).
+            {provider === "mock" || !provider
+              ? <>Sent a 6-digit code to +91 {mobile}. Use <Text style={{ color: colors.brandPrimary }}>123456</Text> (demo).</>
+              : provider === "aoc" && devHint
+              ? <>WhatsApp template not delivered yet. Use <Text style={{ color: colors.brandPrimary }}>{devHint}</Text> to continue.</>
+              : provider === "aoc"
+              ? <>We&apos;ve sent a 6-digit code to your WhatsApp on +91 {mobile}.</>
+              : <>Sent a 6-digit code to +91 {mobile}.</>}
           </Text>
           <TextInput
             testID="verify-otp-input"

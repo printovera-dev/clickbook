@@ -71,6 +71,12 @@ export default function AdminOrders() {
               <Pressable onPress={() => setSelected(null)} testID="admin-order-close"><Feather name="x" size={22} color={colors.onSurface} /></Pressable>
             </View>
             <Text style={s.bodyMuted}>Status: {selected?.production_status?.replace(/_/g, " ")}{selected?.gift_wrap ? " · 🎁 Gift wrap" : ""}</Text>
+            {selected?.gift_wrap && selected?.gift_note ? (
+              <View style={styles.giftNoteCard} testID="admin-gift-note">
+                <Text style={{ fontFamily: fonts.text, fontSize: 11, color: colors.onBrandTertiary, textTransform: "uppercase", letterSpacing: 0.6 }}>Gift note</Text>
+                <Text style={{ marginTop: 4, fontFamily: fonts.display, fontStyle: "italic", color: colors.onBrandTertiary, fontSize: 15 }}>&ldquo;{selected.gift_note}&rdquo;</Text>
+              </View>
+            ) : null}
             <Text style={[s.label, { marginTop: spacing.lg }]}>Update status</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, paddingBottom: spacing.md }} style={{ maxHeight: 56, marginTop: spacing.sm }}>
               {STATUSES.map((st) => (
@@ -101,4 +107,5 @@ const styles = StyleSheet.create({
   modalWrap: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   modal: { backgroundColor: colors.surface, padding: spacing.xl, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, paddingBottom: spacing.xxxl },
   input: { marginTop: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, fontFamily: fonts.text, color: colors.onSurface, backgroundColor: colors.surfaceSecondary },
+  giftNoteCard: { marginTop: spacing.md, padding: spacing.md, backgroundColor: colors.brandTertiary, borderRadius: radius.md, borderWidth: 1, borderColor: colors.brandSecondary },
 });
