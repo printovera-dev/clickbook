@@ -1,5 +1,6 @@
 """Idempotent seed data: settings, covers, layouts, backgrounds, offers, process bots, admin."""
 from core import db, now_iso, new_id
+from design import COVER_STYLES
 
 
 async def seed():
@@ -8,18 +9,20 @@ async def seed():
             "id": "default", "price_per_sheet": 90, "gst_percent": 18,
             "min_sheets": 10, "max_sheets": 75, "size": "8x8", "gift_wrap_fee": 150,
         })
-    if await db.covers.count_documents({}) == 0:
-        await db.covers.insert_many([
-            {"id": new_id(), "name": "Linen Ivory", "description": "Textured linen finish in warm ivory",
-             "image_url": "https://images.unsplash.com/photo-1544816155-12df9643f363?w=800&auto=format&fit=crop",
-             "active": True, "display_order": 1, "created_at": now_iso()},
-            {"id": new_id(), "name": "Classic Hardcover", "description": "Premium hardcover with matte lamination",
-             "image_url": "https://images.unsplash.com/photo-1519791883288-dc8bd696e667?w=800&auto=format&fit=crop",
-             "active": True, "display_order": 2, "created_at": now_iso()},
-            {"id": new_id(), "name": "Photo Cover", "description": "Full-bleed photo cover printed edge to edge",
-             "image_url": "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800&auto=format&fit=crop",
-             "active": True, "display_order": 3, "created_at": now_iso()},
-        ])
+    # Cover styles (editable image + text model). Legacy covers without a style are retired.
+    style_images = {
+        "signature": "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800&auto=format&fit=crop",
+        "classic": "https://images.unsplash.com/photo-1544816155-12df9643f363?w=800&auto=format&fit=crop",
+        "editorial": "https://images.unsplash.com/photo-1519791883288-dc8bd696e667?w=800&auto=format&fit=crop",
+    }
+    for i, (key, st) in enumerate(COVER_STYLES.items()):
+        await db.covers.update_one(
+            {"style": key},
+            {"$setOnInsert": {"id": new_id(), "style": key, "image_url": style_images[key], "created_at": now_iso()},
+             "$set": {"name": st["name"], "description": st["description"], "active": True, "display_order": i + 1}},
+            upsert=True,
+        )
+    await db.covers.update_many({"style": {"$exists": False}}, {"$set": {"active": False}})
     existing = {l["photo_count"] for l in await db.layouts.find({}, {"_id": 0, "photo_count": 1}).to_list(50)}
     layouts = {
         1: ("One Photo", [{"x": 0.05, "y": 0.05, "w": 0.9, "h": 0.9}]),

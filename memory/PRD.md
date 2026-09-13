@@ -62,3 +62,15 @@ ClickBook is a premium photo-album service that lets customers create beautifull
 ## Feature updates (2026-09-11, iteration 6 — 3D preview rebuilt)
 - `BookPreview` is now a real two-page open book: leaves pivot around the spine with perspective (front face rotates 0→-90°, back face lands on the left -90°→-180°), drag-to-turn follows the finger with snap/velocity, arrow controls, cast shadows, spine gradient, page-block thickness and a slight book tilt. Faces = cover, pages, (blank filler), back cover.
 - Entry points: after auto-generate (`/album/[id]/preview`), Home drafts (opens preview when the album has pages), editor header book icon (`editor-3d-preview`), review screen.
+
+## Feature updates (2026-09-13, iteration 7 — design system overhaul)
+- **Album style chooser** (`/create/style`): Elegant / Balanced / Gallery, stored as `album.design_style` + in design versions; generator rhythms per style (`backend/design.py`).
+- **Unified design model** (`src/design.ts` ⇄ `backend/design.py`): per-slot non-destructive image transform `{scale, ox, oy, fit}`, text objects `{text,x,y,w,h,font,size,weight,italic,color,align,z}`, cover design `{style, photo_id, image, frame, background, texts}`. Same math renders in `PageCanvas` (editor + 3D preview + final review) and in `pdf_renderer.py` (Pillow, 8×8 in @ 300 dpi, print derivatives, bundled Google fonts).
+- **Full-screen page editor** (`/album/[id]/page?index=N|cover`), opened by double-tapping a page/cover in the 3D preview: Adjust Image (drag / pinch / zoom / Fit / Fill / Reset), Change Image, + Add Text (6 fonts, size, bold, italic, align, colour, duplicate, delete, drag, resize handle — glyphs never distorted), Change Layout (Single/Duo/Trio/Quad, keeps photos & crops), Background, Cover Style, Undo/Redo, Save & Preview / Cancel.
+- **Cover system**: Signature Full Bleed / Classic Portrait / Editorial Frame (seeded covers with `style`), default cover design created at generation from the first photo + album name.
+- **Design lock**: order creation writes an `approved` design version; payment locks the album (`locked`, status `ordered`) → design edits return 409; PDF renders from the frozen `album_snapshot`.
+- **Admin**: `POST /admin/images` upload; Admin → Covers has Upload/Replace image.
+- **Expo Go upload fix**: FormData now uses `expo-file-system` `File` (SDK 57 fetch rejects `{uri}` parts).
+- **Razorpay LIVE keys** configured (`rzp_live_TbRScBYEKSdUbH`). Webhook secret unchanged (user supplied a URL instead of a secret).
+- **Production deployment package**: `backend/Dockerfile`, `backend/deploy/` (docker-compose: mongo + gunicorn/uvicorn API + nginx TLS + certbot, systemd unit, `deploy.sh install|update|logs|status|backup`, README).
+- Not yet: drag-to-reorder pages (still move up/down), snapping guides, admin upload UI for backgrounds/bots (endpoint exists), italic in PDF (rendered upright).

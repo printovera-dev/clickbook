@@ -6,14 +6,14 @@ import { s } from "@/src/ui";
 import { colors, spacing, fonts } from "@/src/theme";
 
 export default function Generating() {
-  const { albumId } = useLocalSearchParams<{ albumId: string }>();
+  const { albumId, style } = useLocalSearchParams<{ albumId: string; style?: string }>();
   const router = useRouter();
   const [err, setErr] = useState("");
   const [retryKey, setRetryKey] = useState(0);
   useEffect(() => {
     (async () => {
       try {
-        await api.autoGenerate(String(albumId));
+        await api.autoGenerate(String(albumId), style ? String(style) : undefined);
         setTimeout(() => router.replace({ pathname: "/album/[id]/preview", params: { id: String(albumId) } }), 400);
       } catch (e: any) {
         setErr(e?.message || "Could not design your album. Please try again.");

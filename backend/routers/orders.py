@@ -29,7 +29,7 @@ async def mark_order_paid(order: dict, payment_id: str, method: str, extra: Opti
         {"$set": {"payment_status": "paid", "payment_id": payment_id, "payment_method": method,
                   "paid_at": now_iso(), "updated_at": now_iso(), **(extra or {})}},
     )
-    await db.albums.update_one({"id": order["album_id"]}, {"$set": {"status": "ordered"}})
+    await db.albums.update_one({"id": order["album_id"]}, {"$set": {"status": "ordered", "locked": True, "locked_at": now_iso()}})
 
 
 @router.post("/orders")
@@ -65,6 +65,14 @@ async def create_order(payload: OrderCreate, customer: dict = Depends(get_curren
     }
     await db.orders.insert_one(dict(order))
     order.pop("_id", None)
+    # Final Approved Version: the design the customer approved for this order (frozen in album_snapshot).
+    await db.design_versions.insert_one({
+        "id": new_id(), "album_id": album["id"], "version": album.get("version", 1), "kind": "approved",
+        "order_id": order["id"], "snapshot": {"pages": album.get("pages"), "sheets": sheets,
+                                               "cover_design": album.get("cover_design"),
+                                               "design_style": album.get("design_style")},
+        "created_at": now_iso(),
+    })
     return {"order": order, "amount": price["total"]}
 
 

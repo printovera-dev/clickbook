@@ -71,6 +71,38 @@ async function request<T = any>(
   return res.json();
 }
 
+async function uploadFile(path: string, uri: string, filename: string, webFile: any, admin: boolean) {
+  {
+    const token = admin ? await getAdminToken() : await getToken();
+    const form = new FormData();
+    if (Platform.OS === "web") {
+      // Web: FormData needs a real File/Blob, not the RN {uri} shim
+      let file: any = webFile;
+      if (!file) {
+        const resp = await fetch(uri);
+        const blob = await resp.blob();
+        file = new File([blob], filename, { type: blob.type || "image/jpeg" });
+      }
+      form.append("file", file);
+    } else {
+      // Native (Expo SDK 54+): fetch is WinterCG-compliant and rejects the legacy {uri,name,type} shim.
+      const { File: ExpoFile } = await import("expo-file-system");
+      form.append("file", new ExpoFile(uri) as any, filename);
+    }
+    const res = await fetch(`${BASE}/api${path}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form as any,
+    });
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try { msg = JSON.parse(await res.text()).detail || msg; } catch {}
+      throw new Error(msg);
+    }
+    return res.json();
+  }
+}
+
 export const api = {
   // update api signature
   sendOtp: (mobile: string, channel = "whatsapp") =>
@@ -92,41 +124,18 @@ export const api = {
     request<{ album: any }>("/albums", { method: "POST", body: { cover_id, name } }),
   listMyAlbums: () => request<{ albums: any[] }>("/albums"),
   getAlbum: (id: string) => request<{ album: any }>(`/albums/${id}`),
-  autoGenerate: (id: string) => request<{ album: any }>(`/albums/${id}/generate`, { method: "POST", body: {} }),
+  autoGenerate: (id: string, style?: string) => request<{ album: any }>(`/albums/${id}/generate`, { method: "POST", body: style ? { style } : {} }),
+  updateAlbum: (id: string, data: any) => request<{ album: any }>(`/albums/${id}`, { method: "PUT", body: data }),
   updatePages: (id: string, pages: any[]) =>
     request<{ album: any }>(`/albums/${id}/pages`, { method: "PUT", body: { pages } }),
   deletePhoto: (albumId: string, photoId: string) =>
     request(`/albums/${albumId}/photos/${photoId}`, { method: "DELETE" }),
 
   // Upload
-  uploadPhoto: async (albumId: string, uri: string, filename: string, webFile?: any) => {
-    const token = await getToken();
-    const form = new FormData();
-    if (Platform.OS === "web") {
-      // Web: FormData needs a real File/Blob, not the RN {uri} shim
-      let file: any = webFile;
-      if (!file) {
-        const resp = await fetch(uri);
-        const blob = await resp.blob();
-        file = new File([blob], filename, { type: blob.type || "image/jpeg" });
-      }
-      form.append("file", file);
-    } else {
-      // @ts-ignore React Native FormData file shim
-      form.append("file", { uri, name: filename, type: "image/jpeg" });
-    }
-    const res = await fetch(`${BASE}/api/albums/${albumId}/photos`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      body: form as any,
-    });
-    if (!res.ok) {
-      let msg = `HTTP ${res.status}`;
-      try { msg = JSON.parse(await res.text()).detail || msg; } catch {}
-      throw new Error(msg);
-    }
-    return res.json();
-  },
+  uploadPhoto: (albumId: string, uri: string, filename: string, webFile?: any) =>
+    uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false),
+  adminUploadImage: (uri: string, filename: string, webFile?: any) =>
+    uploadFile(`/admin/images`, uri, filename, webFile, true),
 
   // Pricing / Orders
   calculatePrice: (sheets: number, coupon_code?: string, gift_wrap = false) =>

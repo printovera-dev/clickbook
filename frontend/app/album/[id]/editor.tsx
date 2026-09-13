@@ -90,12 +90,6 @@ export default function Editor() {
     setPageIdx(Math.max(0, Math.min(idx, next.length - 1)));
     commit(next);
   };
-  const setText = (t: string) => {
-    if (!currentPage) return;
-    const next = pages.map((p, i) => (i === pageIdx ? { ...p, text: t } : p));
-    commit(next);
-  };
-
   // Photo rearrangement: tap a photo slot to select, tap another slot (any page) to swap.
   const onSlotPress = (pi: number, slot: number) => {
     if (!sel) {
@@ -131,14 +125,20 @@ export default function Editor() {
       <View style={styles.previewArea}>
         {album ? (
           <BookPreview
-            cover={album.cover_snapshot}
+            cover={album.cover_snapshot} coverDesign={album.cover_design}
             pages={pages}
             photos={album.photos || []}
             albumName={album.name}
             size={300}
+            onEditPage={(i) => router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: String(i) } })} onEditCover={() => router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: "cover" } })}
           />
         ) : null}
-        <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>Editing page {pageIdx + 1} of {pages.length}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, marginTop: spacing.sm }}>
+          <Text style={s.bodyMuted}>Page {pageIdx + 1} of {pages.length}</Text>
+          <Pressable testID="editor-edit-page" onPress={() => router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: String(pageIdx) } })} style={{ flexDirection: "row", alignItems: "center", gap: 4, minHeight: 32 }}>
+            <Feather name="edit-3" size={14} color={colors.brandPrimary} /><Text style={{ color: colors.brandPrimary, fontFamily: fonts.text, fontSize: 13 }}>Edit Page</Text>
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.toolTabs}>
@@ -267,17 +267,12 @@ export default function Editor() {
         )}
         {tool === "text" && (
           <>
-            <Text style={s.label}>Add text to page {pageIdx + 1}</Text>
-            <TextInput
-              testID="editor-text-input"
-              defaultValue={currentPage?.text || ""}
-              onEndEditing={(e) => setText(e.nativeEvent.text)}
-              placeholder="Caption or memory..."
-              placeholderTextColor={colors.muted}
-              multiline
-              style={styles.textInput}
-            />
-            <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>Tap outside to save.</Text>
+            <Text style={s.label}>Text on page {pageIdx + 1}</Text>
+            <Text style={[s.bodyMuted, { marginTop: 4 }]}>
+              {currentPage?.texts?.length ? `${currentPage.texts.length} text object${currentPage.texts.length > 1 ? "s" : ""} on this page.` : "No text yet."} Text is added and styled in the page editor, where you can drag, resize and change fonts.
+            </Text>
+            <Button testID="editor-add-text-button" label="+ Add Text" variant="outline" style={{ marginTop: spacing.md }}
+              onPress={() => router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: String(pageIdx), tool: "text" } })} />
           </>
         )}
       </ScrollView>

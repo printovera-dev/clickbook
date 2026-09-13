@@ -1,0 +1,7 @@
+storage/
+tests/
+__pycache__/
+*.pyc
+.env
+.env.production
+deploy/.env

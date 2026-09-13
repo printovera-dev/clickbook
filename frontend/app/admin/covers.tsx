@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Modal, Switch } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Modal, Switch, Alert } from "react-native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -8,12 +8,24 @@ import { api } from "@/src/api";
 import { Button, s } from "@/src/ui";
 import { colors, spacing, radius, fonts } from "@/src/theme";
 import Feather from "@react-native-vector-icons/feather";
+import * as ImagePicker from "expo-image-picker";
 
 export default function AdminCovers() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const q = useQuery({ queryKey: ["admin-covers"], queryFn: () => api.adminListCovers() });
   const [editing, setEditing] = useState<any | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const pickImage = async () => {
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.9 });
+    if (res.canceled || !res.assets?.[0]) return;
+    const a = res.assets[0];
+    setUploading(true);
+    try {
+      const r = await api.adminUploadImage(a.uri, a.fileName || `cover_${Date.now()}.jpg`, (a as any).file);
+      setEditing((e: any) => ({ ...e, image_url: r.image.url }));
+    } catch (e: any) { Alert.alert("Upload failed", e?.message || "Please try again"); } finally { setUploading(false); }
+  };
 
   const save = async () => {
     if (!editing) return;
@@ -58,6 +70,8 @@ export default function AdminCovers() {
             </View>
             <TextInput testID="cover-name" placeholder="Name" placeholderTextColor={colors.muted} value={editing?.name} onChangeText={(t) => setEditing({ ...editing, name: t })} style={styles.input} />
             <TextInput testID="cover-desc" placeholder="Description" placeholderTextColor={colors.muted} value={editing?.description} onChangeText={(t) => setEditing({ ...editing, description: t })} style={styles.input} />
+            {editing?.image_url ? <Image source={{ uri: editing.image_url }} style={{ width: "100%", height: 140, borderRadius: radius.sm, marginBottom: spacing.sm }} contentFit="cover" /> : null}
+            <Button testID="cover-upload-image" label={uploading ? "Uploading…" : editing?.image_url ? "Replace image" : "Upload image"} variant="outline" onPress={pickImage} loading={uploading} style={{ marginBottom: spacing.sm }} />
             <TextInput testID="cover-image" placeholder="Image URL" placeholderTextColor={colors.muted} value={editing?.image_url} autoCapitalize="none" onChangeText={(t) => setEditing({ ...editing, image_url: t })} style={styles.input} />
             <TextInput testID="cover-order" placeholder="Display order" placeholderTextColor={colors.muted} value={String(editing?.display_order ?? "")} keyboardType="number-pad" onChangeText={(t) => setEditing({ ...editing, display_order: Number(t) || 0 })} style={styles.input} />
             <View style={styles.switchRow}><Text style={s.body}>Active</Text><Switch value={!!editing?.active} onValueChange={(v) => setEditing({ ...editing, active: v })} /></View>

@@ -27,7 +27,7 @@ export default function Review() {
         <Text style={s.h1}>Review your ClickBook</Text>
         <Text style={[s.bodyMuted, { marginTop: 4 }]}>Flip through every page. Once ordered, we&#39;ll print exactly what you see.</Text>
         <View style={{ marginTop: spacing.xl, alignItems: "center" }}>
-          {album ? <BookPreview cover={album.cover_snapshot} pages={album.pages || []} photos={album.photos || []} albumName={album.name} /> : null}
+          {album ? <BookPreview cover={album.cover_snapshot} coverDesign={album.cover_design} pages={album.pages || []} photos={album.photos || []} albumName={album.name} onEditPage={(i) => router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: String(i) } })} onEditCover={() => router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: "cover" } })} /> : null}
         </View>
         <Pressable testID="review-confirm-check" onPress={() => setConfirmed(!confirmed)} style={styles.confirmRow}>
           <View style={[styles.checkbox, confirmed && { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary }]}>

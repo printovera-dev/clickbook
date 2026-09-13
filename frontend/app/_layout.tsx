@@ -5,6 +5,8 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
+import { useFonts } from "expo-font";
+import { FONT_ASSETS } from "@/src/design";
 
 import { ErrorBoundary } from "@/src/components/error-boundary";
 import { queryClient } from "@/src/query-client";
@@ -24,6 +26,7 @@ const iconPrewarm = () => {
 };
 
 export default function RootLayout() {
+  useFonts(FONT_ASSETS); // design fonts; screens render with fallbacks until loaded
   useEffect(() => {
     iconPrewarm();
   }, []);

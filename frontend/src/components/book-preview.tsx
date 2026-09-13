@@ -10,17 +10,17 @@ import Animated, {
 } from "react-native-reanimated";
 import Feather from "@react-native-vector-icons/feather";
 import { colors, spacing, radius, fonts } from "@/src/theme";
+import { PageCanvas } from "@/src/components/page-canvas";
+import { Page, Photo, CoverDesign, coverToPage } from "@/src/design";
 
-type Page = { id: string; photo_ids: string[]; layout_photo_count: number; background: string; text?: string };
-type Photo = { id: string; preview_url?: string; thumbnail_url?: string; original_url?: string };
 type Face = { kind: "cover" | "back" | "blank" | "page"; page?: Page; number?: number };
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const FLIP_MS = 520;
 
 export function BookPreview({
-  cover, pages, photos, size = Math.min(SCREEN_W - 32, 400), albumName,
-}: { cover: any; pages: Page[]; photos: Photo[]; size?: number; albumName?: string }) {
+  cover, coverDesign, pages, photos, size = Math.min(SCREEN_W - 32, 400), albumName, onEditPage, onEditCover,
+}: { cover: any; coverDesign?: CoverDesign | null; pages: Page[]; photos: Photo[]; size?: number; albumName?: string; onEditPage?: (pageIndex: number) => void; onEditCover?: () => void }) {
   const pageW = size / 2;
   const pageH = pageW; // 8x8" square pages
   const photosById = useMemo(() => Object.fromEntries(photos.map((p) => [p.id, p])), [photos]);
@@ -99,6 +99,21 @@ export function BookPreview({
       });
     });
 
+  const tap = Gesture.Tap().numberOfTaps(2).maxDelay(320).onEnd((e) => {
+    "worklet";
+    if (activeDir.value !== 0) return;
+    const right = e.x > (size + 24) / 2;
+    runOnJS(handleDoubleTap)(right);
+  });
+  const composed = Gesture.Exclusive(tap, pan);
+
+  function handleDoubleTap(right: boolean) {
+    const face = right ? (turned < leaves ? faces[2 * turned] : null) : (turned > 0 ? faces[2 * turned - 1] : null);
+    if (!face) return;
+    if (face.kind === "page" && onEditPage) onEditPage(face.number! - 1);
+    if (face.kind === "cover" && onEditCover) onEditCover();
+  }
+
   // Flipping leaf: front face pivots on the spine from the right; back face lands on the left.
   const frontStyle = useAnimatedStyle(() => ({
     opacity: progress.value < 0.5 ? 1 : 0,
@@ -153,7 +168,7 @@ export function BookPreview({
 
   return (
     <View style={{ alignItems: "center" }}>
-      <GestureDetector gesture={pan}>
+      <GestureDetector gesture={composed}>
         <View style={{ width: size + 24, height: pageH + 36, alignItems: "center", justifyContent: "center" }}>
           {/* Whole book tilted slightly for depth */}
           <View style={{ width: size, height: pageH, transform: [{ perspective: 1600 }, { rotateX: "7deg" }] }}>
@@ -164,13 +179,13 @@ export function BookPreview({
 
             {/* Static left page */}
             <View style={[styles.half, { left: 0, width: pageW, height: pageH }, !leftFace && styles.empty]}>
-              {leftFace ? <FaceView face={leftFace} photosById={photosById} cover={cover} albumName={albumName} side="left" /> : null}
+              {leftFace ? <FaceView face={leftFace} photosById={photosById} cover={cover} coverDesign={coverDesign} albumName={albumName} side="left" pageSize={pageW} /> : null}
               {leftFace ? <LinearGradient colors={["rgba(0,0,0,0.22)", "rgba(0,0,0,0)"]} start={{ x: 1, y: 0 }} end={{ x: 0.75, y: 0 }} style={StyleSheet.absoluteFill} pointerEvents="none" /> : null}
               {flip && leftFace ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }, leftCast]} /> : null}
             </View>
             {/* Static right page */}
             <View style={[styles.half, { left: pageW, width: pageW, height: pageH }, !rightFace && styles.empty]}>
-              {rightFace ? <FaceView face={rightFace} photosById={photosById} cover={cover} albumName={albumName} side="right" /> : null}
+              {rightFace ? <FaceView face={rightFace} photosById={photosById} cover={cover} coverDesign={coverDesign} albumName={albumName} side="right" pageSize={pageW} /> : null}
               {rightFace && rightFace.kind !== "cover" ? <LinearGradient colors={["rgba(0,0,0,0.22)", "rgba(0,0,0,0)"]} start={{ x: 0, y: 0 }} end={{ x: 0.25, y: 0 }} style={StyleSheet.absoluteFill} pointerEvents="none" /> : null}
               {flip && rightFace ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }, rightCast]} /> : null}
             </View>
@@ -178,13 +193,13 @@ export function BookPreview({
             {/* Moving leaf */}
             {flip && flipFront ? (
               <Animated.View style={[styles.half, styles.leaf, { left: pageW, width: pageW, height: pageH }, frontStyle]}>
-                <FaceView face={flipFront} photosById={photosById} cover={cover} albumName={albumName} side="right" />
+                <FaceView face={flipFront} photosById={photosById} cover={cover} coverDesign={coverDesign} albumName={albumName} side="right" pageSize={pageW} />
                 <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }, frontShade]} />
               </Animated.View>
             ) : null}
             {flip && flipBack_ ? (
               <Animated.View style={[styles.half, styles.leaf, { left: 0, width: pageW, height: pageH }, backStyle]}>
-                <FaceView face={flipBack_} photosById={photosById} cover={cover} albumName={albumName} side="left" />
+                <FaceView face={flipBack_} photosById={photosById} cover={cover} coverDesign={coverDesign} albumName={albumName} side="left" pageSize={pageW} />
                 <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }, backShade]} />
               </Animated.View>
             ) : null}
@@ -208,10 +223,12 @@ export function BookPreview({
   );
 }
 
-function FaceView({ face, photosById, cover, albumName, side }: {
-  face: Face; photosById: Record<string, Photo>; cover: any; albumName?: string; side: "left" | "right";
+function FaceView({ face, photosById, cover, coverDesign, albumName, side, pageSize }: {
+  face: Face; photosById: Record<string, Photo>; cover: any; coverDesign?: CoverDesign | null; albumName?: string; side: "left" | "right"; pageSize: number;
 }) {
-  if (face.kind === "cover") return <CoverFace cover={cover} albumName={albumName} />;
+  if (face.kind === "cover") {
+    return coverDesign?.photo_id ? <PageCanvas page={coverToPage(coverDesign)} photosById={photosById} size={pageSize} /> : <CoverFace cover={cover} albumName={albumName} />;
+  }
   if (face.kind === "back") {
     return (
       <View style={[styles.face, { backgroundColor: colors.onSurface, alignItems: "center", justifyContent: "center" }]}>
@@ -222,7 +239,7 @@ function FaceView({ face, photosById, cover, albumName, side }: {
   if (face.kind === "blank") {
     return <View style={[styles.face, { backgroundColor: colors.surfaceSecondary }]} />;
   }
-  return <PageFace page={face.page!} photosById={photosById} pageNumber={face.number!} side={side} />;
+  return <PageCanvas page={face.page!} photosById={photosById} size={pageSize} pageNumber={face.number!} numberSide={side} />;
 }
 
 function CoverFace({ cover, albumName }: { cover: any; albumName?: string }) {
@@ -242,35 +259,6 @@ function CoverFace({ cover, albumName }: { cover: any; albumName?: string }) {
   );
 }
 
-function PageFace({ page, photosById, pageNumber, side }: { page: Page; photosById: Record<string, Photo>; pageNumber: number; side: "left" | "right" }) {
-  const photos = page.photo_ids.map((id) => photosById[id]).filter(Boolean);
-  const n = photos.length;
-  const img = (p?: Photo, flex = 1) => (
-    <Image source={{ uri: p?.preview_url }} style={{ flex, borderRadius: 1, backgroundColor: colors.surfaceTertiary }} contentFit="cover" transition={150} />
-  );
-  return (
-    <View style={[styles.face, { backgroundColor: page.background || "#FFF", padding: 8 }]}>
-      {n === 1 ? img(photos[0])
-        : n === 2 ? <View style={{ flex: 1, gap: 5 }}>{img(photos[0])}{img(photos[1])}</View>
-        : n === 3 ? (
-          <View style={{ flex: 1, gap: 5 }}>
-            {img(photos[0], 1.35)}
-            <View style={{ flex: 1, flexDirection: "row", gap: 5 }}>{img(photos[1])}{img(photos[2])}</View>
-          </View>
-        ) : n >= 4 ? (
-          <View style={{ flex: 1, gap: 5 }}>
-            <View style={{ flex: 1, flexDirection: "row", gap: 5 }}>{img(photos[0])}{img(photos[1])}</View>
-            <View style={{ flex: 1, flexDirection: "row", gap: 5 }}>{img(photos[2])}{img(photos[3])}</View>
-          </View>
-        ) : <View style={{ flex: 1, backgroundColor: colors.surfaceTertiary }} />}
-      {page.text ? (
-        <Text style={{ position: "absolute", bottom: 8, left: 8, right: 8, color: colors.onSurface, fontFamily: fonts.display, fontSize: 11 }} numberOfLines={2}>{page.text}</Text>
-      ) : null}
-      <Text style={[styles.pageNum, side === "left" ? { left: 6 } : { right: 6 }]}>{pageNumber}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   half: { position: "absolute", top: 0, overflow: "hidden", backgroundColor: colors.surfaceSecondary },
   empty: { backgroundColor: "transparent" },
@@ -280,5 +268,4 @@ const styles = StyleSheet.create({
   spine: { position: "absolute", top: 0, bottom: 0, width: 2, backgroundColor: "rgba(0,0,0,0.35)", zIndex: 5 },
   controls: { flexDirection: "row", alignItems: "center", gap: spacing.lg, marginTop: spacing.lg },
   ctrlBtn: { padding: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border, minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" },
-  pageNum: { position: "absolute", bottom: 4, color: colors.muted, fontFamily: fonts.text, fontSize: 9 },
 });

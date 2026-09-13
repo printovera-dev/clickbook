@@ -65,7 +65,7 @@ export default function UploadStep() {
 
   const generate = async () => {
     if (photos.length === 0) { setErr("Please upload at least 1 photo"); return; }
-    router.replace({ pathname: "/create/generating", params: { albumId: String(albumId) } });
+    router.replace({ pathname: "/create/style", params: { albumId: String(albumId) } });
   };
 
   return (

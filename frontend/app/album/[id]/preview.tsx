@@ -23,14 +23,15 @@ export default function AlbumPreview() {
       </View>
       <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 140 }}>
         <Text style={s.h1}>{album?.name}</Text>
-        <Text style={[s.bodyMuted, { marginTop: 4 }]}>Drag a page from its edge, or use the arrows, to turn the pages of your book.</Text>
+        <Text style={[s.bodyMuted, { marginTop: 4 }]}>Drag or use the arrows to turn pages. Double-tap any page (or the cover) to edit it.</Text>
         <View style={{ marginTop: spacing.xl, alignItems: "center" }}>
           {album ? (
             <BookPreview
-              cover={album.cover_snapshot}
+              cover={album.cover_snapshot} coverDesign={album.cover_design}
               pages={album.pages || []}
               photos={album.photos || []}
               albumName={album.name}
+              onEditPage={(i) => router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: String(i) } })} onEditCover={() => router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: "cover" } })}
             />
           ) : null}
         </View>
@@ -42,7 +43,8 @@ export default function AlbumPreview() {
       </ScrollView>
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
         <View style={{ flexDirection: "row", gap: spacing.md }}>
-          <Button testID="preview-edit-button" label="Edit" variant="outline" onPress={() => router.push({ pathname: "/album/[id]/editor", params: { id: String(id) } })} style={{ flex: 1 }} />
+          <Button testID="preview-edit-cover-button" label="Edit Cover" variant="outline" onPress={() => router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: "cover" } })} style={{ flex: 1 }} />
+          <Button testID="preview-edit-button" label="Edit Album" variant="outline" onPress={() => router.push({ pathname: "/album/[id]/editor", params: { id: String(id) } })} style={{ flex: 1 }} />
           <Button testID="preview-continue-button" label="Continue" onPress={() => router.push({ pathname: "/album/[id]/review", params: { id: String(id) } })} style={{ flex: 1 }} />
         </View>
       </View>

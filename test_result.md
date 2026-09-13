@@ -108,3 +108,10 @@
 - Backend suites: 89/89 passing (test_iteration3_features.py must run with -n 0, it restarts the backend).
 - Frontend unchanged; needs regression pass of upload -> generate -> preview -> editor -> checkout (Razorpay WebView opens).
 - Fix after iteration_5 report: razorpay-checkout.tsx now loads Razorpay Standard Checkout JS directly on web (Platform.OS==="web"), native keeps WebView; start() moved to useEffect([visible]) to stop double order creation.
+
+## Iteration 7 (main agent, 2026-09-13) — design system overhaul
+- Backend: design.py (model + styles + cover styles), pdf_renderer.py (Pillow 8x8in@300dpi from design model, fonts in backend/fonts), albums: POST /albums/{id}/generate accepts {style}, PUT /albums/{id} (name/design_style/cover_design), 409 when album locked (after payment). Orders: design_versions kind "approved" on order creation; album locked on payment. Admin: POST /admin/images upload; covers have `style`. Seed: 3 cover styles (Signature Full Bleed / Classic Portrait / Editorial Frame).
+- Frontend: create/style.tsx (Elegant/Balanced/Gallery), src/design.ts, src/components/page-canvas.tsx, app/album/[id]/page.tsx (full-screen page/cover editor: Adjust Image pan/pinch/zoom/fit/fill/reset, Change Image, + Add Text with fonts/size/bold/italic/align/color/dup/delete/drag/resize, Change Layout, Background, Cover Style, Undo/Redo, Save & Preview/Cancel). BookPreview double-tap opens page editor; cover renders cover_design. Fonts via expo-font (assets/fonts).
+- Expo Go upload fix: expo-file-system File in FormData.
+- Razorpay LIVE keys set. Deployment package in backend/deploy (+ Dockerfile, README).
+- Backend suites 70/70 (+19 in iteration3 suite run serially).

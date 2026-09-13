@@ -5,6 +5,7 @@ from typing import List, Optional, Any, Dict
 
 from core import db, now_utc, now_iso, new_id, get_current_customer, get_settings_doc
 from storage_manager import save_original, public_url
+from design import STYLE_RHYTHMS, DEFAULT_STYLE, default_transform, default_cover_design
 
 router = APIRouter(tags=["albums"])
 
@@ -21,6 +22,16 @@ class PagesUpdate(BaseModel):
     pages: List[Dict[str, Any]]
 
 
+class GenerateRequest(BaseModel):
+    style: Optional[str] = None  # elegant | balanced | gallery
+
+
+class AlbumUpdate(BaseModel):
+    name: Optional[str] = None
+    design_style: Optional[str] = None
+    cover_design: Optional[Dict[str, Any]] = None
+
+
 async def _owned_album(album_id: str, customer: dict) -> dict:
     album = await db.albums.find_one({"id": album_id, "customer_id": customer["id"]}, {"_id": 0})
     if not album:
@@ -28,17 +39,23 @@ async def _owned_album(album_id: str, customer: dict) -> dict:
     return album
 
 
-async def _save_design(album: dict, pages: list, kind: str) -> dict:
+def _ensure_locked(album: dict) -> None:
+    if album.get("status") in ("ordered", "delivered") or album.get("locked"):
+        raise HTTPException(409, "This ClickBook has been ordered and its design is locked")
+
+
+async def _save_design(album: dict, pages: list, kind: str, extra: Optional[dict] = None) -> dict:
+    _ensure_locked(album)
     settings = await get_settings_doc()
     sheets = max(settings.get("min_sheets", 10), (len(pages) + 1) // 2)
     version = album.get("version", 1) + 1
     await db.albums.update_one(
         {"id": album["id"]},
-        {"$set": {"pages": pages, "sheets": sheets, "updated_at": now_iso(), "version": version}},
+        {"$set": {"pages": pages, "sheets": sheets, "updated_at": now_iso(), "version": version, **(extra or {})}},
     )
     await db.design_versions.insert_one({
         "id": new_id(), "album_id": album["id"], "version": version, "kind": kind,
-        "snapshot": {"pages": pages, "sheets": sheets}, "created_at": now_iso(),
+        "snapshot": {"pages": pages, "sheets": sheets, **(extra or {})}, "created_at": now_iso(),
     })
     return await db.albums.find_one({"id": album["id"]}, {"_id": 0})
 
@@ -58,6 +75,9 @@ async def create_album(payload: AlbumCreate, customer: dict = Depends(get_curren
         "photos": [],
         "pages": [],
         "size": "8x8",
+        "design_style": None,
+        "cover_design": None,
+        "locked": False,
         "version": 1,
         "created_at": now_iso(),
         "updated_at": now_iso(),
@@ -75,6 +95,24 @@ async def list_my_albums(customer: dict = Depends(get_current_customer)):
 @router.get("/albums/{album_id}")
 async def get_album(album_id: str, customer: dict = Depends(get_current_customer)):
     return {"album": await _owned_album(album_id, customer)}
+
+
+@router.put("/albums/{album_id}")
+async def update_album(album_id: str, payload: AlbumUpdate, customer: dict = Depends(get_current_customer)):
+    album = await _owned_album(album_id, customer)
+    _ensure_locked(album)
+    update = {k: v for k, v in payload.dict().items() if v is not None}
+    if "design_style" in update and update["design_style"] not in STYLE_RHYTHMS:
+        raise HTTPException(400, "Invalid style")
+    if update:
+        update["updated_at"] = now_iso()
+        await db.albums.update_one({"id": album_id}, {"$set": update})
+        if "cover_design" in update:
+            await db.design_versions.insert_one({
+                "id": new_id(), "album_id": album_id, "version": album.get("version", 1), "kind": "cover",
+                "snapshot": {"cover_design": update["cover_design"]}, "created_at": now_iso(),
+            })
+    return {"album": await db.albums.find_one({"id": album_id}, {"_id": 0})}
 
 
 @router.post("/albums/{album_id}/photos")
@@ -117,8 +155,12 @@ async def delete_photo(album_id: str, photo_id: str, customer: dict = Depends(ge
 
 
 @router.post("/albums/{album_id}/generate")
-async def auto_generate(album_id: str, customer: dict = Depends(get_current_customer)):
+async def auto_generate(album_id: str, payload: Optional[GenerateRequest] = None,
+                        customer: dict = Depends(get_current_customer)):
     album = await _owned_album(album_id, customer)
+    style = (payload.style if payload and payload.style else None) or album.get("design_style") or DEFAULT_STYLE
+    if style not in STYLE_RHYTHMS:
+        raise HTTPException(400, "Invalid style")
     photos = album.get("photos", [])
     if not photos:
         raise HTTPException(400, "No photos uploaded")
@@ -127,11 +169,11 @@ async def auto_generate(album_id: str, customer: dict = Depends(get_current_cust
     bgs = await db.backgrounds.find({"active": True}, {"_id": 0}).to_list(100)
     default_bg = bgs[0]["color"] if bgs else "#FFFFFF"
 
-    # Rhythm mixing 1/2/3/4-photo layouts; falls back to smaller layouts near the end.
+    # Style rhythm (photos per page); falls back to smaller layouts near the end.
     pages = []
     i = 0
     idx = 0
-    rhythm = [2, 1, 3, 2, 4, 1, 2]
+    rhythm = STYLE_RHYTHMS[style]
     while i < len(photos):
         want = rhythm[idx % len(rhythm)]
         chosen = None
@@ -149,6 +191,8 @@ async def auto_generate(album_id: str, customer: dict = Depends(get_current_cust
             "layout_id": chosen["id"] if chosen else "",
             "layout_photo_count": count,
             "photo_ids": [photos[i + k]["id"] for k in range(count)],
+            "images": {str(k): {"photo_id": photos[i + k]["id"], **default_transform()} for k in range(count)},
+            "texts": [],
             "background": default_bg,
             "text": "",
             "order": idx,
@@ -156,7 +200,11 @@ async def auto_generate(album_id: str, customer: dict = Depends(get_current_cust
         i += count
         idx += 1
 
-    return {"album": await _save_design(album, pages, "auto")}
+    extra = {"design_style": style}
+    if not album.get("cover_design"):
+        cover_style = (album.get("cover_snapshot") or {}).get("style") or "signature"
+        extra["cover_design"] = default_cover_design(cover_style, photos[0]["id"], album.get("name", "My Album"))
+    return {"album": await _save_design(album, pages, "auto", extra)}
 
 
 @router.put("/albums/{album_id}/pages")

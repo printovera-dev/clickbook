@@ -1,12 +1,13 @@
 """Admin console: login, dashboard, orders, covers, offers, settings, process bots, customers, PDF."""
-import io
 import secrets
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from typing import Optional
 
-from core import db, now_iso, new_id, get_current_admin, get_settings_doc, logger
-from storage_manager import save_pdf, get_file_bytes, public_url
+from core import db, now_iso, new_id, get_current_admin, get_settings_doc
+from storage_manager import save_pdf, save_original, public_url
+from pdf_renderer import render_album_pdf
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -22,6 +23,7 @@ class CoverIn(BaseModel):
     name: str
     description: Optional[str] = ""
     image_url: str
+    style: Optional[str] = None  # signature | classic | editorial
     active: bool = True
     display_order: int = 0
 
@@ -119,57 +121,37 @@ async def update_order_status(order_id: str, payload: StatusUpdate, admin: dict 
 
 @router.post("/orders/{order_id}/pdf")
 async def generate_pdf(order_id: str, admin: dict = Depends(get_current_admin)):
-    from reportlab.lib.pagesizes import inch
-    from reportlab.lib.utils import ImageReader
-    from reportlab.pdfgen import canvas
-
+    """Print-ready 8x8in PDF from the frozen album_snapshot (final approved design)."""
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(404, "Order not found")
-    buf = io.BytesIO()
-    c = canvas.Canvas(buf, pagesize=(8 * inch, 8 * inch))
     album = order.get("album_snapshot", {})
-    photos_by_id = {p["id"]: p for p in album.get("photos", [])}
-    # Cover
-    c.setFillColorRGB(0.77, 0.42, 0.28)
-    c.rect(0, 0, 8 * inch, 8 * inch, fill=1)
-    c.setFillColorRGB(1, 1, 1)
-    c.setFont("Helvetica-Bold", 32)
-    c.drawCentredString(4 * inch, 4 * inch, "ClickBook")
-    c.setFont("Helvetica", 14)
-    c.drawCentredString(4 * inch, 3.5 * inch, album.get("name", "My Album"))
-    c.showPage()
-    for page in album.get("pages", []):
-        c.setFillColorRGB(1, 1, 1)
-        c.rect(0, 0, 8 * inch, 8 * inch, fill=1)
-        photo_ids = page.get("photo_ids", [])
-        n = len(photo_ids)
-        for i, pid in enumerate(photo_ids):
-            photo = photos_by_id.get(pid)
-            img_bytes = get_file_bytes(photo.get("print_path", "")) if photo else None
-            if not img_bytes:
-                continue
-            try:
-                img = ImageReader(io.BytesIO(img_bytes))
-                if n == 1:
-                    c.drawImage(img, 0.5 * inch, 0.5 * inch, 7 * inch, 7 * inch, preserveAspectRatio=True, anchor="c")
-                elif n == 2:
-                    c.drawImage(img, 0.5 * inch, 0.5 * inch + 3.5 * inch * i, 7 * inch, 3.2 * inch, preserveAspectRatio=True, anchor="c")
-                elif n == 3:
-                    if i == 0:
-                        c.drawImage(img, 0.5 * inch, 3.6 * inch, 7 * inch, 3.9 * inch, preserveAspectRatio=True, anchor="c")
-                    else:
-                        c.drawImage(img, 0.5 * inch + (i - 1) * 3.6 * inch, 0.5 * inch, 3.4 * inch, 3.0 * inch, preserveAspectRatio=True, anchor="c")
-                else:
-                    col, row = i % 2, i // 2
-                    c.drawImage(img, 0.5 * inch + col * 3.6 * inch, 4.1 * inch - row * 3.6 * inch, 3.4 * inch, 3.4 * inch, preserveAspectRatio=True, anchor="c")
-            except Exception as e:
-                logger.warning(f"pdf draw err: {e}")
-        c.showPage()
-    c.save()
-    meta = save_pdf(order["customer_id"], order["album_id"], buf.getvalue())
+    layouts = await db.layouts.find({}, {"_id": 0}).to_list(50)
+    layouts_by_id = {l["id"]: l for l in layouts}
+    pdf_bytes = await run_in_threadpool(render_album_pdf, album, layouts_by_id)
+    meta = save_pdf(order["customer_id"], order["album_id"], pdf_bytes)
     await db.orders.update_one({"id": order_id}, {"$set": {"pdf_path": meta["pdf_path"], "pdf_url": public_url(meta["pdf_path"])}})
-    return {"pdf_url": public_url(meta["pdf_path"]), "size_bytes": meta["size_bytes"]}
+    return {"pdf_url": public_url(meta["pdf_path"]), "size_bytes": meta["size_bytes"], "pages": len(album.get("pages", [])) + 1}
+
+
+# ---- Admin-managed images (covers, backgrounds, process bots, promos) ----
+
+@router.post("/images")
+async def admin_upload_image(file: UploadFile = File(...), admin: dict = Depends(get_current_admin)):
+    """Upload a replacement image for any admin-managed asset. Returns stable URLs (preview + original)."""
+    data = await file.read()
+    if len(data) > 20 * 1024 * 1024:
+        raise HTTPException(400, "File too large (max 20MB)")
+    try:
+        meta = await run_in_threadpool(save_original, "admin", "assets", file.filename or "image.jpg", data)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    doc = {"id": new_id(), "filename": file.filename, "uploaded_by": admin["username"], "created_at": now_iso(), **meta,
+           "url": public_url(meta["preview_path"]), "thumbnail_url": public_url(meta["thumbnail_path"]),
+           "original_url": public_url(meta["original_path"])}
+    await db.admin_images.insert_one(dict(doc))
+    doc.pop("_id", None)
+    return {"image": doc}
 
 
 # ---- Covers ----
