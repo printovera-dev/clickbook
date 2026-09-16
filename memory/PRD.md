@@ -74,3 +74,9 @@ ClickBook is a premium photo-album service that lets customers create beautifull
 - **Razorpay LIVE keys** configured (`rzp_live_TbRScBYEKSdUbH`). Webhook secret unchanged (user supplied a URL instead of a secret).
 - **Production deployment package**: `backend/Dockerfile`, `backend/deploy/` (docker-compose: mongo + gunicorn/uvicorn API + nginx TLS + certbot, systemd unit, `deploy.sh install|update|logs|status|backup`, README).
 - Not yet: drag-to-reorder pages (still move up/down), snapping guides, admin upload UI for backgrounds/bots (endpoint exists), italic in PDF (rendered upright).
+
+## Feature updates (2026-09-13, iteration 8)
+- **Cover photo picker** on the Choose Style screen (thumbnails; `generate` accepts `cover_photo_id`, validated against the album).
+- **Admin image uploads**: Admin → Process Bots has Upload/Replace/Remove image (`image_url`); customers see the image in the active stage bubble on order tracking. Covers already had upload.
+- **Drag-to-reorder pages** (`PageOrderList`): hold the ≡ handle and drag; commits through the editor's undo/redo history; page numbers update live.
+- **Snap guides** in the page editor: text boxes snap to page centre, 5 % margins and other text objects' edges/centres with a terracotta guide line while dragging.

@@ -43,6 +43,7 @@ export default function PageEditor() {
   const [saving, setSaving] = useState(false);
   const [coverKey, setCoverKey] = useState<string>("signature");
   const dims = useRef<Record<string, { w: number; h: number }>>({});
+  const [guides, setGuides] = useState<{ v: number[]; h: number[] }>({ v: [], h: [] });
   const gestureStart = useRef<any>(null);
 
   useEffect(() => {
@@ -113,15 +114,34 @@ export default function PageEditor() {
 
   // ---- text gestures (drag box, resize handle) ----
   const onTextStart = () => { gestureStart.current = { t: selectedTextObj }; snapshot(); };
-  const onTextMove = (tx: number, ty: number) => {
-    const st = gestureStart.current?.t as TextObject | undefined; if (!st) return;
-    updateText({ x: Math.max(0, Math.min(1 - st.w, st.x + tx / size)), y: Math.max(0, Math.min(1 - st.h, st.y + ty / size)) }, true);
+  // Snap guides: page centre, safe margins (5%), and other text objects' edges/centres.
+  const SNAP = 0.012;
+  const snapAxis = (edges: number[], candidates: number[]) => {
+    for (const c of candidates) for (let k = 0; k < edges.length; k++) {
+      if (Math.abs(edges[k] - c) < SNAP) return { delta: c - edges[k], line: c };
+    }
+    return null;
   };
+  const onTextMove = (tx: number, ty: number) => {
+    const st = gestureStart.current?.t as TextObject | undefined; if (!st || !page) return;
+    let x = Math.max(0, Math.min(1 - st.w, st.x + tx / size));
+    let y = Math.max(0, Math.min(1 - st.h, st.y + ty / size));
+    const others = (page.texts || []).filter((o) => o.id !== st.id);
+    const vC = [0.5, 0.05, 0.95, ...others.flatMap((o) => [o.x, o.x + o.w, o.x + o.w / 2])];
+    const hC = [0.5, 0.05, 0.95, ...others.flatMap((o) => [o.y, o.y + o.h, o.y + o.h / 2])];
+    const sv = snapAxis([x, x + st.w, x + st.w / 2], vC);
+    const sh = snapAxis([y, y + st.h, y + st.h / 2], hC);
+    if (sv) x += sv.delta;
+    if (sh) y += sh.delta;
+    setGuides({ v: sv ? [sv.line] : [], h: sh ? [sh.line] : [] });
+    updateText({ x, y }, true);
+  };
+  const clearGuides = () => setGuides({ v: [], h: [] });
   const onTextResize = (tx: number, ty: number) => {
     const st = gestureStart.current?.t as TextObject | undefined; if (!st) return;
     updateText({ w: Math.max(0.15, Math.min(1 - st.x, st.w + tx / size)), h: Math.max(0.06, Math.min(1 - st.y, st.h + ty / size)) }, true);
   };
-  const textPan = Gesture.Pan().onStart(() => { "worklet"; runOnJS(onTextStart)(); }).onUpdate((e) => { "worklet"; runOnJS(onTextMove)(e.translationX, e.translationY); });
+  const textPan = Gesture.Pan().onStart(() => { "worklet"; runOnJS(onTextStart)(); }).onUpdate((e) => { "worklet"; runOnJS(onTextMove)(e.translationX, e.translationY); }).onEnd(() => { "worklet"; runOnJS(clearGuides)(); });
   const resizePan = Gesture.Pan().onStart(() => { "worklet"; runOnJS(onTextStart)(); }).onUpdate((e) => { "worklet"; runOnJS(onTextResize)(e.translationX, e.translationY); });
 
   // ---- actions ----
@@ -218,6 +238,9 @@ export default function PageEditor() {
             onTextPress={(tid) => { setSelText(tid); setSelSlot(null); setTool("text"); }}
             onImageDims={(pid, w, h) => { dims.current[pid] = { w, h }; }}
           />
+          {/* Snap guides */}
+          {guides.v.map((v) => <View key={`v${v}`} pointerEvents="none" style={{ position: "absolute", left: v * size - 0.5, top: 0, width: 1, height: size, backgroundColor: colors.brandPrimary, zIndex: 50 }} />)}
+          {guides.h.map((h) => <View key={`h${h}`} pointerEvents="none" style={{ position: "absolute", top: h * size - 0.5, left: 0, height: 1, width: size, backgroundColor: colors.brandPrimary, zIndex: 50 }} />)}
           {/* Image gesture surface */}
           {tool === "image" && slotRect ? (
             <GestureDetector gesture={imgGesture}>

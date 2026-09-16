@@ -6,12 +6,19 @@ import Feather from "@react-native-vector-icons/feather";
 import { Button, s } from "@/src/ui";
 import { colors, spacing, radius, fonts } from "@/src/theme";
 import { ALBUM_STYLES, StyleKey } from "@/src/design";
+import { useQuery } from "@tanstack/react-query";
+import { Image } from "expo-image";
+import { api } from "@/src/api";
 
 export default function ChooseStyle() {
   const { albumId } = useLocalSearchParams<{ albumId: string }>();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [style, setStyle] = useState<StyleKey | null>(null);
+  const [coverPhoto, setCoverPhoto] = useState<string | null>(null);
+  const albumQ = useQuery({ queryKey: ["album", albumId], queryFn: () => api.getAlbum(String(albumId)), enabled: !!albumId });
+  const photos: any[] = albumQ.data?.album?.photos || [];
+  const selectedCover = coverPhoto || photos[0]?.id;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface, paddingTop: insets.top }}>
@@ -21,7 +28,17 @@ export default function ChooseStyle() {
         <View style={{ width: 22 }} />
       </View>
       <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 140 }}>
-        <Text style={s.h1}>Choose your album style</Text>
+        <Text style={s.label}>Cover photo</Text>
+        <Text style={[s.bodyMuted, { marginTop: 4 }]}>Pick the photograph for your front cover. You can change it later.</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, paddingVertical: spacing.md }}>
+          {photos.map((p) => (
+            <Pressable key={p.id} testID={`cover-photo-${p.id}`} onPress={() => setCoverPhoto(p.id)} style={[styles.thumb, selectedCover === p.id && styles.thumbActive]}>
+              <Image source={{ uri: p.thumbnail_url }} style={{ flex: 1 }} contentFit="cover" />
+              {selectedCover === p.id ? <View style={styles.thumbBadge}><Feather name="check" size={12} color={colors.onBrandPrimary} /></View> : null}
+            </Pressable>
+          ))}
+        </ScrollView>
+        <Text style={[s.h1, { marginTop: spacing.lg }]}>Choose your album style</Text>
         <Text style={[s.bodyMuted, { marginTop: 4 }]}>Choose how you want your photos arranged. You can fine-tune everything later.</Text>
         <View style={{ marginTop: spacing.xl, gap: spacing.md }}>
           {ALBUM_STYLES.map((st) => {
@@ -46,7 +63,7 @@ export default function ChooseStyle() {
           testID="style-continue-button"
           label="Design my album"
           disabled={!style}
-          onPress={() => router.replace({ pathname: "/create/generating", params: { albumId: String(albumId), style: String(style) } })}
+          onPress={() => router.replace({ pathname: "/create/generating", params: { albumId: String(albumId), style: String(style), coverPhotoId: selectedCover || "" } })}
         />
       </View>
     </View>
@@ -72,5 +89,8 @@ const styles = StyleSheet.create({
   cardActive: { borderColor: colors.brandPrimary, backgroundColor: colors.brandTertiary },
   radio: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: colors.borderStrong, alignItems: "center", justifyContent: "center" },
   radioActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
+  thumb: { width: 84, height: 84, borderRadius: radius.sm, overflow: "hidden", borderWidth: 1, borderColor: colors.border },
+  thumbActive: { borderColor: colors.brandPrimary, borderWidth: 2 },
+  thumbBadge: { position: "absolute", right: 4, top: 4, width: 20, height: 20, borderRadius: 10, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
   footer: { position: "absolute", left: 0, right: 0, bottom: 0, padding: spacing.xl, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
 });

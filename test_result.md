@@ -115,3 +115,9 @@
 - Expo Go upload fix: expo-file-system File in FormData.
 - Razorpay LIVE keys set. Deployment package in backend/deploy (+ Dockerfile, README).
 - Backend suites 70/70 (+19 in iteration3 suite run serially).
+
+## Iteration 8 (main agent) — cover photo picker, admin bot image upload, drag reorder, snap guides
+- create/style.tsx: cover photo thumbnails (testID cover-photo-{id}) -> generate {style, cover_photo_id}.
+- admin/bots.tsx: Upload/Replace/Remove image (bot-upload-image), BotUpdate.image_url; order tracking shows bot image.
+- src/components/page-order-list.tsx: drag handle page-{i}-drag (long-press 120ms then drag vertically), rows page-row-{i}; commits via existing editor history (undo/redo).
+- page.tsx: snap guides while dragging text (centre 0.5, margins 0.05/0.95, other text edges/centres), guide lines rendered.

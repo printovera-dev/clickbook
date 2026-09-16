@@ -6,6 +6,7 @@ import { api } from "@/src/api";
 import { s, Button } from "@/src/ui";
 import { colors, spacing, radius, fonts } from "@/src/theme";
 import Feather from "@react-native-vector-icons/feather";
+import { Image } from "expo-image";
 
 const STAGES = ["processing", "printing", "packaging", "out_for_delivery", "delivered"];
 
@@ -60,6 +61,7 @@ export default function OrderTracking() {
                     <Text style={[s.h2, !active && !done && { color: colors.muted }]}>{bot?.label || stage.replace(/_/g, " ")}</Text>
                     {active && bot?.message ? (
                       <View style={styles.botBubble}>
+                        {bot.image_url ? <Image source={{ uri: bot.image_url }} style={{ width: "100%", height: 120, borderRadius: 6, marginBottom: 8 }} contentFit="cover" /> : null}
                         <Text style={{ color: colors.onBrandTertiary, fontFamily: fonts.text }}>{bot.message}</Text>
                       </View>
                     ) : null}

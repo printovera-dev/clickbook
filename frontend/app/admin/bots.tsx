@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Modal, Switch } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Modal, Switch, Alert } from "react-native";
+import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
@@ -13,10 +15,21 @@ export default function AdminBots() {
   const router = useRouter();
   const q = useQuery({ queryKey: ["admin-bots"], queryFn: () => api.adminProcessBots() });
   const [editing, setEditing] = useState<any | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const pickImage = async () => {
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.9 });
+    if (res.canceled || !res.assets?.[0]) return;
+    const a = res.assets[0];
+    setUploading(true);
+    try {
+      const r = await api.adminUploadImage(a.uri, a.fileName || `bot_${Date.now()}.jpg`, (a as any).file);
+      setEditing((e: any) => ({ ...e, image_url: r.image.url }));
+    } catch (e: any) { Alert.alert("Upload failed", e?.message || "Please try again"); } finally { setUploading(false); }
+  };
 
   const save = async () => {
     if (!editing) return;
-    await api.adminUpdateBot(editing.id, { label: editing.label, message: editing.message, icon: editing.icon, active: editing.active });
+    await api.adminUpdateBot(editing.id, { label: editing.label, message: editing.message, icon: editing.icon, active: editing.active, image_url: editing.image_url ?? "" });
     setEditing(null); q.refetch();
   };
 
@@ -51,6 +64,11 @@ export default function AdminBots() {
             </View>
             <TextInput testID="bot-label" value={editing?.label} placeholder="Label" placeholderTextColor={colors.muted} onChangeText={(t) => setEditing({ ...editing, label: t })} style={styles.input} />
             <TextInput testID="bot-message" value={editing?.message} placeholder="Message" placeholderTextColor={colors.muted} onChangeText={(t) => setEditing({ ...editing, message: t })} style={styles.input} multiline />
+            {editing?.image_url ? <Image source={{ uri: editing.image_url }} style={{ width: "100%", height: 120, borderRadius: radius.sm, marginBottom: spacing.sm }} contentFit="cover" /> : null}
+            <View style={{ flexDirection: "row", gap: spacing.sm, marginBottom: spacing.sm }}>
+              <Button testID="bot-upload-image" label={uploading ? "Uploading…" : editing?.image_url ? "Replace image" : "Upload image"} variant="outline" onPress={pickImage} loading={uploading} style={{ flex: 1 }} />
+              {editing?.image_url ? <Button testID="bot-remove-image" label="Remove" variant="outline" onPress={() => setEditing({ ...editing, image_url: "" })} /> : null}
+            </View>
             <TextInput testID="bot-icon" value={editing?.icon} placeholder="Feather icon name" placeholderTextColor={colors.muted} autoCapitalize="none" onChangeText={(t) => setEditing({ ...editing, icon: t })} style={styles.input} />
             <View style={styles.switchRow}><Text style={s.body}>Active</Text><Switch value={!!editing?.active} onValueChange={(v) => setEditing({ ...editing, active: v })} /></View>
             <Button testID="bot-save" label="Save" onPress={save} style={{ marginTop: spacing.lg }} />

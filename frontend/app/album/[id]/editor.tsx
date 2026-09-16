@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/src/api";
 import { BookPreview } from "@/src/components/book-preview";
+import { PageOrderList } from "@/src/components/page-order-list";
 import { Button, s } from "@/src/ui";
 import { colors, spacing, radius, fonts } from "@/src/theme";
 import Feather from "@react-native-vector-icons/feather";
@@ -74,15 +75,6 @@ export default function Editor() {
       photoIds.push(unused);
     }
     const next = pages.map((p, i) => (i === pageIdx ? { ...p, layout_id: layout.id, layout_photo_count: layout.photo_count, photo_ids: photoIds } : p));
-    commit(next);
-  };
-  const movePage = (from: number, dir: -1 | 1) => {
-    const to = from + dir;
-    if (to < 0 || to >= pages.length) return;
-    const next = [...pages];
-    const [it] = next.splice(from, 1);
-    next.splice(to, 0, it);
-    setPageIdx(to);
     commit(next);
   };
   const deletePage = (idx: number) => {
@@ -206,21 +198,12 @@ export default function Editor() {
         {tool === "pages" && (
           <>
             <Text style={s.label}>Page order</Text>
-            <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
-              {pages.map((p, i) => (
-                <View key={p.id} style={[styles.pageRow, i === pageIdx && { borderColor: colors.brandPrimary, borderWidth: 2 }]}>
-                  <Pressable onPress={() => setPageIdx(i)} testID={`page-${i}-select`} style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
-                    <View style={[styles.pageChip, { backgroundColor: p.background }]}>
-                      <Text style={{ color: p.background === "#1C1917" ? "#FFF" : colors.onSurface, fontFamily: fonts.text, fontSize: 11 }}>{i + 1}</Text>
-                    </View>
-                    <Text style={[s.body, { marginLeft: spacing.md }]}>{p.layout_photo_count} photo layout</Text>
-                  </Pressable>
-                  <Pressable onPress={() => movePage(i, -1)} testID={`page-${i}-up`} style={styles.iconBtn}><Feather name="arrow-up" size={16} color={colors.onSurface} /></Pressable>
-                  <Pressable onPress={() => movePage(i, 1)} testID={`page-${i}-down`} style={styles.iconBtn}><Feather name="arrow-down" size={16} color={colors.onSurface} /></Pressable>
-                  <Pressable onPress={() => deletePage(i)} testID={`page-${i}-delete`} style={styles.iconBtn}><Feather name="trash-2" size={16} color={colors.error} /></Pressable>
-                </View>
-              ))}
-            </View>
+            <PageOrderList
+              pages={pages} photosById={photosById} selected={pageIdx}
+              onSelect={setPageIdx}
+              onReorder={(from, to) => { const next = [...pages]; const [it] = next.splice(from, 1); next.splice(to, 0, it); setPageIdx(to); commit(next); }}
+              onDelete={deletePage}
+            />
           </>
         )}
         {tool === "photos" && (

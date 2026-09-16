@@ -124,7 +124,8 @@ export const api = {
     request<{ album: any }>("/albums", { method: "POST", body: { cover_id, name } }),
   listMyAlbums: () => request<{ albums: any[] }>("/albums"),
   getAlbum: (id: string) => request<{ album: any }>(`/albums/${id}`),
-  autoGenerate: (id: string, style?: string) => request<{ album: any }>(`/albums/${id}/generate`, { method: "POST", body: style ? { style } : {} }),
+  autoGenerate: (id: string, style?: string, cover_photo_id?: string) =>
+    request<{ album: any }>(`/albums/${id}/generate`, { method: "POST", body: { style: style || null, cover_photo_id: cover_photo_id || null } }),
   updateAlbum: (id: string, data: any) => request<{ album: any }>(`/albums/${id}`, { method: "PUT", body: data }),
   updatePages: (id: string, pages: any[]) =>
     request<{ album: any }>(`/albums/${id}/pages`, { method: "PUT", body: { pages } }),

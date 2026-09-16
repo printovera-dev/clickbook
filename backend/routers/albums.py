@@ -24,6 +24,7 @@ class PagesUpdate(BaseModel):
 
 class GenerateRequest(BaseModel):
     style: Optional[str] = None  # elegant | balanced | gallery
+    cover_photo_id: Optional[str] = None
 
 
 class AlbumUpdate(BaseModel):
@@ -201,9 +202,14 @@ async def auto_generate(album_id: str, payload: Optional[GenerateRequest] = None
         idx += 1
 
     extra = {"design_style": style}
+    cover_pid = payload.cover_photo_id if payload and payload.cover_photo_id else None
+    if cover_pid and not any(p["id"] == cover_pid for p in photos):
+        raise HTTPException(400, "Cover photo not in this album")
     if not album.get("cover_design"):
         cover_style = (album.get("cover_snapshot") or {}).get("style") or "signature"
-        extra["cover_design"] = default_cover_design(cover_style, photos[0]["id"], album.get("name", "My Album"))
+        extra["cover_design"] = default_cover_design(cover_style, cover_pid or photos[0]["id"], album.get("name", "My Album"))
+    elif cover_pid:
+        extra["cover_design"] = {**album["cover_design"], "photo_id": cover_pid, "image": default_transform()}
     return {"album": await _save_design(album, pages, "auto", extra)}
 
 

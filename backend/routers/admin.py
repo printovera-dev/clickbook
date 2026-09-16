@@ -60,6 +60,7 @@ class BotUpdate(BaseModel):
     label: Optional[str] = None
     message: Optional[str] = None
     icon: Optional[str] = None
+    image_url: Optional[str] = None
     active: Optional[bool] = None
 
 
