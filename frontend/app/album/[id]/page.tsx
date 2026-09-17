@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Alert, Dimensions, Platform, KeyboardAvoidingView } from "react-native";
 import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -50,7 +51,7 @@ export default function PageEditor() {
     if (album && !page) {
       if (isCover) {
         const cd: CoverDesign | null = album.cover_design;
-        if (cd) { setPage(coverToPage(cd)); setCoverKey(cd.style || "signature"); }
+        if (cd) { setPage(coverToPage(cd)); setCoverKey(cd.style || "signature"); if (initialTool && ["image", "replace", "coverstyle", "background", "text"].includes(initialTool)) setTool(initialTool as Tool); }
         return;
       }
       const p = album.pages?.[pageIndex];
@@ -59,7 +60,7 @@ export default function PageEditor() {
         if (initialTool === "text") {
           const t = newTextObject({ z: base.texts.length + 1 });
           setPage({ ...base, texts: [...base.texts, t] }); setHistory([base]); setSelText(t.id); setSelSlot(null); setTool("text"); setEditingText(true);
-        } else setPage(base);
+        } else { setPage(base); if (initialTool && ["image", "replace", "layout", "background"].includes(initialTool)) setTool(initialTool as Tool); }
       }
     }
   }, [album, page, pageIndex, isCover, initialTool]);
@@ -157,6 +158,15 @@ export default function PageEditor() {
     commit({ ...page, texts: [...(page.texts || []), t] }); setSelText(t.id);
   };
   const deleteText = () => { if (!page || !selText) return; commit({ ...page, texts: page.texts!.filter((t) => t.id !== selText) }); setSelText(null); };
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.key === "Backspace" || e.key === "Delete") && selText && !editingText) { e.preventDefault(); deleteText(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selText, editingText, page]);
   const changeLayout = (count: number) => {
     if (!page) return;
     const unused = photos.map((p) => p.id).filter((pid) => !page.photo_ids.includes(pid));
@@ -171,13 +181,26 @@ export default function PageEditor() {
   const replaceImage = (pid: string) => {
     if (!page || selSlot == null) return;
     const ids = [...page.photo_ids]; ids[selSlot] = pid;
-    commit({ ...page, photo_ids: ids, images: { ...(page.images || {}), [String(selSlot)]: { ...(page.images?.[String(selSlot)] || defaultTransform()), photo_id: pid } } });
-    setTool("image");
+    commit({ ...page, photo_ids: ids, images: { ...(page.images || {}), [String(selSlot)]: { ...defaultTransform(), photo_id: pid } } });
+  };
+  const [uploadingNew, setUploadingNew] = useState(false);
+  const uploadNewImage = async () => {
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.85 });
+    if (res.canceled || !res.assets?.[0]) return;
+    const a = res.assets[0];
+    setUploadingNew(true);
+    try {
+      const r = await api.uploadPhoto(String(id), a.uri, a.fileName || `photo_${Date.now()}.jpg`, (a as any).file);
+      qc.setQueryData(["album", id], (old: any) => old ? { ...old, album: { ...old.album, photos: [...(old.album.photos || []), r.photo] } } : old);
+      replaceImage(r.photo.id);
+    } catch (e: any) {
+      Alert.alert("Upload failed", e?.message || "Please try again");
+    } finally { setUploadingNew(false); }
   };
   const setCoverStyle = (key: string) => {
     if (!page) return;
     const st = COVER_STYLES.find((c) => c.key === key); if (!st) return;
-    commit({ ...page, slots: [st.frame], background: st.background, images: { "0": { ...defaultTransform(), photo_id: page.photo_ids[0] } } });
+    commit({ ...page, slots: [st.frame], background: st.background });
     setCoverKey(key as any);
   };
   const save = async () => {
@@ -213,7 +236,7 @@ export default function PageEditor() {
     { key: "image", icon: "move", label: "Adjust Image" },
     { key: "replace", icon: "image", label: "Change Image" },
     { key: "text", icon: "type", label: "Add Text" },
-    isCover ? { key: "coverstyle", icon: "book", label: "Cover Style" } : { key: "layout", icon: "grid", label: "Change Layout" },
+    isCover ? { key: "coverstyle", icon: "book", label: "Change Cover Style" } : { key: "layout", icon: "grid", label: "Change Layout" },
     { key: "background", icon: "droplet", label: "Background" },
   ];
 
@@ -283,7 +306,7 @@ export default function PageEditor() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
               <Chip icon="zoom-in" label="Zoom in" onPress={() => updateImage(selSlot, { scale: Math.min(4, slotTr.scale + 0.2) })} testID="img-zoom-in" />
               <Chip icon="zoom-out" label="Zoom out" onPress={() => updateImage(selSlot, { scale: Math.max(1, slotTr.scale - 0.2), ox: slotTr.scale - 0.2 <= 1 ? 0 : slotTr.ox, oy: slotTr.scale - 0.2 <= 1 ? 0 : slotTr.oy })} testID="img-zoom-out" />
-              <Chip icon="maximize" label="Fill" active={slotTr.fit !== "fit"} onPress={() => updateImage(selSlot, { fit: "fill" })} testID="img-fill" />
+              <Chip icon="maximize" label="Fill" active={slotTr.fit !== "fit"} onPress={() => updateImage(selSlot, { fit: "fill", scale: 1, ox: 0, oy: 0 })} testID="img-fill" />
               <Chip icon="minimize" label="Fit" active={slotTr.fit === "fit"} onPress={() => updateImage(selSlot, { fit: "fit", scale: 1, ox: 0, oy: 0 })} testID="img-fit" />
               <Chip icon="rotate-ccw" label="Reset" onPress={() => updateImage(selSlot, defaultTransform())} testID="img-reset" />
             </ScrollView>
@@ -291,6 +314,10 @@ export default function PageEditor() {
 
           {tool === "replace" ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+              <Pressable testID="replace-upload-new" onPress={uploadNewImage} disabled={uploadingNew} style={[styles.thumb, { alignItems: "center", justifyContent: "center", borderStyle: "dashed", borderColor: colors.brandPrimary }]}>
+                <Feather name={uploadingNew ? "loader" : "upload"} size={18} color={colors.brandPrimary} />
+                <Text style={{ fontFamily: fonts.text, fontSize: 9, color: colors.brandPrimary, marginTop: 2, textAlign: "center" }}>{uploadingNew ? "Uploading" : "Upload new"}</Text>
+              </Pressable>
               {photos.map((p) => (
                 <Pressable key={p.id} testID={`replace-photo-${p.id}`} onPress={() => replaceImage(p.id)} style={[styles.thumb, slotPhotoId === p.id && { borderColor: colors.brandPrimary, borderWidth: 2 }]}>
                   <Image source={{ uri: p.thumbnail_url }} style={{ flex: 1 }} contentFit="cover" />

@@ -5,6 +5,8 @@ import secrets
 
 from core import db, now_utc, now_iso, new_id, get_current_customer
 from routers.catalog import compute_price
+from routers.notifications import notify
+from production import schedule_production_package
 
 router = APIRouter(tags=["orders"])
 
@@ -23,13 +25,19 @@ class PaymentConfirm(BaseModel):
 
 
 async def mark_order_paid(order: dict, payment_id: str, method: str, extra: Optional[dict] = None) -> None:
-    """Idempotent: only flips pending/failed orders to paid, then locks the album."""
-    await db.orders.update_one(
+    """Idempotent: only flips pending/failed orders to paid, then locks the album, notifies the customer
+    and kicks off the print-facility package (Downloads/<order>/) in the background."""
+    r = await db.orders.update_one(
         {"id": order["id"], "payment_status": {"$ne": "paid"}},
         {"$set": {"payment_status": "paid", "payment_id": payment_id, "payment_method": method,
                   "paid_at": now_iso(), "updated_at": now_iso(), **(extra or {})}},
     )
     await db.albums.update_one({"id": order["album_id"]}, {"$set": {"status": "ordered", "locked": True, "locked_at": now_iso()}})
+    if r.modified_count:
+        await notify(order["customer_id"], f"Order {order['order_no']} confirmed",
+                     f"Payment received. Your {order.get('sheets', '')}-sheet ClickBook is now in production.",
+                     "order", order["id"])
+        schedule_production_package(order["id"])
 
 
 @router.post("/orders")
@@ -44,9 +52,18 @@ async def create_order(payload: OrderCreate, customer: dict = Depends(get_curren
     if price.get("coupon_error"):
         raise HTTPException(400, price["coupon_error"])
 
+    # Album/production name: "Cover Title / dd-mm-yyyy", else "Client Name / dd-mm-yyyy"
+    cover_texts = ((album.get("cover_design") or {}).get("texts") or [])
+    cover_title = next((t.get("text", "").strip() for t in cover_texts if t.get("text", "").strip()), "")
+    client_name = (customer.get("name") or "").strip() or customer.get("mobile", "Customer")
+    created = now_utc()
+    production_name = f"{cover_title or client_name} / {created.strftime('%d-%m-%Y')}"
     order = {
         "id": new_id(),
         "order_no": f"CB{now_utc().strftime('%y%m%d')}{secrets.randbelow(9000) + 1000}",
+        "client_name": client_name,
+        "cover_title": cover_title,
+        "album_name": production_name,
         "customer_id": customer["id"],
         "customer_snapshot": {"name": customer.get("name"), "mobile": customer.get("mobile"), "email": customer.get("email")},
         "album_id": album["id"],

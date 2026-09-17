@@ -106,7 +106,7 @@ class TestPhotoUploadFlow:
     def test_08_auto_generate_pages(self):
         r = requests.post(
             f"{BASE_URL}/api/albums/{self.state['album_id']}/generate",
-            json={},
+            json={"allow_short": True, },
             headers={"Authorization": f"Bearer {self.state['token']}"},
             timeout=60,
         )

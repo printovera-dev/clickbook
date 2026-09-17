@@ -61,7 +61,7 @@ async def get_settings_doc() -> dict:
     s = await db.settings.find_one({"id": "default"}, {"_id": 0})
     if not s:
         s = {"id": "default", "price_per_sheet": 90, "gst_percent": 18,
-             "min_sheets": 10, "max_sheets": 75, "size": "8x8", "gift_wrap_fee": 150}
+             "min_sheets": 20, "max_sheets": 75, "size": "8x8", "gift_wrap_fee": 150}
         await db.settings.insert_one(dict(s))
     if "gift_wrap_fee" not in s:
         s["gift_wrap_fee"] = 150

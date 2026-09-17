@@ -63,10 +63,15 @@ async function request<T = any>(
   if (!res.ok) {
     const text = await res.text();
     let msg = text;
+    let detail: any = null;
     try {
-      msg = JSON.parse(text).detail || text;
+      detail = JSON.parse(text).detail;
+      msg = typeof detail === "string" ? detail : detail?.message || text;
     } catch {}
-    throw new Error(msg || `HTTP ${res.status}`);
+    const err: any = new Error(msg || `HTTP ${res.status}`);
+    err.status = res.status;
+    err.detail = detail;
+    throw err;
   }
   return res.json();
 }
@@ -151,6 +156,11 @@ export const api = {
   listMyOrders: () => request<{ orders: any[] }>("/orders"),
   getOrder: (id: string) => request<{ order: any; process_bots: any[] }>(`/orders/${id}`),
 
+  // Notifications (customer)
+  listNotifications: () => request<{ notifications: any[]; unread_count: number }>("/notifications"),
+  readNotification: (id: string) => request(`/notifications/${id}/read`, { method: "POST", body: {} }),
+  readAllNotifications: () => request("/notifications/read-all", { method: "POST", body: {} }),
+
   // Policies
   listPolicies: () => request<{ policies: any[] }>("/policies"),
   getPolicy: (key: string) => request<{ policy: any }>(`/policies/${key}`),
@@ -164,6 +174,11 @@ export const api = {
   adminUpdateOrderStatus: (id: string, data: any) =>
     request(`/admin/orders/${id}/status`, { method: "PUT", body: data, admin: true }),
   adminGeneratePdf: (id: string) => request<any>(`/admin/orders/${id}/pdf`, { method: "POST", body: {}, admin: true }),
+  adminOrderDownloads: (id: string) => request<{ package: any; files: any[] }>(`/admin/orders/${id}/downloads`, { admin: true }),
+  adminDownloadsZipUrl: async (id: string) => `${BASE}/api/admin/orders/${id}/downloads.zip?token=${encodeURIComponent((await getAdminToken()) || "")}`,
+  adminSendNotification: (data: { title: string; body: string; type: string; customer_id?: string | null; order_id?: string | null }) =>
+    request<{ sent: number; broadcast: boolean }>("/admin/notifications", { method: "POST", body: data, admin: true }),
+  adminNotifications: () => request<{ notifications: any[] }>("/admin/notifications", { admin: true }),
   adminListCovers: () => request<{ covers: any[] }>("/covers?admin=true", { admin: true }),
   adminCreateCover: (data: any) => request("/admin/covers", { method: "POST", body: data, admin: true }),
   adminUpdateCover: (id: string, data: any) => request(`/admin/covers/${id}`, { method: "PUT", body: data, admin: true }),

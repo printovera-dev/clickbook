@@ -183,7 +183,7 @@ def test_create_album_with_photos(s):
         r = s.post(f"{API}/albums/{state['album_id']}/photos",
                    headers=state["auth"], files=files)
         assert r.status_code == 200, r.text
-    r = s.post(f"{API}/albums/{state['album_id']}/generate", headers=state["auth"])
+    r = s.post(f"{API}/albums/{state['album_id']}/generate", json={"allow_short": True}, headers=state["auth"])
     assert r.status_code == 200, r.text
     state["sheets"] = r.json()["album"]["sheets"]
 

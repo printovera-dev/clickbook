@@ -11,7 +11,7 @@ import { colors, spacing, radius, fonts } from "@/src/theme";
 import Feather from "@react-native-vector-icons/feather";
 
 export default function UploadStep() {
-  const { albumId } = useLocalSearchParams<{ albumId: string }>();
+  const { albumId, notice, style: keepStyle, coverPhotoId: keepCover } = useLocalSearchParams<{ albumId: string; notice?: string; style?: string; coverPhotoId?: string }>();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [uploading, setUploading] = useState(false);
@@ -65,7 +65,9 @@ export default function UploadStep() {
 
   const generate = async () => {
     if (photos.length === 0) { setErr("Please upload at least 1 photo"); return; }
-    router.replace({ pathname: "/create/style", params: { albumId: String(albumId) } });
+    keepStyle
+      ? router.replace({ pathname: "/create/generating", params: { albumId: String(albumId), style: String(keepStyle), coverPhotoId: String(keepCover || "") } })
+      : router.replace({ pathname: "/create/style", params: { albumId: String(albumId) } });
   };
 
   return (
@@ -77,6 +79,13 @@ export default function UploadStep() {
       </View>
       <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 140 }}>
         <Text style={s.h1}>Upload your photos</Text>
+        {notice ? (
+          <View testID="upload-notice" style={{ marginTop: spacing.md, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.brandTertiary, borderWidth: 1, borderColor: colors.brandSecondary }}>
+            <Text style={{ color: colors.onBrandTertiary, fontFamily: fonts.text, fontWeight: "600" }}>More photos needed</Text>
+            <Text style={{ color: colors.onBrandTertiary, fontFamily: fonts.text, marginTop: 4 }}>{notice}</Text>
+            <Text style={[s.bodyMuted, { marginTop: 4 }]}>Your uploaded photos are kept — just add more and continue.</Text>
+          </View>
+        ) : null}
         <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>Pick from your gallery. We&apos;ll design the album automatically.</Text>
 
         <Pressable testID="upload-pick-button" onPress={pickAndUpload} style={styles.dropzone}>

@@ -19,8 +19,8 @@ const { width: SCREEN_W } = Dimensions.get("window");
 const FLIP_MS = 520;
 
 export function BookPreview({
-  cover, coverDesign, pages, photos, size = Math.min(SCREEN_W - 32, 400), albumName, onEditPage, onEditCover,
-}: { cover: any; coverDesign?: CoverDesign | null; pages: Page[]; photos: Photo[]; size?: number; albumName?: string; onEditPage?: (pageIndex: number) => void; onEditCover?: () => void }) {
+  cover, coverDesign, pages, photos, size = Math.min(SCREEN_W - 32, 400), albumName, onEditPage, onEditCover, onSelectPage, selectedPage,
+}: { cover: any; coverDesign?: CoverDesign | null; pages: Page[]; photos: Photo[]; size?: number; albumName?: string; onEditPage?: (pageIndex: number) => void; onEditCover?: () => void; onSelectPage?: (pageIndex: number | "cover") => void; selectedPage?: number | "cover" | null }) {
   const pageW = size / 2;
   const pageH = pageW; // 8x8" square pages
   const photosById = useMemo(() => Object.fromEntries(photos.map((p) => [p.id, p])), [photos]);
@@ -105,10 +105,24 @@ export function BookPreview({
     const right = e.x > (size + 24) / 2;
     runOnJS(handleDoubleTap)(right);
   });
-  const composed = Gesture.Exclusive(tap, pan);
+  const singleTap = Gesture.Tap().numberOfTaps(1).maxDuration(250).onEnd((e) => {
+    "worklet";
+    if (activeDir.value !== 0) return;
+    runOnJS(handleSingleTap)(e.x > (size + 24) / 2);
+  });
+  const composed = Gesture.Exclusive(tap, singleTap, pan);
 
+  function faceAt(right: boolean) {
+    return right ? (turned < leaves ? faces[2 * turned] : null) : (turned > 0 ? faces[2 * turned - 1] : null);
+  }
+  function handleSingleTap(right: boolean) {
+    const face = faceAt(right);
+    if (!face || !onSelectPage) return;
+    if (face.kind === "page") onSelectPage(face.number! - 1);
+    if (face.kind === "cover") onSelectPage("cover");
+  }
   function handleDoubleTap(right: boolean) {
-    const face = right ? (turned < leaves ? faces[2 * turned] : null) : (turned > 0 ? faces[2 * turned - 1] : null);
+    const face = faceAt(right);
     if (!face) return;
     if (face.kind === "page" && onEditPage) onEditPage(face.number! - 1);
     if (face.kind === "cover" && onEditCover) onEditCover();
@@ -152,6 +166,7 @@ export function BookPreview({
   const rightTurned = flip?.dir === 1 ? turned + 1 : flip?.dir === -1 ? turned : turned;
   const leftFace = leftTurned > 0 ? faces[2 * leftTurned - 1] : null;
   const rightFace = rightTurned < leaves ? faces[2 * rightTurned] : null;
+  const isSel = (f: Face | null) => !!f && selectedPage != null && ((f.kind === "page" && selectedPage === f.number! - 1) || (f.kind === "cover" && selectedPage === "cover"));
   const flipFront = flip ? faces[2 * flip.leaf] : null;
   const flipBack_ = flip ? faces[2 * flip.leaf + 1] : null;
 
@@ -182,12 +197,14 @@ export function BookPreview({
               {leftFace ? <FaceView face={leftFace} photosById={photosById} cover={cover} coverDesign={coverDesign} albumName={albumName} side="left" pageSize={pageW} /> : null}
               {leftFace ? <LinearGradient colors={["rgba(0,0,0,0.22)", "rgba(0,0,0,0)"]} start={{ x: 1, y: 0 }} end={{ x: 0.75, y: 0 }} style={StyleSheet.absoluteFill} pointerEvents="none" /> : null}
               {flip && leftFace ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }, leftCast]} /> : null}
+              {isSel(leftFace) && !flip ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderWidth: 3, borderColor: colors.brandPrimary }]} /> : null}
             </View>
             {/* Static right page */}
             <View style={[styles.half, { left: pageW, width: pageW, height: pageH }, !rightFace && styles.empty]}>
               {rightFace ? <FaceView face={rightFace} photosById={photosById} cover={cover} coverDesign={coverDesign} albumName={albumName} side="right" pageSize={pageW} /> : null}
               {rightFace && rightFace.kind !== "cover" ? <LinearGradient colors={["rgba(0,0,0,0.22)", "rgba(0,0,0,0)"]} start={{ x: 0, y: 0 }} end={{ x: 0.25, y: 0 }} style={StyleSheet.absoluteFill} pointerEvents="none" /> : null}
               {flip && rightFace ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }, rightCast]} /> : null}
+              {isSel(rightFace) && !flip ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderWidth: 3, borderColor: colors.brandPrimary }]} /> : null}
             </View>
 
             {/* Moving leaf */}

@@ -1,14 +1,19 @@
 import { useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Modal, RefreshControl } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Modal, RefreshControl, Linking, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@/src/api";
+import { api, fileUrl } from "@/src/api";
 import { Button, s } from "@/src/ui";
 import { colors, spacing, radius, fonts } from "@/src/theme";
 import Feather from "@react-native-vector-icons/feather";
 
 const STATUSES = ["processing", "printing", "packaging", "out_for_delivery", "delivered", "cancelled"];
+
+function fmtBytes(n?: number) {
+  if (!n) return "";
+  return n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`;
+}
 
 export default function AdminOrders() {
   const insets = useSafeAreaInsets();
@@ -17,8 +22,17 @@ export default function AdminOrders() {
   const [selected, setSelected] = useState<any | null>(null);
   const [note, setNote] = useState("");
   const [tracking, setTracking] = useState("");
+  const [building, setBuilding] = useState(false);
+  const [buildError, setBuildError] = useState<string | null>(null);
   const q = useQuery({ queryKey: ["admin-orders", filter], queryFn: () => api.adminOrders(filter || undefined) });
   const orders = q.data?.orders || [];
+  const downloads = useQuery({
+    queryKey: ["admin-order-downloads", selected?.id],
+    queryFn: () => api.adminOrderDownloads(selected.id),
+    enabled: !!selected,
+    refetchInterval: (query) => (query.state.data?.package?.status === "building" ? 3000 : false),
+  });
+  const pkg = downloads.data?.package;
 
   const updateStatus = async (nextStatus: string) => {
     if (!selected) return;
@@ -26,11 +40,29 @@ export default function AdminOrders() {
     setSelected(null); setNote(""); setTracking("");
     q.refetch();
   };
-  const genPdf = async () => {
+  const buildPackage = async () => {
     if (!selected) return;
-    const r = await api.adminGeneratePdf(selected.id);
-    q.refetch();
-    setSelected({ ...selected, pdf_url: r.pdf_url });
+    setBuilding(true); setBuildError(null);
+    try {
+      await api.adminGeneratePdf(selected.id);
+      await downloads.refetch();
+      q.refetch();
+    } catch (e: any) {
+      setBuildError(e.message || "Build failed");
+    } finally {
+      setBuilding(false);
+    }
+  };
+  const openZip = async () => {
+    if (!selected) return;
+    Linking.openURL(await api.adminDownloadsZipUrl(selected.id));
+  };
+  const notifyCustomer = () => {
+    if (!selected) return;
+    const o = selected;
+    setSelected(null);
+    router.push({ pathname: "/admin/notifications", params: { customer_id: o.customer_id, order_id: o.id, order_no: o.order_no,
+      customer_label: `${o.customer_snapshot?.name || "—"} · ${o.customer_snapshot?.mobile || ""}` } } as any);
   };
 
   return (
@@ -65,18 +97,21 @@ export default function AdminOrders() {
 
       <Modal visible={!!selected} transparent animationType="slide" onRequestClose={() => setSelected(null)}>
         <View style={styles.modalWrap}>
-          <View style={styles.modal}>
+          <View style={[styles.modal, { paddingBottom: insets.bottom + spacing.xl }]}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing.md }}>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
               <Text style={s.h1}>{selected?.order_no}</Text>
-              <Pressable onPress={() => setSelected(null)} testID="admin-order-close"><Feather name="x" size={22} color={colors.onSurface} /></Pressable>
+              <Pressable onPress={() => setSelected(null)} testID="admin-order-close" hitSlop={12}><Feather name="x" size={22} color={colors.onSurface} /></Pressable>
             </View>
-            <Text style={s.bodyMuted}>Status: {selected?.production_status?.replace(/_/g, " ")}{selected?.gift_wrap ? " · 🎁 Gift wrap" : ""}</Text>
+            <Text style={s.bodyMuted}>{selected?.album_name}</Text>
+            <Text style={s.bodyMuted}>Status: {selected?.production_status?.replace(/_/g, " ")} · {selected?.payment_status}{selected?.gift_wrap ? " · 🎁 Gift wrap" : ""}</Text>
             {selected?.gift_wrap && selected?.gift_note ? (
               <View style={styles.giftNoteCard} testID="admin-gift-note">
                 <Text style={{ fontFamily: fonts.text, fontSize: 11, color: colors.onBrandTertiary, textTransform: "uppercase", letterSpacing: 0.6 }}>Gift note</Text>
                 <Text style={{ marginTop: 4, fontFamily: fonts.display, fontStyle: "italic", color: colors.onBrandTertiary, fontSize: 15 }}>&ldquo;{selected.gift_note}&rdquo;</Text>
               </View>
             ) : null}
+
             <Text style={[s.label, { marginTop: spacing.lg }]}>Update status</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, paddingBottom: spacing.md }} style={{ maxHeight: 56, marginTop: spacing.sm }}>
               {STATUSES.map((st) => (
@@ -86,13 +121,50 @@ export default function AdminOrders() {
               ))}
             </ScrollView>
             <TextInput testID="admin-tracking-input" value={tracking} onChangeText={setTracking} placeholder="Tracking number (optional)" placeholderTextColor={colors.muted} style={styles.input} />
-            <TextInput testID="admin-note-input" value={note} onChangeText={setNote} placeholder="Note (optional)" placeholderTextColor={colors.muted} style={styles.input} />
-            <Button testID="admin-generate-pdf" label="Generate print PDF" variant="outline" onPress={genPdf} style={{ marginTop: spacing.lg }} />
-            {selected?.pdf_url ? <Text style={[s.bodyMuted, { marginTop: 6 }]}>PDF ready ✓</Text> : null}
+            <TextInput testID="admin-note-input" value={note} onChangeText={setNote} placeholder="Note (optional) — sent to the customer" placeholderTextColor={colors.muted} style={styles.input} />
+            <Button testID="admin-notify-customer" label="Message customer" variant="outline" onPress={notifyCustomer} style={{ marginTop: spacing.md }} />
+
+            <Text style={[s.label, { marginTop: spacing.xl }]}>Production files</Text>
+            <View style={styles.pkgCard} testID="admin-production-package">
+              {downloads.isLoading ? <ActivityIndicator color={colors.brandPrimary} /> : null}
+              {pkg?.status === "building" ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                  <ActivityIndicator color={colors.brandPrimary} />
+                  <Text style={s.body}>Rendering print files…</Text>
+                </View>
+              ) : null}
+              {pkg?.status === "failed" ? <Text style={{ color: colors.error, fontFamily: fonts.text }}>Render failed: {pkg.error}</Text> : null}
+              {!pkg || pkg.status === "none" ? (
+                <Text style={s.bodyMuted}>{selected?.payment_status === "paid" ? "Not built yet." : "Files are generated automatically once payment is received."}</Text>
+              ) : null}
+              {pkg?.status === "ready" ? (
+                <View>
+                  <Text style={[s.bodyMuted, { fontSize: 12 }]} testID="admin-package-dir">{pkg.dir}/ · {pkg.pages} pages · {fmtBytes(pkg.size_bytes)}</Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.md }}>
+                    <FileChip icon="file-text" label="Album.pdf" testID="admin-file-pdf" onPress={() => Linking.openURL(fileUrl(pkg.pdf_url)!)} />
+                    <FileChip icon="image" label="Cover/cover.jpg" testID="admin-file-cover" onPress={() => Linking.openURL(fileUrl(pkg.cover_url)!)} />
+                    <FileChip icon="layers" label={`Print/ (${pkg.pages} pages)`} testID="admin-file-print" onPress={() => Linking.openURL(fileUrl(pkg.print_urls?.[0])!)} />
+                  </View>
+                  <Button testID="admin-download-zip" label="Download all (ZIP)" onPress={openZip} style={{ marginTop: spacing.md }} size="sm" />
+                </View>
+              ) : null}
+              {buildError ? <Text style={{ color: colors.error, fontFamily: fonts.text, marginTop: spacing.sm }}>{buildError}</Text> : null}
+              <Button testID="admin-generate-pdf" label={pkg?.status === "ready" ? "Rebuild production files" : "Build production files"} variant="outline" size="sm" onPress={buildPackage} loading={building} style={{ marginTop: spacing.md }} />
+            </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
     </View>
+  );
+}
+
+function FileChip({ icon, label, onPress, testID }: { icon: string; label: string; onPress: () => void; testID: string }) {
+  return (
+    <Pressable onPress={onPress} testID={testID} style={styles.fileChip}>
+      <Feather name={icon as any} size={14} color={colors.brandPrimary} />
+      <Text style={{ color: colors.onSurface, fontFamily: fonts.text, fontSize: 12 }}>{label}</Text>
+    </Pressable>
   );
 }
 

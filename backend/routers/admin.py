@@ -1,13 +1,15 @@
 """Admin console: login, dashboard, orders, covers, offers, settings, process bots, customers, PDF."""
 import secrets
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
+from fastapi.responses import Response
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from typing import Optional
 
 from core import db, now_iso, new_id, get_current_admin, get_settings_doc
-from storage_manager import save_pdf, save_original, public_url
-from pdf_renderer import render_album_pdf
+from storage_manager import save_original, public_url, list_dir_files, zip_dir
+from production import build_production_package
+from routers.notifications import notify_order_status
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -113,26 +115,51 @@ async def update_order_status(order_id: str, payload: StatusUpdate, admin: dict 
         {"$set": update,
          "$push": {"status_history": {"status": payload.production_status, "at": now_iso(), "note": payload.note or ""}}},
     )
-    if payload.production_status == "delivered":
-        order = await db.orders.find_one({"id": order_id}, {"_id": 0})
-        if order:
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if order:
+        if payload.production_status == "delivered":
             await db.albums.update_one({"id": order["album_id"]}, {"$set": {"status": "delivered"}})
+        await notify_order_status(order, payload.production_status, payload.note or "")
     return {"success": True}
 
 
 @router.post("/orders/{order_id}/pdf")
 async def generate_pdf(order_id: str, admin: dict = Depends(get_current_admin)):
-    """Print-ready 8x8in PDF from the frozen album_snapshot (final approved design)."""
-    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    """(Re)builds the full print package from the frozen album_snapshot:
+    Downloads/<order>/Album.pdf + Cover/cover.jpg + Print/page_NNN.jpg + manifest.json."""
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0, "id": 1, "album_snapshot": 1})
     if not order:
         raise HTTPException(404, "Order not found")
-    album = order.get("album_snapshot", {})
-    layouts = await db.layouts.find({}, {"_id": 0}).to_list(50)
-    layouts_by_id = {l["id"]: l for l in layouts}
-    pdf_bytes = await run_in_threadpool(render_album_pdf, album, layouts_by_id)
-    meta = save_pdf(order["customer_id"], order["album_id"], pdf_bytes)
-    await db.orders.update_one({"id": order_id}, {"$set": {"pdf_path": meta["pdf_path"], "pdf_url": public_url(meta["pdf_path"])}})
-    return {"pdf_url": public_url(meta["pdf_path"]), "size_bytes": meta["size_bytes"], "pages": len(album.get("pages", [])) + 1}
+    pkg = await build_production_package(order_id)
+    if pkg.get("status") != "ready":
+        raise HTTPException(500, f"Render failed: {pkg.get('error', 'unknown error')}")
+    return {"pdf_url": pkg["pdf_url"], "size_bytes": pkg["size_bytes"], "pages": pkg["pages"] + 1, "package": pkg}
+
+
+@router.get("/orders/{order_id}/downloads")
+async def order_downloads(order_id: str, admin: dict = Depends(get_current_admin)):
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0, "order_no": 1, "production_package": 1})
+    if not order:
+        raise HTTPException(404, "Order not found")
+    pkg = order.get("production_package") or {"status": "none"}
+    files = list_dir_files(pkg["dir"]) if pkg.get("dir") else []
+    return {"package": pkg, "files": [{**f, "url": public_url(f["path"])} for f in files]}
+
+
+@router.get("/orders/{order_id}/downloads.zip", include_in_schema=False)
+async def order_downloads_zip(order_id: str, token: str = ""):
+    """Zip of the whole Downloads/<order>/ folder. Token passed as query so it can open in a browser tab."""
+    if not token or not await db.admins.find_one({"token": token}, {"_id": 1}):
+        raise HTTPException(401, "Invalid admin token")
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0, "order_no": 1, "production_package": 1})
+    if not order or not (order.get("production_package") or {}).get("dir"):
+        raise HTTPException(404, "Production package not built yet")
+    data = await run_in_threadpool(zip_dir, order["production_package"]["dir"])
+    if data is None:
+        raise HTTPException(404, "Package folder missing")
+    name = order["production_package"]["dir"].split("/")[-1]
+    return Response(content=data, media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{name}.zip"'})
 
 
 # ---- Admin-managed images (covers, backgrounds, process bots, promos) ----

@@ -86,3 +86,15 @@ android-sdk/
 credentials.json
 *.key
 .credentials
+
+# secrets & runtime data
+.env
+backend/.env
+backend/.env.production
+backend/deploy/.env
+backend/storage/
+!.env.example
+!backend/.env.example
+!frontend/.env.example
+!backend/.env.production.example
+!backend/deploy/.env.example

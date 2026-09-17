@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -14,6 +15,10 @@ export default function AlbumPreview() {
   const router = useRouter();
   const q = useQuery({ queryKey: ["album", id], queryFn: () => api.getAlbum(String(id)), enabled: !!id });
   const album = q.data?.album;
+  const [selected, setSelected] = useState<number | "cover" | null>(null);
+  const goPage = (tool?: string) => selected === "cover"
+    ? router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: "cover", ...(tool ? { tool } : {}) } })
+    : router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: String(selected), ...(tool ? { tool } : {}) } });
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface, paddingTop: insets.top }}>
       <View style={styles.topbar}>
@@ -32,9 +37,26 @@ export default function AlbumPreview() {
               photos={album.photos || []}
               albumName={album.name}
               onEditPage={(i) => router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: String(i) } })} onEditCover={() => router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: "cover" } })}
+              onSelectPage={setSelected} selectedPage={selected}
             />
           ) : null}
         </View>
+        {selected != null ? (
+          <View testID="page-quick-controls" style={styles.quick}>
+            <Text style={s.label}>{selected === "cover" ? "Cover selected" : `Page ${selected + 1} selected`} · double-tap to zoom in</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, marginTop: spacing.sm }}>
+              {(selected === "cover"
+                ? [["image", "move", "Adjust Image"], ["replace", "image", "Change Image"], ["text", "type", "Text"], ["coverstyle", "book", "Cover Style"], ["background", "droplet", "Background"]]
+                : [["background", "droplet", "Background"], ["layout", "grid", "Layout"], ["text", "type", "Text"], ["image", "move", "Adjust Image"], ["replace", "image", "Change Image"]]
+              ).map(([tool, icon, label]) => (
+                <Pressable key={tool} testID={`quick-${tool}`} onPress={() => goPage(tool)} style={styles.quickBtn}>
+                  <Feather name={icon as any} size={14} color={colors.onSurface} />
+                  <Text style={{ fontFamily: fonts.text, fontSize: 12, color: colors.onSurface }}>{label}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
         <View style={styles.stats}>
           <Stat label="Pages" value={String(album?.pages?.length || 0)} />
           <Stat label="Sheets" value={String(album?.sheets || 0)} />
@@ -63,6 +85,8 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   topbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: spacing.xl },
+  quick: { marginTop: spacing.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surfaceSecondary },
+  quickBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, minHeight: 40, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border },
   stats: { flexDirection: "row", gap: spacing.md, marginTop: spacing.xxl },
   stat: { flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.lg, backgroundColor: colors.surfaceSecondary },
   footer: { position: "absolute", left: 0, right: 0, bottom: 0, padding: spacing.xl, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },

@@ -64,6 +64,7 @@ def album(sess, auth_h, cover_id):
             up = sess.post(f"{BASE}/api/albums/{a['id']}/photos", headers=auth_h,
                            files={"file": (f"test_photo_{i}.jpg", f, "image/jpeg")})
             assert up.status_code == 200, up.text
+    sess.post(f"{BASE}/api/albums/{a['id']}/generate", headers=auth_h, json={"allow_short": True, "style": "balanced"})
     r2 = sess.get(f"{BASE}/api/albums/{a['id']}", headers=auth_h)
     return r2.json()["album"]
 
@@ -72,7 +73,7 @@ def album(sess, auth_h, cover_id):
 
 class TestStyleAwareGeneration:
     def test_generate_with_gallery_style(self, sess, auth_h, album):
-        r = sess.post(f"{BASE}/api/albums/{album['id']}/generate", headers=auth_h, json={"style": "gallery"})
+        r = sess.post(f"{BASE}/api/albums/{album['id']}/generate", headers=auth_h, json={"allow_short": True, "style": "gallery"})
         assert r.status_code == 200, r.text
         a = r.json()["album"]
         assert a["design_style"] == "gallery"
@@ -82,7 +83,7 @@ class TestStyleAwareGeneration:
         assert a["cover_design"]["photo_id"] == a["photos"][0]["id"]
 
     def test_generate_invalid_style_400(self, sess, auth_h, album):
-        r = sess.post(f"{BASE}/api/albums/{album['id']}/generate", headers=auth_h, json={"style": "bogus"})
+        r = sess.post(f"{BASE}/api/albums/{album['id']}/generate", headers=auth_h, json={"allow_short": True, "style": "bogus"})
         assert r.status_code == 400
 
 
@@ -91,7 +92,7 @@ class TestStyleAwareGeneration:
 class TestPageEditorPersistence:
     def test_put_pages_persists_text_and_transform(self, sess, auth_h, album):
         # regenerate to ensure we have pages
-        sess.post(f"{BASE}/api/albums/{album['id']}/generate", headers=auth_h, json={"style": "balanced"})
+        sess.post(f"{BASE}/api/albums/{album['id']}/generate", headers=auth_h, json={"allow_short": True, "style": "balanced"})
         r = sess.get(f"{BASE}/api/albums/{album['id']}", headers=auth_h)
         a = r.json()["album"]
         pages = a["pages"]

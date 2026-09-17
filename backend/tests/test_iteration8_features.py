@@ -73,8 +73,7 @@ class TestCoverPhotoPicker:
     def test_generate_with_third_photo_as_cover(self, sess, auth_h, album):
         third = album["photos"][2]["id"]
         r = sess.post(f"{BASE}/api/albums/{album['id']}/generate",
-                      headers=auth_h,
-                      json={"style": "balanced", "cover_photo_id": third})
+                      headers=auth_h, json={"allow_short": True, "style": "balanced", "cover_photo_id": third})
         assert r.status_code == 200, r.text
         a = r.json()["album"]
         assert a["cover_design"] is not None
@@ -88,8 +87,7 @@ class TestCoverPhotoPicker:
         """cover_photo_id is respected on subsequent generate calls too."""
         first = album["photos"][0]["id"]
         r = sess.post(f"{BASE}/api/albums/{album['id']}/generate",
-                      headers=auth_h,
-                      json={"style": "elegant", "cover_photo_id": first})
+                      headers=auth_h, json={"allow_short": True, "style": "elegant", "cover_photo_id": first})
         assert r.status_code == 200
         got = sess.get(f"{BASE}/api/albums/{album['id']}", headers=auth_h).json()["album"]
         assert got["cover_design"]["photo_id"] == first
@@ -104,8 +102,7 @@ class TestCoverPhotoPicker:
             up = sess.post(f"{BASE}/api/albums/{other['id']}/photos", headers=auth_h,
                            files={"file": ("x.jpg", f, "image/jpeg")})
         foreign_pid = up.json()["photo"]["id"]
-        r2 = sess.post(f"{BASE}/api/albums/{album['id']}/generate", headers=auth_h,
-                       json={"style": "balanced", "cover_photo_id": foreign_pid})
+        r2 = sess.post(f"{BASE}/api/albums/{album['id']}/generate", headers=auth_h, json={"allow_short": True, "style": "balanced", "cover_photo_id": foreign_pid})
         assert r2.status_code == 400, f"expected 400, got {r2.status_code}: {r2.text}"
 
 
@@ -142,8 +139,7 @@ class TestAdminBotImage:
 
         # 5) Create an order (paid via mock) so the customer has an order to fetch
         # Ensure the album has pages (generate is idempotent, worker-safe)
-        sess.post(f"{BASE}/api/albums/{album['id']}/generate", headers=auth_h,
-                  json={"style": "balanced"})
+        sess.post(f"{BASE}/api/albums/{album['id']}/generate", headers=auth_h, json={"allow_short": True, "style": "balanced"})
         addr = {"name": "Iter8", "line1": "1 Test", "city": "Mumbai",
                 "state": "MH", "pincode": "400001", "mobile": MOBILE}
         r_ord = sess.post(f"{BASE}/api/orders", headers=auth_h,
@@ -181,8 +177,7 @@ class TestPagesReorderPersistence:
             with open(f"{ASSETS}/test_photo_{i}.jpg", "rb") as f:
                 sess.post(f"{BASE}/api/albums/{aid}/photos", headers=auth_h,
                           files={"file": (f"p{i}.jpg", f, "image/jpeg")})
-        sess.post(f"{BASE}/api/albums/{aid}/generate", headers=auth_h,
-                  json={"style": "gallery"})
+        sess.post(f"{BASE}/api/albums/{aid}/generate", headers=auth_h, json={"allow_short": True, "style": "gallery"})
         got = sess.get(f"{BASE}/api/albums/{aid}", headers=auth_h).json()["album"]
         pages = got["pages"]
         if len(pages) < 2:

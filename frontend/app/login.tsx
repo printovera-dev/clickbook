@@ -75,9 +75,6 @@ export default function Login() {
           </View>
           {err ? <Text style={{ color: colors.error, marginTop: spacing.sm, fontFamily: fonts.text }}>{err}</Text> : null}
           <Button testID="login-send-otp-button" label="Continue" onPress={send} loading={loading} style={{ marginTop: spacing.xl }} />
-          <Pressable testID="admin-login-link" onPress={() => router.push("/admin/login")} style={{ marginTop: spacing.xl, alignSelf: "center" }}>
-            <Text style={[s.bodyMuted, { textDecorationLine: "underline" }]}>Admin login</Text>
-          </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>

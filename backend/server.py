@@ -5,7 +5,7 @@ from starlette.middleware.cors import CORSMiddleware
 from core import client, now_iso, logger  # loads .env before anything reads it
 from storage_manager import STORAGE_BASE
 from seed import seed
-from routers import auth, catalog, albums, orders, payments, admin, files
+from routers import auth, catalog, albums, orders, payments, admin, files, notifications
 
 app = FastAPI(title="ClickBook API")
 api = APIRouter(prefix="/api")
@@ -16,7 +16,8 @@ async def health():
     return {"ok": True, "service": "clickbook", "time": now_iso()}
 
 
-for r in (auth.router, catalog.router, albums.router, orders.router, payments.router, admin.router, files.router):
+for r in (auth.router, catalog.router, albums.router, orders.router, payments.router, admin.router, files.router,
+          notifications.router):
     api.include_router(r)
 
 app.include_router(api)

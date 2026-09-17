@@ -28,6 +28,7 @@ export default function AdminDashboard() {
     { key: "offers", label: "Offers", icon: "tag", path: "/admin/offers" },
     { key: "pricing", label: "Pricing", icon: "dollar-sign", path: "/admin/pricing" },
     { key: "bots", label: "Process Bots", icon: "message-circle", path: "/admin/bots" },
+    { key: "notifications", label: "Notifications", icon: "bell", path: "/admin/notifications" },
     { key: "customers", label: "Customers", icon: "users", path: "/admin/customers" },
   ];
 

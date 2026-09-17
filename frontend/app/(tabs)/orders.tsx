@@ -2,6 +2,7 @@ import { View, Text, ScrollView, StyleSheet, Pressable, RefreshControl } from "r
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
+import { StatusBadge } from "@/src/components/status-badge";
 import { api } from "@/src/api";
 import { s } from "@/src/ui";
 import { colors, spacing, radius, fonts } from "@/src/theme";
@@ -10,7 +11,7 @@ import Feather from "@react-native-vector-icons/feather";
 export default function Orders() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const q = useQuery({ queryKey: ["orders"], queryFn: () => api.listMyOrders() });
+  const q = useQuery({ queryKey: ["orders"], queryFn: () => api.listMyOrders(), refetchInterval: 15000 });
   const orders = q.data?.orders || [];
 
   return (
@@ -40,11 +41,7 @@ export default function Orders() {
                 <Text style={s.bodyMuted}>
                   {new Date(o.created_at).toLocaleDateString()} · {o.sheets} sheets · ₹{o.price?.total}
                 </Text>
-                <View style={styles.badge}>
-                  <Text style={{ color: colors.brandPrimary, fontFamily: fonts.text, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6 }}>
-                    {o.production_status?.replace(/_/g, " ")}
-                  </Text>
-                </View>
+                <StatusBadge order={o} testID={`order-status-${o.id}`} />
               </View>
               <Feather name="chevron-right" color={colors.muted} size={22} />
             </Pressable>

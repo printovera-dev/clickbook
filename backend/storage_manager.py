@@ -7,9 +7,13 @@ Two drivers:
 
 Driver selection: env `STORAGE_DRIVER` ("local" | "s3"). Default "local".
 """
+import io
+import json
 import os
+import re
 import shutil
 import uuid
+import zipfile
 from pathlib import Path
 from typing import Optional
 
@@ -137,3 +141,61 @@ def save_pdf(customer_id: str, album_id: str, data: bytes) -> dict:
     rel = f"clickbook/customers/{customer_id}/albums/{album_id}/pdf/{key}"
     _put(rel, data, "application/pdf")
     return {"pdf_path": rel, "size_bytes": len(data)}
+
+
+# ---- Production package: Downloads/<order folder>/{Album.pdf, Cover/, Print/, manifest.json} ----
+
+DOWNLOADS_DIR = "Downloads"
+
+
+def safe_folder_name(name: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", (name or "").strip()).strip("_")
+    return cleaned[:80] or "album"
+
+
+def save_production_package(folder: str, pdf: bytes, cover_jpg: bytes, page_jpgs: list, manifest: dict) -> dict:
+    rel = f"{DOWNLOADS_DIR}/{safe_folder_name(folder)}"
+    if not _use_s3():
+        # rebuilds replace the folder so stale pages from an older render never ship to print
+        shutil.rmtree(STORAGE_BASE / rel, ignore_errors=True)
+    pdf_path = f"{rel}/Album.pdf"
+    cover_path = f"{rel}/Cover/cover.jpg"
+    _put(pdf_path, pdf, "application/pdf")
+    _put(cover_path, cover_jpg, "image/jpeg")
+    print_paths = []
+    for i, data in enumerate(page_jpgs, start=1):
+        p = f"{rel}/Print/page_{i:03d}.jpg"
+        _put(p, data, "image/jpeg")
+        print_paths.append(p)
+    _put(f"{rel}/manifest.json", json.dumps(manifest, indent=2).encode("utf-8"), "application/json")
+    total = len(pdf) + len(cover_jpg) + sum(len(d) for d in page_jpgs)
+    return {"dir": rel, "pdf_path": pdf_path, "cover_path": cover_path, "print_paths": print_paths,
+            "manifest_path": f"{rel}/manifest.json", "size_bytes": total}
+
+
+def list_dir_files(rel_dir: str) -> list:
+    """Relative file paths (with sizes) under a storage folder — local driver only."""
+    if _use_s3() or ".." in rel_dir.split("/"):
+        return []
+    root = STORAGE_BASE / rel_dir
+    if not root.is_dir():
+        return []
+    out = []
+    for p in sorted(root.rglob("*")):
+        if p.is_file():
+            out.append({"path": str(p.relative_to(STORAGE_BASE)), "name": str(p.relative_to(root)), "size_bytes": p.stat().st_size})
+    return out
+
+
+def zip_dir(rel_dir: str) -> Optional[bytes]:
+    if _use_s3() or ".." in rel_dir.split("/"):
+        return None
+    root = STORAGE_BASE / rel_dir
+    if not root.is_dir():
+        return None
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for p in sorted(root.rglob("*")):
+            if p.is_file():
+                zf.write(p, arcname=str(p.relative_to(root)))
+    return buf.getvalue()

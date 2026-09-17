@@ -16,6 +16,8 @@ export default function Home() {
   const albums = useQuery({ queryKey: ["albums"], queryFn: () => api.listMyAlbums() });
   const orders = useQuery({ queryKey: ["orders"], queryFn: () => api.listMyOrders() });
   const offers = useQuery({ queryKey: ["offers"], queryFn: () => api.listOffers() });
+  const notifs = useQuery({ queryKey: ["notifications"], queryFn: () => api.listNotifications(), refetchInterval: 30000 });
+  const unread = notifs.data?.unread_count || 0;
 
   const drafts = (albums.data?.albums || []).filter((a: any) => a.status === "draft");
   const activeOrder = (orders.data?.orders || []).find((o: any) =>
@@ -23,7 +25,7 @@ export default function Home() {
   );
 
   const refresh = () => {
-    albums.refetch(); orders.refetch(); offers.refetch();
+    albums.refetch(); orders.refetch(); offers.refetch(); notifs.refetch();
   };
 
   return (
@@ -34,9 +36,19 @@ export default function Home() {
     >
       <View style={styles.header}>
         <Text style={[s.display, { fontSize: 28 }]}>ClickBook</Text>
-        <Pressable onPress={() => router.push("/(tabs)/profile")} testID="home-profile-icon">
-          <Feather name="user" size={22} color={colors.onSurface} />
-        </Pressable>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.lg }}>
+          <Pressable onPress={() => router.push("/notifications")} testID="home-notifications-bell" hitSlop={10} style={{ position: "relative" }}>
+            <Feather name="bell" size={22} color={colors.onSurface} />
+            {unread > 0 ? (
+              <View style={styles.bellBadge} testID="home-notifications-badge">
+                <Text style={styles.bellBadgeTxt}>{unread > 9 ? "9+" : unread}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+          <Pressable onPress={() => router.push("/(tabs)/profile")} testID="home-profile-icon" hitSlop={10}>
+            <Feather name="user" size={22} color={colors.onSurface} />
+          </Pressable>
+        </View>
       </View>
 
       <Pressable
@@ -198,4 +210,19 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     backgroundColor: colors.surface,
   },
+  bellBadge: {
+    position: "absolute",
+    top: -6,
+    right: -8,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    backgroundColor: colors.brandPrimary,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: colors.surface,
+  },
+  bellBadgeTxt: { color: colors.onBrandPrimary, fontSize: 10, fontFamily: fonts.text, fontWeight: "600" },
 });

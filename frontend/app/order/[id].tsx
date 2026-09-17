@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
+import { StatusBadge, orderStatus } from "@/src/components/status-badge";
 import { api } from "@/src/api";
 import { s, Button } from "@/src/ui";
 import { colors, spacing, radius, fonts } from "@/src/theme";
@@ -27,6 +28,25 @@ export default function OrderTracking() {
         <View style={{ width: 22 }} />
       </View>
       <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: spacing.xxxl }}>
+        {order ? (
+          <View testID="payment-status-card" style={[styles.celebrate, { borderColor: orderStatus(order).color, backgroundColor: orderStatus(order).bg }]}>
+            <Feather name={orderStatus(order).paid ? "check-circle" : "alert-circle"} size={22} color={orderStatus(order).color} />
+            <View style={{ marginLeft: spacing.md, flex: 1 }}>
+              <Text style={s.h2}>{orderStatus(order).paid ? "Payment complete" : "Payment incomplete"}</Text>
+              <Text style={s.bodyMuted}>
+                {orderStatus(order).paid
+                  ? `Paid ${order.paid_at ? new Date(order.paid_at).toLocaleString() : ""} · ${order.payment_method === "razorpay" ? "Razorpay" : "verified"} · ₹${order.price?.total}`
+                  : "Your ClickBook will go to print once payment is confirmed."}
+              </Text>
+              <StatusBadge order={order} testID="order-tracking-status" />
+              {!orderStatus(order).paid ? (
+                <Pressable testID="complete-payment-button" onPress={() => router.push({ pathname: "/album/[id]/checkout", params: { id: String(order.album_id) } })} style={{ marginTop: spacing.sm, alignSelf: "flex-start", backgroundColor: colors.error, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999 }}>
+                  <Text style={{ color: colors.onError, fontFamily: fonts.text, fontWeight: "600" }}>Complete payment</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
         {celebrate === "1" ? (
           <View style={styles.celebrate} testID="order-celebrate-banner">
             <Feather name="check-circle" size={22} color={colors.success} />

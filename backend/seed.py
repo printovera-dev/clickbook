@@ -7,7 +7,7 @@ async def seed():
     if not await db.settings.find_one({"id": "default"}):
         await db.settings.insert_one({
             "id": "default", "price_per_sheet": 90, "gst_percent": 18,
-            "min_sheets": 10, "max_sheets": 75, "size": "8x8", "gift_wrap_fee": 150,
+            "min_sheets": 20, "max_sheets": 75, "size": "8x8", "gift_wrap_fee": 150,
         })
     # Cover styles (editable image + text model). Legacy covers without a style are retired.
     style_images = {

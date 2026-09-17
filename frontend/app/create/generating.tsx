@@ -16,6 +16,10 @@ export default function Generating() {
         await api.autoGenerate(String(albumId), style ? String(style) : undefined, coverPhotoId ? String(coverPhotoId) : undefined);
         setTimeout(() => router.replace({ pathname: "/album/[id]/preview", params: { id: String(albumId) } }), 400);
       } catch (e: any) {
+        if (e?.detail?.code === "insufficient_photos") {
+          router.replace({ pathname: "/create/upload", params: { albumId: String(albumId), notice: e.detail.message, style: String(style || ""), coverPhotoId: String(coverPhotoId || "") } });
+          return;
+        }
         setErr(e?.message || "Could not design your album. Please try again.");
       }
     })();

@@ -130,11 +130,37 @@ def render_cover(album: dict, photos_by_id: dict, size_px: int = PAGE_PX) -> Ima
     return canvas
 
 
-def render_album_pdf(album: dict, layouts_by_id: dict) -> bytes:
+def render_frames(album: dict, layouts_by_id: dict):
+    """Returns (cover_image, [page_images]) at 8x8 in @ 300 dpi."""
     photos_by_id = {p["id"]: p for p in album.get("photos", [])}
     pages_sorted = sorted(album.get("pages", []), key=lambda p: p.get("order", 0))
-    frames = [render_cover(album, photos_by_id)]
-    frames += [render_page(p, photos_by_id, layouts_by_id) for p in pages_sorted]
+    cover = render_cover(album, photos_by_id)
+    pages = [render_page(p, photos_by_id, layouts_by_id) for p in pages_sorted]
+    return cover, pages
+
+
+def frames_to_pdf(cover: Image.Image, pages: list) -> bytes:
     buf = io.BytesIO()
-    frames[0].save(buf, "PDF", save_all=True, append_images=frames[1:], resolution=DPI, quality=92)
+    cover.save(buf, "PDF", save_all=True, append_images=pages, resolution=DPI, quality=92)
     return buf.getvalue()
+
+
+def frame_to_jpeg(img: Image.Image) -> bytes:
+    buf = io.BytesIO()
+    img.save(buf, "JPEG", quality=95, dpi=(DPI, DPI), subsampling=0)
+    return buf.getvalue()
+
+
+def render_album_pdf(album: dict, layouts_by_id: dict) -> bytes:
+    cover, pages = render_frames(album, layouts_by_id)
+    return frames_to_pdf(cover, pages)
+
+
+def render_production_package(album: dict, layouts_by_id: dict) -> dict:
+    """Everything the print facility needs: Album.pdf + full-res cover JPEG + sequential page JPEGs."""
+    cover, pages = render_frames(album, layouts_by_id)
+    return {
+        "pdf": frames_to_pdf(cover, pages),
+        "cover": frame_to_jpeg(cover),
+        "pages": [frame_to_jpeg(p) for p in pages],
+    }

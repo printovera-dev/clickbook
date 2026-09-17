@@ -141,7 +141,7 @@ def test_settings(s):
     st = r.json()["settings"]
     assert st["price_per_sheet"] == 90
     assert st["gst_percent"] == 18
-    assert st["min_sheets"] == 10
+    assert st["min_sheets"] == 20  # business rule: minimum 20 sheets
     assert st["max_sheets"] == 75
 
 
@@ -234,7 +234,7 @@ def test_file_serving(s):
 
 
 def test_auto_generate(s):
-    r = s.post(f"{API}/albums/{state['album_id']}/generate", headers=state["auth"])
+    r = s.post(f"{API}/albums/{state['album_id']}/generate", json={"allow_short": True}, headers=state["auth"])
     assert r.status_code == 200, r.text
     album = r.json()["album"]
     assert len(album["pages"]) >= 2

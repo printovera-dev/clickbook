@@ -25,6 +25,7 @@ class PagesUpdate(BaseModel):
 class GenerateRequest(BaseModel):
     style: Optional[str] = None  # elegant | balanced | gallery
     cover_photo_id: Optional[str] = None
+    allow_short: bool = False  # admin/test escape hatch only
 
 
 class AlbumUpdate(BaseModel):
@@ -210,6 +211,21 @@ async def auto_generate(album_id: str, payload: Optional[GenerateRequest] = None
         extra["cover_design"] = default_cover_design(cover_style, cover_pid or photos[0]["id"], album.get("name", "My Album"))
     elif cover_pid:
         extra["cover_design"] = {**album["cover_design"], "photo_id": cover_pid, "image": default_transform()}
+    # Minimum-sheet rule (2 pages per sheet): never present an under-filled design as ready.
+    settings = await get_settings_doc()
+    min_sheets = int(settings.get("min_sheets", 20))
+    required_pages = min_sheets * 2
+    if len(pages) < required_pages and not (payload and payload.allow_short):
+        avg = sum(rhythm) / len(rhythm)
+        need_more = max(1, int(round((required_pages - len(pages)) * avg)))
+        raise HTTPException(status_code=422, detail={
+            "code": "insufficient_photos",
+            "message": f"A ClickBook needs at least {min_sheets} sheets ({required_pages} pages). "
+                       f"Your {len(photos)} photos fill {len(pages)} pages in the {style.title()} style — "
+                       f"please add about {need_more} more photos.",
+            "pages": len(pages), "required_pages": required_pages, "min_sheets": min_sheets,
+            "photos": len(photos), "need_more": need_more, "style": style,
+        })
     return {"album": await _save_design(album, pages, "auto", extra)}
 
 
