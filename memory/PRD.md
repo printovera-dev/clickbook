@@ -56,6 +56,11 @@ ClickBook is a premium photo-album service that lets customers create beautifull
 - **Backend refactor**: `server.py` (1050 lines) → thin app assembly + `core.py` (env, db, auth deps, settings) + `seed.py` + `routers/{auth,catalog,albums,orders,payments,admin,files}.py`. Route table verified identical (49 routes). `/api/files` responses carry immutable cache headers.
 - Test suites updated for random OTP (`dev_hint`) and live Razorpay mode; 89/89 passing. Note: `test_iteration3_features.py` restarts the backend, run it with `-n 0` separately from the other suites.
 
+## Feature updates (2026-09-18, iteration 9)
+- **Production Downloads package** (`backend/production.py`): when an order is paid, the backend renders the frozen design into `STORAGE_BASE/Downloads/<order_no>_<album>/` → `Album.pdf`, `Cover/cover.jpg`, `Print/page_001.jpg…` (2400×2400 px = 8×8 in @ 300 dpi, q95), `manifest.json` (order/client/sheets/address/style). Stored on `order.production_package` (status building/ready/failed). Admin order modal shows the folder, file chips, "Download all (ZIP)" (`GET /admin/orders/{id}/downloads.zip?token=`) and Build/Rebuild (`POST /admin/orders/{id}/pdf`).
+- **Notification system** (`routers/notifications.py`): admin composes to one customer or broadcasts to all (types general/offer/correction/status), history with read counts; system auto-notifies on payment confirmation and on every admin status change (process bot message or admin note as body). Customers: Home bell + unread badge, `/notifications` inbox (tap = read + open linked order, mark all read). Admin order modal has "Message customer" (prefilled).
+- Tests: `tests/test_iteration9_downloads_notifications.py` (9), frontend E2E iteration_9 all pass.
+
 ## Deferred (roadmap)
 - Real WhatsApp/SMS provider (playbook-driven), real Razorpay integration, ML-driven auto-layout selection (currently rhythm-based), image cropping/zoom inside placeholders, 3+ photo layouts, Lottie process-bot animations.
 

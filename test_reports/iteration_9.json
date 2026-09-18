@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 9 (frontend only): All 5 requested E2E acceptance flows PASS on the web preview (390x844). Customer OTP login via dev_hint OTP works. Home shows bell (home-notifications-bell) and, when unread>0, a badge (home-notifications-badge). /notifications lists items, unread dots (notification-unread-{id}), and 'Mark all read' (notifications-read-all). Admin login -> dashboard -> admin-nav-notifications opens compose. Broadcast: chose notify-target-all + notify-type-offer, filled notify-title + notify-body, notify-send -> notify-result 'Sent to all 93 customers ✓'; 'Recently sent' updates with broadcast · 91 customers etc. One-customer flow: notify-target-one -> picker modal, searched '500990' -> customer-pick-b4e50fc0e7af42f78a39c760d5e54042 (9876500990), sent 'E2E Personal ...' -> notify-result 'Sent to 1 customer ✓'. Customer 9876500990 logged in -> Home badge=2 (both new notifications), inbox lists both at top with unread dots; tap on first cleared its dot; 'Mark all read' cleared all unread and Home badge disappeared. Admin Orders (admin-nav-orders): opened PAID order d55fdca72265402b9d77a64ac0aa8ed0 (CB2609176533) -> admin-production-package card visible; admin-package-dir 'Downloads/CB2609176533_Iter9_Print_Pack_17-09-2026/ · 2 pages · 970 KB'; chips admin-file-pdf, admin-file-cover, admin-file-print visible; admin-download-zip + admin-generate-pdf(label 'Rebuild production files') visible. In-page fetch to file URLs returned 200 with correct content-types: Album.pdf (application/pdf, 382512), Cover/cover.jpg (image/jpeg, 258366), Print/page_001.jpg (175093), Print/page_002.jpg (177046); downloads.zip?token=... returned 200. For UNPAID order 584ca5e9... admin-production-package card renders the copy 'Files are generated automatically once payment is received.' with 'Build production files' button (no file chips). Status change: tapped admin-status-packaging with a note 'E2E status change {ts}' from the modal -> customer 9876500990 immediately sees a new notification 'Order CB2609176533 · Packaging' with the note as body, badge=1 on Home; tap opens /order/d55fdca... and Order Tracking screen shows status Packaging (highlighted step). 'Message customer' (admin-notify-customer) navigates to /admin/notifications?customer_id=...&order_id=...&order_no=CB2609176533&customer_label=... with the compose screen prefilled: notify-target-one chip active ('— · 9876500990'), 'Linked to order CB2609176533' subtitle, type=correction preselected, notify-title='Order CB2609176533'. Zero red-screen errors. Only console warning is the pre-existing 'shadow* style props are deprecated. Use boxShadow.' RN-web deprecation (already tracked in iteration_8).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "RN Web shadow* -> boxShadow", "issue": "Pre-existing non-blocking deprecation warning 'shadow* style props are deprecated. Use boxShadow.' Reference: /app/frontend/app/album/[id]/page.tsx and other files still using shadowColor/shadowOpacity/shadowRadius/shadowOffset. Same finding as iteration_8."}
+    ]
+  },
+  "test_report_links": [
+    "/tmp/n1_login.png",
+    "/tmp/n3_broadcast_result.png",
+    "/tmp/n6_one_result.png",
+    "/tmp/n8_inbox.png",
+    "/tmp/n9_home_after.png",
+    "/tmp/n10_admin_order_paid.png",
+    "/tmp/n11_unpaid.png",
+    "/tmp/n12_notify_prefill.png",
+    "/tmp/n13_cust_order.png"
+  ],
+  "action_items": [
+    "LOW (carry-over): migrate remaining RN shadow* style props to boxShadow to silence RN Web deprecation warning."
+  ],
+  "critical_code_review_comments": [
+    "/app/frontend/app/admin/notifications.tsx: adminCustomers query is `enabled: picker`; on first click the modal opens with an empty list until fetch resolves (~1s). Playwright had to wait ~3-4s to see customer-pick-* rows. Consider prefetching customer list on screen mount or showing a small loading spinner inside the modal for user feedback (currently no skeleton or 'Loading...' state is rendered).",
+    "/app/frontend/app/admin/orders.tsx: production package downloads query uses refetchInterval only while status==='building' and polls every 3s -- matches spec. admin-generate-pdf label toggles between 'Build production files' and 'Rebuild production files' based on pkg?.status === 'ready' -- verified in both states.",
+    "/app/frontend/app/notifications.tsx: unread badge cleared client-side by invalidating ['notifications'] queryKey; correctly matches the Home useQuery(['notifications']) refetch cadence (30s interval) plus explicit refetch on read/read-all. No stale state issue observed on Home after Mark all read.",
+    "/app/frontend/src/api.ts adminDownloadsZipUrl passes admin token in the query string (?token=...) — file endpoint accepts this and returns 200 with the ZIP; matches admin router implementation.",
+    "/app/frontend/app/(tabs)/home.tsx uses refetchInterval: 30000 for notifications — reasonable but for status-change flows a customer already on Home would wait up to 30s to see the badge. Acceptable, but consider tightening to 15s or invalidating on window focus."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not re-run this iteration (spec says already 9/9 green)", "frontend": "5/5 acceptance flows PASS (customer bell/inbox, admin broadcast, admin one-customer, admin production package paid+unpaid, admin status change -> customer notif -> order screen)"},
+  "seed_data_creation": "Sent two persistent E2E test notifications to broadcast + customer 9876500990 (title contains 'E2E Broadcast <ts>' and 'E2E Personal <ts>'); status change on order CB2609176533 also created an auto notification. Order status flipped from 'printing' to 'packaging' during this test. Safe to leave; if reverting is desired, admin can PUT /admin/orders/{id}/status back to 'printing'.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Frontend URL: https://memories-album.preview.emergentagent.com. Admin token in localStorage key 'clickbook.adminToken'; customer token in 'clickbook.customerToken'. Playwright contexts do NOT share storage across mcp_browser_automation invocations — always admin-login again at the start of each script. For customer OTP, the dev_hint is rendered inline on /verify; extract with a small regex `/\\b\\d{6}\\b/` scan of text nodes (<80 chars) — works reliably. adminCustomers is fetched lazily when the customer picker opens; wait ~3s before querying `[data-testid^=customer-pick-]`. For file URL 200 checks, always use in-page `fetch(url)` via page.evaluate so cookies/CORS match; direct urllib from the container may hit the reverse proxy differently. Existing test customers with paid orders: 9876500990 and 9876500991 (b4e50fc0.../fc7ed04c...); order CB2609176533 has a ready production package (2 pages, ~970KB).",
+  "rca_of_issue": "No issues found. Iteration 9's two new features (production 'Downloads' package on payment and Customer Notification System with admin compose/broadcast + auto-notify on payment/status change) are fully functional on the web preview across admin and customer roles."
+}
