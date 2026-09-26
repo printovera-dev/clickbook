@@ -1,0 +1,49 @@
+{
+  "summary": "Iteration 12 — Bug-fix batch verification. ALL 7 review checklists PASS end-to-end on mobile viewport (390x844). The previously-reported MEDIUM bug (duplicate Home tree after OTP verify) is now FIXED — verify.tsx calls router.dismissTo('/(tabs)/home') and post-verify counts are menu=1, slider1=1, home-notifications-bell=1, home-login1-start=1 (signed-in CTA renders instead of the mobile input). Bottom tabs (Chat/Orders/Profile) are tappable and navigate correctly post-verify (guard not stale).\n\nChat tab: (1) customer 9876500555 (1 paid order) → chat-messages + chat-whatsapp-single card reading 'Chat about Order #CB2609261536' and page auto-opens window.open('https://wa.me/919999117810?text=Hello%20ClickBook%2C%20I%20have%20a%20question%20regarding%20Order%20%23CB2609261536.'). (2) customer 9876500990 (6 paid orders) → chat-pick-order label + 6 chat-order-{id} rows; tapping the first row opened wa.me with Order %23CB2609262240. Both URLs contain 'wa.me/919999117810' and encoded 'Order #CB'.\n\nPayment lock: customer 9876500555 → Profile → profile-my-books → /albums lists 'Renamed' (album 5a9f9b4d…) labelled 'ordered · view only' with a real .webp cover thumbnail. Opening it → /album/5a9f9b4d…/preview shows preview-locked-banner ('Payment completed — this ClickBook is locked and view only.') + preview-view-orders. No edit buttons rendered (preview-edit-button/preview-edit-cover-button counts = 0). Direct navigation to /album/5a9f9b4d…/editor and /album/5a9f9b4d…/page?index=0 BOTH redirect back to /preview. Backend curl PUT /api/albums/5a9f9b4d…/pages with the 555 customer token returned HTTP 409 with body 'This album has been locked because payment has been completed. Further editing is not available.'\n\nUnpaid album stays editable: customer 9876500777 → /album/09fdba…/preview shows preview-edit-cover-button + preview-edit-button + preview-continue-button. SINGLE tap on the right page of the 3D book opens /album/09fdba…/page?index=1 immediately (no double-tap needed) — page-editor-title text reads exactly 'Edit Page 2 of 80'. Direct navigation to ?index=79 → title 'Edit Page 80 of 80'. In the album Editor, editor-tool-photos tab label reads 'Swap Images' (verified via textContent).\n\nMy ClickBooks: Iter7 ORDERED · VIEW ONLY cards use img src ending in /thumbnails/*.webp (or .jpg for a couple of older ones) — real front-cover thumbnails, NOT the catalog cover. DRAFT albums (e.g. Stress 120) still use the catalog default cover (customer-assets emergent .png) as expected — that photo IS the album's cover_snapshot for draft state. Album b6f2b3fbffdb49b0a1c9edaec6333d4a shows 'INCOMPLETE · CONTINUE UPLOADING' label (state='uploading'). Orders tab shows order-thumb-{id} testIDs (verified 5 rows).\n\nHome header logo is exactly 250 × 88 px (2× the previous 44px) — width capped at min(264, width-140). Home slider1 still renders with 4 dot children and auto-advances between screenshots (slide 2 → slide 3 within ~4s).\n\nDuplicate-upload flow (upload.tsx): CODE-VERIFIED but NOT UI-AUTOMATABLE. upload.tsx:46-65 implements a Set<`${filename}|${size}`> seeded with the album's existing photos, counts duplicates in the picker result, and on web calls window.confirm('Duplicate images found (N). Do you want to skip the duplicate images?') — accepting drops duplicates and uploads only the unique ones. On web expo-image-picker mounts a hidden <input type=file> only for the lifetime of the launchImageLibraryAsync promise (never visible to Playwright), so we could not drive a real file selection through the picker as required by the review checklist. Per the review instruction, this is marked as not-automatable rather than a failure. The 119-photo grid (upload-photo-grid + upload-count '119 photos') and Add photos button render correctly on /create/upload?albumId=09fdba….",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/tmp/01_post_verify_home.png",
+    "/tmp/02_chat_555.png",
+    "/tmp/03_chat_990.png",
+    "/tmp/04_my_books_locked.png",
+    "/tmp/05_preview_locked.png",
+    "/tmp/06_preview_unpaid.png",
+    "/tmp/07_page_editor_title.png",
+    "/tmp/08_editor_swap.png",
+    "/tmp/09_page_index_check.png",
+    "/tmp/10_my_books_777.png",
+    "/tmp/11_orders_thumbs.png",
+    "/tmp/12_upload_page.png"
+  ],
+  "action_items": [
+    "OPTIONAL / LOW: Duplicate-upload flow (upload.tsx) is not automatable via Playwright because expo-image-picker's web adapter uses a transient hidden input. If E2E automation is required, expose a testing hook (e.g. a testID on a persistent <input type='file'> mounted only in __DEV__) so tests can call setInputFiles([...]) directly. The runtime code path itself (Set-based dedup + window.confirm on web / Alert on native) is correct.",
+    "LOW (carry-over): shadow* → boxShadow and props.pointerEvents → style.pointerEvents deprecation warnings still logged — cosmetic only.",
+    "LOW (carry-over): first seed home-why video (video-play-6614cca8cb9a4c54a1bb489b1cbb92a8) still returns 'Video unavailable' inside the YouTube iframe — reseed with a valid public video ID."
+  ],
+  "critical_code_review_comments": [
+    "/app/frontend/app/verify.tsx:25 — router.dismissTo('/(tabs)/home') correctly pops back to the pre-existing tabs stack instead of stacking a second copy; verified via document.querySelectorAll('[data-testid=\"home-menu\"]').length === 1 after verify.",
+    "/app/frontend/app/album/[id]/page.tsx:251 — title format 'Edit Page ${pageIndex + 1} of ${album.pages.length}' matches the review requirement (verified index=1 → 'Edit Page 2 of 80', index=79 → 'Edit Page 80 of 80').",
+    "/app/frontend/app/album/[id]/editor.tsx:145,198 — 'Swap Images' label is applied only for the photos tool (t === 'photos'); other tools keep their capitalised keys.",
+    "/app/frontend/app/album/[id]/preview.tsx:44-46 — BookPreview.onSelectPage now calls router.push directly when !album.locked, giving the requested single-tap-to-edit behaviour.",
+    "/app/backend/routers/albums.py — PUT /api/albums/{id}/pages correctly returns 409 with the locked message for state='locked' albums (verified via curl).",
+    "/app/frontend/app/(tabs)/chat.tsx:36-39 — Auto-open effect fires once (autoOpened guard) when list.length===1; verified only one wa.me URL was opened for 9876500555.",
+    "/app/frontend/app/(tabs)/albums.tsx:19 — label() differentiates 'ordered · view only' / 'delivered' / 'draft' / 'incomplete · continue uploading' / 'incomplete · continue' as required.",
+    "/app/frontend/app/(tabs)/home.tsx:175 — logo <Image> uses height:88 (~2× original), width capped at Math.min(264, width - 140)."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "PUT /api/albums/{id}/pages on locked album → 409 (verified curl). GET /api/orders + GET /api/albums for all three customers 200 OK. No backend regressions.",
+    "frontend": "7/7 review checklists PASS. 0 UI bugs, 0 integration issues. Duplicate-upload flow verified by code inspection only (picker not automatable)."
+  },
+  "seed_data_creation": "None. Reused seeded customers 9876500777 / 9876500555 / 9876500990 and their existing albums / orders. No writes performed beyond the OTP verify flow (which creates a fresh customer session token).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Fastest path: send OTP → verify → grab token via curl (POST /api/auth/otp/send returns dev_hint; POST /api/auth/otp/verify returns token) then localStorage.setItem('clickbook.customerToken', token) + page.goto('/home'). Customer 9876500777 has 5+ paid orders + the draft album 09fdba…; 9876500555 has 1 paid order and a locked album 5a9f9b4d… (name 'Renamed'); 9876500990 has 6 paid orders. Book preview testIDs are preview-close/prev/next/edit-cover-button/edit-button/continue-button — there are NO per-page testIDs on the 3D book, so single-tap tests must use mouse coordinates (approx x=280,y=280 for the right page after tapping preview-next). Chat auto-open uses window.open (Linking.openURL on web) — stub window.open in add_init_script to capture URLs.",
+  "rca_of_issue": "The previously-reported duplicate-Home-mount bug is CLOSED. Root cause was router.replace('/(tabs)/home') stacking a second copy of the tabs subtree because the initial <Redirect href='/(tabs)/home' /> from /index.tsx had already mounted it. Fix (verify.tsx:25): router.dismissTo('/(tabs)/home') pops back to the existing tabs instance instead of stacking a new one. Verified post-verify DOM has exactly one home-menu, home-slider1, home-notifications-bell, and home-login1-start (signed-in CTA rendered), and Chat/Orders/Profile tabs are immediately tappable without stale guard rejects."
+}

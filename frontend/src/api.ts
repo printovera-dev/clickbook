@@ -2,7 +2,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 
-const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
+export const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
 
 export const TOKEN_KEY = "clickbook.customerToken";
 export const ADMIN_TOKEN_KEY = "clickbook.adminToken";

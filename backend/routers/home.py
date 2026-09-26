@@ -1,7 +1,9 @@
 """Home page content (CMS): sliders, hero images, videos, steps, graphics. Admin-editable without an app rebuild.
 Single document `home_content/default`; GET /home is public, PUT /admin/home replaces it. Images are uploaded via
 POST /admin/images (VPS storage) and referenced by URL."""
+import re
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Any, Dict, List, Optional
 
@@ -91,6 +93,20 @@ async def home_content():
     return {"content": _public_view(doc),
             "pricing": {"min_sheets": min_sheets, "price_per_sheet": per_sheet, "gst_percent": gst,
                         "base_price": base, "size": settings.get("size", "8x8"), "free_delivery": True}}
+
+
+@router.get("/home/video/{video_id}", include_in_schema=False)
+async def video_player(video_id: str, provider: str = "youtube"):
+    """Embedded player page. YouTube refuses to play when the embed URL is loaded directly in a WebView (no
+    referer/origin → 'Video unavailable, watch on YouTube'), so the app loads this page from our own origin."""
+    if not re.fullmatch(r"[A-Za-z0-9_-]{6,}", video_id):
+        raise HTTPException(404, "Unknown video")
+    src = (f"https://www.youtube-nocookie.com/embed/{video_id}?autoplay=1&playsinline=1&rel=0&modestbranding=1"
+           if provider == "youtube" else f"https://player.vimeo.com/video/{video_id}?autoplay=1")
+    html = f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>html,body{{margin:0;height:100%;background:#000}}iframe{{position:absolute;inset:0;width:100%;height:100%;border:0}}</style></head>
+<body><iframe src="{src}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></body></html>"""
+    return Response(content=html, media_type="text/html")
 
 
 class HomeUpdate(BaseModel):
