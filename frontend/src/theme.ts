@@ -36,6 +36,17 @@ const light = {
   border: "#E6E4DD",
   borderStrong: "#C2C0B8",
   divider: "#E6E4DD",
+
+  // ClickBook home page palette (from the supplied design)
+  homeBg: "#F7F5FB",
+  homePink: "#D73C8A",
+  homeRed: "#E63946",
+  homeBlue: "#2F6FDB",
+  homeBlueSoft: "#E6F0FC",
+  homeMint: "#6FC79A",
+  homeMintSoft: "#E4F6EC",
+  homeCharcoal: "#2B2B2E",
+  homeCard: "#FFFFFF",
 };
 
 export type ThemeColors = typeof light;

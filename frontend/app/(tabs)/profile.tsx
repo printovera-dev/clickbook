@@ -66,13 +66,20 @@ export default function Profile() {
       <Button testID="profile-save-button" label={saved ? "Saved ✓" : "Save"} onPress={save} style={{ marginTop: spacing.xl }} />
 
       <View style={{ height: 1, backgroundColor: colors.border, marginVertical: spacing.xxl }} />
+      <Text style={s.label}>My ClickBooks</Text>
+      <Pressable testID="profile-my-books" onPress={() => router.push("/(tabs)/albums")} style={[styles.row, { marginTop: spacing.sm }]}>
+        <Text style={s.body}>Drafts &amp; ordered albums</Text>
+      </Pressable>
+
+      <View style={{ height: 1, backgroundColor: colors.border, marginVertical: spacing.xxl }} />
       <Text style={s.label}>Legal</Text>
       <View style={{ marginTop: spacing.sm, gap: spacing.sm }}>
         {[
+          { key: "faq", label: "FAQ" },
           { key: "privacy", label: "Privacy Policy" },
           { key: "terms", label: "Terms & Conditions" },
           { key: "refund", label: "Refund & Cancellation" },
-          { key: "shipping", label: "Shipping Policy" },
+          { key: "shipping", label: "Shipping & Delivery" },
         ].map((p) => (
           <Pressable
             key={p.key}

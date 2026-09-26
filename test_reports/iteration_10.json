@@ -1,0 +1,56 @@
+{
+  "summary": "Iteration 10 regression (Expo Go crash after ~30 images → picker + FlatList virtualization + WebP thumbnail rewrite). All customer/admin flows on the 120-photo stress album PASS on the web preview (390x844). Login via OTP+dev_hint works (mobile 9876500777). /create/upload?albumId=09fdba…: upload-count reads '120 PHOTOS', grid testID upload-photo-grid scrolls smoothly (scrollHeight 5128, clientHeight 772) with FlatList virtualization observed — 120 <img> mounted at t=0 but 66 after scroll to bottom (removeClippedSubviews drops off-screen rows). Sample thumb src ends .webp and fetch returned status=200 content-type=image/webp. upload-remove-<pid> removes a tile (120→119 PHOTOS) and 'Design my album (119 photos)' remains enabled. /create/cover: cover-list FlatList visible with 3 seeded active covers (cover-d100…, cover-0b58…, cover-dd82…), plus cover-back and cover-continue; GET /api/covers?offset=0&limit=10 returns {covers,total:3,offset:0,limit:10,next_offset:null} — legacy 'covers' key preserved and every item has thumbnail_url. /create/style?albumId=…: horizontal cover-photo strip renders (8 items initially mounted from 119 photos; horizontal FlatList virtualization active), tapping cover-photo-<id> shows the check badge overlay (verified via screenshot). /album/{id}/preview: 3D preview loads, front cover + pages 5-6 of 80 render, preview-next flips pages without errors. /album/{id}/editor: editor-tool-photos → editor-photos-list virtualized (12 photos-page-<i> rows mounted initially, 25 after scroll to bottom of 80 rows). Swap flow: photos-slot-0-0 then photos-slot-1-0 swapped image src correctly (before slot10=62b0…webp / after slot00=62b0…webp; slot10 became empty then repopulated after PUT completes — assertion 'swapped:True'). /album/{id}/page?index=0: page-tool-replace strip mounts 10 replace-photo-<id> tiles from 119 photos (horizontal FlatList — scrollWidth 1024 / clientWidth 390; 19 mounted after scrolling right); replace-upload-new tile visible; tapping a replace-photo-<id> replaces the canvas image (previews/62b0…webp → previews/7b0a5f…webp). page-editor-save exists (rendered as 'Save & Preview' button testID=page-editor-save). My Books: 10+ album-card-<id> testIDs render with cover thumbnails (top row = Stress 120, 119 photos · 40 sheets · DRAFT). Home drafts still render via home-draft-<id>. Admin covers (login admin/clickbook@2026): /admin/covers lists all 6 covers (active+inactive) via GET /api/covers?admin=true&limit=100 → total:6, items:6; testIDs admin-cover-add + 6× admin-cover-<id> visible; pagination did not break admin. Backend paginated envelopes verified via pytest (5 pass / 1 skip): covers/backgrounds/layouts all expose total/offset/limit/next_offset AND their legacy top-level keys; thumbnail_url is set on every returned cover.\n\nMinor observations (non-blocking, reported): (1) RN-Web console warning 'props.pointerEvents is deprecated. Use style.pointerEvents' — new deprecation surfaced by this iteration's changes; (2) pre-existing shadow* → boxShadow deprecation still present (tracked since iter 8); (3) upload grid mounts all 120 <img> at t=0 before user scrolls — RN-Web FlatList ignores initialNumToRender/windowSize on first paint until the container scrolls (virtualization DOES kick in on scroll → 66 mounted). On Expo Go this is not an issue because RN-native FlatList honours initialNumToRender; recording as an FYI for the web preview only. No VirtualizedList-nesting warnings, no red-screen errors, no failing API calls, no Razorpay/checkout was invoked.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "props.pointerEvents", "issue": "New RN-Web deprecation warning 'props.pointerEvents is deprecated. Use style.pointerEvents' surfaced during editor / page-editor interactions this iteration. Likely a Pressable/View prop introduced in the FlatList strips. Reference: search /app/frontend/app/album/[id]/editor.tsx and /app/frontend/app/album/[id]/page.tsx for pointerEvents=\"…\" props and move them into style.pointerEvents."},
+      {"component": "shadow* style props (pre-existing)", "issue": "Non-blocking deprecation 'shadow* style props are deprecated. Use boxShadow.' still present across page.tsx and other files. Same as iter 8/9."},
+      {"component": "FlatList initial-render on RN-Web (FYI)", "issue": "RN-Web's FlatList does not honour initialNumToRender/windowSize on the very first paint — all 120 tiles are mounted before the user scrolls, then removeClippedSubviews drops off-screen rows (120→66 after scrolling to the bottom of the stress album). Only relevant to the web preview; native (Expo Go) FlatList virtualization is unaffected."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter10_pagination.py",
+    "/app/test_reports/pytest/pytest_results_iter10.xml",
+    "/tmp/06_upload.png",
+    "/tmp/07_upload_bottom.png",
+    "/tmp/08_after_remove.png",
+    "/tmp/09_cover.png",
+    "/tmp/10_style.png",
+    "/tmp/11_style_selected.png",
+    "/tmp/12_preview.png",
+    "/tmp/13_preview_after_flip.png",
+    "/tmp/14_editor.png",
+    "/tmp/15_page_editor.png",
+    "/tmp/16_page_replace.png",
+    "/tmp/17_page_saved.png",
+    "/tmp/18_mybooks.png",
+    "/tmp/19_home_drafts.png",
+    "/tmp/20_admin_home.png",
+    "/tmp/21_admin_covers.png"
+  ],
+  "action_items": [
+    "LOW: Migrate remaining RN shadow* style props to boxShadow.",
+    "LOW: Replace props.pointerEvents=… with style.pointerEvents=… on Views/Pressables (grep /app/frontend/app/album/[id]/ for pointerEvents=)."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/routers/catalog.py: with_thumbnails() looks up admin_images by URL in one query — no N+1. _small_variant() only rewrites Unsplash-style w= params; images without w= fall through to the original URL. Acceptable as a best-effort optimisation.",
+    "/app/frontend/app/create/upload.tsx: FlatList config (initialNumToRender=12, windowSize=3, removeClippedSubviews, getItemLayout) is correct for native. On web the initial mount currently paints all rows; consider gating a 'web only' initialNumToRender=15 via Platform.OS === 'web' if you want to squeeze the web preview too — but Expo Go (the actual target) is fine.",
+    "/app/frontend/app/album/[id]/page.tsx: replace-photo strip works as expected — horizontal FlatList virtualizes on horizontal scroll (10→19 mounted after scrollLeft > 600). replace-upload-new sibling is rendered in ListHeaderComponent, so it's always accessible without scrolling.",
+    "/app/frontend/app/album/[id]/editor.tsx: Photos-tab editor-photos-list virtualizes correctly (12→25 rows mounted around the viewport). Swap flow issues an async PUT /albums/{id}/pages and the UI temporarily clears the destination slot image before the fetch resolves — the intermediate 'null' image state can be noticeable on slow networks; consider optimistic swap instead of clear-then-set."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter10_pagination.py (new — regression suite for paginated catalog endpoints)"
+  ],
+  "success_rate": {
+    "backend": "5/5 pass (1 skipped by design) — pytest /app/test_reports/pytest/pytest_results_iter10.xml",
+    "frontend": "10/10 acceptance flows PASS (login OTP, upload count+thumb+remove+virtualization, /covers pagination, /style cover strip + check badge, 3D preview flip, editor Photos virtualization + swap, page-editor Replace strip + replace, My Books cards, Home drafts, Admin Covers)"
+  },
+  "seed_data_creation": "Removed exactly one photo from album 09fdba3e1551453ca11fd0b9b881dae1 during upload test (120→119). No new albums or orders created. No payments triggered. Album count for customer 9876500777 unchanged apart from that single photo delete.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Customer 9876500777 stress album id is 09fdba3e1551453ca11fd0b9b881dae1 with 119 photos remaining after iteration 10 removed one photo. The album's 80 pages are generated and its preview_url/thumbnail_url point to WebP variants (thumbnails ~400px, previews ~1200px). Backend paginated envelope shape: {items_key, total, offset, limit, next_offset}. Legacy top-level keys are preserved for backward compatibility. On RN-Web the FlatList initial paint mounts all items; wait for the container to scroll before asserting mounted-<img> count.",
+  "rca_of_issue": "N/A — regression PASSED. Root cause fix (picker quality 1 + FlatList virtualization + WebP thumbnails/previews + expo-image memory-disk cache + paginated catalog endpoints) is behaving as designed on the web preview: thumbnails are served as image/webp (verified via in-page fetch), off-screen rows are unmounted after scrolling on both vertical (upload/editor Photos) and horizontal (style cover-photo strip, page-editor replace strip) FlatLists, catalog endpoints return the paginated envelope while preserving their legacy top-level keys, and admin still receives all covers via ?admin=true&limit=100. The 30-image Expo Go crash cannot be reproduced from the web preview but the underlying memory-pressure vectors (full-quality re-encode + full-grid decode + originals in previews) have all been eliminated in the code paths exercised here."
+}

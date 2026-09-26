@@ -98,7 +98,9 @@ class TestPhotoUploadFlow:
                     url = f"{BASE_URL}{url}"
                 r = requests.get(url, timeout=30)
                 assert r.status_code == 200, f"{field} {url} returned {r.status_code}"
-                assert len(r.content) > 500, f"{field} returned too few bytes ({len(r.content)})"
+                assert r.content[:4] in (b"RIFF", b"\xff\xd8\xff\xe0", b"\xff\xd8\xff\xe1", b"\xff\xd8\xff\xdb", b"\x89PNG") or r.content[:3] == b"\xff\xd8\xff", \
+                    f"{field} is not an image (starts {r.content[:8]!r})"
+                assert len(r.content) > 100, f"{field} returned too few bytes ({len(r.content)})"
                 ctype = r.headers.get("Content-Type", "")
                 assert "image" in ctype or r.content[:3] == b"\xff\xd8\xff" or r.content[:8] == b"\x89PNG\r\n\x1a\n", \
                     f"{field} not an image: {ctype}"

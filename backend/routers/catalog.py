@@ -1,4 +1,5 @@
 """Public catalog: covers, layouts, backgrounds, settings, offers, pricing, policies."""
+import re
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
@@ -9,24 +10,62 @@ from policies import POLICIES
 
 router = APIRouter(tags=["catalog"])
 
+MAX_PAGE = 100
+
+
+def _small_variant(url: str, width: int = 400) -> str:
+    """Best-effort small version of a remote catalog image (Unsplash-style w= param)."""
+    if not url or "w=" not in url:
+        return url
+    return re.sub(r"([?&])w=\d+", rf"\g<1>w={width}", url)
+
+
+async def with_thumbnails(items: list) -> list:
+    """Adds thumbnail_url to catalog assets so grids never decode the full-size image.
+    Admin-uploaded images resolve to their stored 400px derivative; remote URLs get a width hint."""
+    urls = [i.get("image_url") for i in items if i.get("image_url") and not i.get("thumbnail_url")]
+    lookup = {}
+    if urls:
+        async for img in db.admin_images.find({"url": {"$in": urls}}, {"_id": 0, "url": 1, "thumbnail_url": 1}):
+            lookup[img["url"]] = img.get("thumbnail_url")
+    for i in items:
+        if i.get("image_url") and not i.get("thumbnail_url"):
+            i["thumbnail_url"] = lookup.get(i["image_url"]) or _small_variant(i["image_url"])
+    return items
+
+
+def _page(items: list, total: int, offset: int, limit: int, key: str) -> dict:
+    nxt = offset + len(items)
+    return {key: items, "total": total, "offset": offset, "limit": limit, "next_offset": nxt if nxt < total else None}
+
+
+def _clamp(limit: int) -> int:
+    return max(1, min(limit, MAX_PAGE))
+
 
 @router.get("/covers")
-async def list_covers(admin: bool = False):
+async def list_covers(admin: bool = False, offset: int = 0, limit: int = 20):
     q = {} if admin else {"active": True}
-    covers = await db.covers.find(q, {"_id": 0}).sort("display_order", 1).to_list(50)
-    return {"covers": covers}
+    limit = _clamp(limit)
+    total = await db.covers.count_documents(q)
+    covers = await db.covers.find(q, {"_id": 0}).sort("display_order", 1).skip(max(0, offset)).limit(limit).to_list(limit)
+    return _page(await with_thumbnails(covers), total, offset, limit, "covers")
 
 
 @router.get("/layouts")
-async def list_layouts():
-    layouts = await db.layouts.find({"active": True}, {"_id": 0}).sort("photo_count", 1).to_list(50)
-    return {"layouts": layouts}
+async def list_layouts(offset: int = 0, limit: int = 50):
+    limit = _clamp(limit)
+    total = await db.layouts.count_documents({"active": True})
+    layouts = await db.layouts.find({"active": True}, {"_id": 0}).sort("photo_count", 1).skip(max(0, offset)).limit(limit).to_list(limit)
+    return _page(await with_thumbnails(layouts), total, offset, limit, "layouts")
 
 
 @router.get("/backgrounds")
-async def list_backgrounds():
-    bgs = await db.backgrounds.find({"active": True}, {"_id": 0}).to_list(100)
-    return {"backgrounds": bgs}
+async def list_backgrounds(offset: int = 0, limit: int = 50):
+    limit = _clamp(limit)
+    total = await db.backgrounds.count_documents({"active": True})
+    bgs = await db.backgrounds.find({"active": True}, {"_id": 0}).skip(max(0, offset)).limit(limit).to_list(limit)
+    return _page(await with_thumbnails(bgs), total, offset, limit, "backgrounds")
 
 
 @router.get("/settings")

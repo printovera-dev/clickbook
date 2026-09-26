@@ -1,4 +1,5 @@
 """Serves VPS/S3 stored assets at /api/files/{path}."""
+import mimetypes
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, Response
 
@@ -17,5 +18,5 @@ async def serve_file(full_path: str):
     data = get_file_bytes(full_path)
     if data is None:
         raise HTTPException(404, "File not found")
-    ct = "application/pdf" if full_path.endswith(".pdf") else "image/jpeg"
+    ct = mimetypes.guess_type(full_path)[0] or "application/octet-stream"
     return Response(content=data, media_type=ct, headers=CACHE)

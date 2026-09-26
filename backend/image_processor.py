@@ -19,11 +19,15 @@ PREVIEW_MAX = 1200   # 3D book preview
 PRINT_MAX = 3000     # 8x8" @ ~300dpi + bleed
 
 
-def _encode(img: Image.Image, max_side: int, quality: int) -> bytes:
+def _encode(img: Image.Image, max_side: int, quality: int, fmt: str = "JPEG") -> bytes:
     out = img.copy()
     out.thumbnail((max_side, max_side), Image.LANCZOS)
     buf = io.BytesIO()
-    out.save(buf, "JPEG", quality=quality, optimize=True, progressive=True)
+    if fmt == "WEBP":
+        # ~30% smaller than JPEG at equal quality; decoded natively by expo-image on iOS/Android/web.
+        out.save(buf, "WEBP", quality=quality, method=4)
+    else:
+        out.save(buf, "JPEG", quality=quality, optimize=True, progressive=True)
     return buf.getvalue()
 
 
@@ -41,9 +45,9 @@ def make_derivatives(data: bytes) -> dict:
         raise ValueError(f"Not a valid image: {e}")
     w, h = img.size
     return {
-        "thumbnail": _encode(img, THUMB_MAX, 80),
-        "preview": _encode(img, PREVIEW_MAX, 85),
-        "print": _encode(img, PRINT_MAX, 92),
+        "thumbnail": _encode(img, THUMB_MAX, 80, "WEBP"),
+        "preview": _encode(img, PREVIEW_MAX, 85, "WEBP"),
+        "print": _encode(img, PRINT_MAX, 92),  # JPEG: print pipeline / PDF
         "width": w,
         "height": h,
     }

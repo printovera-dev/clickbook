@@ -1,7 +1,6 @@
 // Focused full-screen page editor (opened by double-tapping a page in the 3D preview).
 import { useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Alert, Dimensions, Platform, KeyboardAvoidingView } from "react-native";
-import { Image } from "expo-image";
+import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Alert, Dimensions, Platform, KeyboardAvoidingView, FlatList } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -13,6 +12,7 @@ import { api } from "@/src/api";
 import { Button, s } from "@/src/ui";
 import { colors, spacing, radius, fonts } from "@/src/theme";
 import { PageCanvas } from "@/src/components/page-canvas";
+import { Thumb } from "@/src/components/thumb";
 import {
   Page, Photo, TextObject, CoverDesign, FONTS, TEXT_COLORS, LAYOUT_NAMES, DEFAULT_POSITIONS, COVER_STYLES,
   slotRects, imageDrawRect, defaultTransform, newTextObject, fontFamilyFor, coverToPage, pageToCover,
@@ -29,7 +29,7 @@ export default function PageEditor() {
   const router = useRouter();
   const qc = useQueryClient();
   const albumQ = useQuery({ queryKey: ["album", id], queryFn: () => api.getAlbum(String(id)), enabled: !!id });
-  const bgQ = useQuery({ queryKey: ["backgrounds"], queryFn: api.listBackgrounds });
+  const bgQ = useQuery({ queryKey: ["backgrounds"], queryFn: () => api.listBackgrounds() });
   const album = albumQ.data?.album;
   const photos: Photo[] = album?.photos || [];
   const photosById = useMemo(() => Object.fromEntries(photos.map((p) => [p.id, p])), [photos]);
@@ -185,7 +185,10 @@ export default function PageEditor() {
   };
   const [uploadingNew, setUploadingNew] = useState(false);
   const uploadNewImage = async () => {
-    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.85 });
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"], quality: 1, exif: false, base64: false,
+      preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
+    });
     if (res.canceled || !res.assets?.[0]) return;
     const a = res.assets[0];
     setUploadingNew(true);
@@ -313,17 +316,28 @@ export default function PageEditor() {
           ) : null}
 
           {tool === "replace" ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-              <Pressable testID="replace-upload-new" onPress={uploadNewImage} disabled={uploadingNew} style={[styles.thumb, { alignItems: "center", justifyContent: "center", borderStyle: "dashed", borderColor: colors.brandPrimary }]}>
-                <Feather name={uploadingNew ? "loader" : "upload"} size={18} color={colors.brandPrimary} />
-                <Text style={{ fontFamily: fonts.text, fontSize: 9, color: colors.brandPrimary, marginTop: 2, textAlign: "center" }}>{uploadingNew ? "Uploading" : "Upload new"}</Text>
-              </Pressable>
-              {photos.map((p) => (
-                <Pressable key={p.id} testID={`replace-photo-${p.id}`} onPress={() => replaceImage(p.id)} style={[styles.thumb, slotPhotoId === p.id && { borderColor: colors.brandPrimary, borderWidth: 2 }]}>
-                  <Image source={{ uri: p.thumbnail_url }} style={{ flex: 1 }} contentFit="cover" />
+            <FlatList
+              horizontal
+              data={photos}
+              keyExtractor={(p) => p.id}
+              showsHorizontalScrollIndicator={false}
+              initialNumToRender={6}
+              windowSize={3}
+              removeClippedSubviews
+              extraData={slotPhotoId}
+              contentContainerStyle={styles.row}
+              ListHeaderComponent={
+                <Pressable testID="replace-upload-new" onPress={uploadNewImage} disabled={uploadingNew} style={[styles.thumb, { alignItems: "center", justifyContent: "center", borderStyle: "dashed", borderColor: colors.brandPrimary }]}>
+                  <Feather name={uploadingNew ? "loader" : "upload"} size={18} color={colors.brandPrimary} />
+                  <Text style={{ fontFamily: fonts.text, fontSize: 9, color: colors.brandPrimary, marginTop: 2, textAlign: "center" }}>{uploadingNew ? "Uploading" : "Upload new"}</Text>
                 </Pressable>
-              ))}
-            </ScrollView>
+              }
+              renderItem={({ item: p }) => (
+                <Pressable testID={`replace-photo-${p.id}`} onPress={() => replaceImage(p.id)} style={[styles.thumb, slotPhotoId === p.id && { borderColor: colors.brandPrimary, borderWidth: 2 }]}>
+                  <Thumb uri={p.thumbnail_url} recyclingKey={p.id} style={{ flex: 1 }} />
+                </Pressable>
+              )}
+            />
           ) : null}
 
           {tool === "text" ? (

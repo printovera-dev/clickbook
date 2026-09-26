@@ -24,6 +24,7 @@ export default function AdminDashboard() {
 
   const links = [
     { key: "orders", label: "Orders", icon: "package", path: "/admin/orders" },
+    { key: "home", label: "Home Page", icon: "layout", path: "/admin/home" },
     { key: "covers", label: "Covers", icon: "book", path: "/admin/covers" },
     { key: "offers", label: "Offers", icon: "tag", path: "/admin/offers" },
     { key: "pricing", label: "Pricing", icon: "dollar-sign", path: "/admin/pricing" },

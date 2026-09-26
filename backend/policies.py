@@ -1,5 +1,78 @@
 """Legal policy content — mirrors clickbook.world (Privacy, Terms, Shipping, Refund)."""
 POLICIES = {
+    "faq": {
+        "title": "FAQ",
+        "updated": "2026-09-26",
+        "body": """What is ClickBook?
+
+ClickBook are beautifully designed, new-age digital photo albums that make preserving your memories easier than ever. Creating a phone photo album takes just 60 seconds, so you can turn everyday moments into a lasting keepsake.
+
+Every ClickBook is carefully handcrafted and hardbound to last a lifetime and beyond. Each 8×8-inch album starts at 20 pages and can be extended up to as number of pages , with multiple stunning colours to choose from.
+
+Why ClickBook?
+
+Capture and preserve life’s little joys — kids’ dance parties, goofy grins, birthdays, milestones, firsts, travels, festivals, and more. Don’t let memories sit in the cloud or get buried in your phone gallery. Turn them into a digital, online, or phone photo album with ClickBook and relive them together.
+
+Flip through the pages, share laughter, and strengthen family bonds. Your memories are handbound, beautifully printed, and made to be cherished for generations.
+
+How long does delivery take?
+
+We offer Free Pan-India Shipping. We take up to 3 business days to craft your album. Once shipped, delivery typically takes 10–12 business days.
+
+If your order hasn’t arrived within 10–12 business days from the shipping date, contact us at support@clickbook.world or call 9999117810. We’ll help right away.
+
+How many photos can I have in a ClickBook?
+
+Clickbook algorithm  decide the number of photos when  you choose design , we offer three type of design and each design needs different number of images . Don’t worry Our software will ask you autiomotically
+
+My product is defective. Can I get a replacement?
+
+Absolutely. We offer a replacement guarantee if:
+
+Your order is damaged or defective in transit
+
+Product quality doesn’t match the specifications
+
+Wrong product was shipped
+
+Contact us within 10 days of delivery at support@clickbook.com or call 6364182702. We’ll arrange a reverse pickup and dispatch a replacement after we receive the returned item.
+
+Note: We don’t exchange if an incorrect item was ordered by the customer. Refunds aren’t provided; replacements are offered per the above.
+
+How does ClickBook handle my privacy?
+
+We value your privacy. We collect information you provide, some usage data, and limited info from trusted partners (e.g., analytics and social platforms). We use it to process orders, provide support, improve our services, protect against fraud, and comply with the law.
+
+We do not sell your personal information.
+
+You can unsubscribe from marketing emails anytime.
+
+data deletion  is automatic after 30 days if accounts inactive
+
+Our services aren’t intended for users under 18.
+
+Key terms you should know
+
+Use of the service implies agreement with our Terms & Privacy Policy.
+
+Don’t upload illegal, infringing, or harmful content; we may remove or restrict such content.
+
+Security: keep your account credentials safe; report unauthorized use promptly.
+
+We may update features/policies; continued use means you accept the changes.
+
+Disputes governed by laws of Karnataka, India; courts in Bengaluru have jurisdiction.
+
+For the full Terms & Conditions, contact us at support@clickbook.com.
+
+Still need help?
+
+We’re happy to assist with orders, tracking, replacements, or general queries.
+
+Phone/WhatsApp: 9999117810
+
+Email: support@clickbook.com / support@clickbook.world""",
+    },
     "privacy": {
         "title": "Privacy Policy",
         "updated": "2026-09-11",
@@ -133,93 +206,113 @@ Questions about these Terms? Reach us at support@clickbook.world.""",
 
     "refund": {
         "title": "Refund & Cancellation Policy",
-        "updated": "2026-09-11",
-        "body": """This policy explains how cancellations, refunds, and reprints work for ClickBook orders.
+        "updated": "2026-09-26",
+        "body": """We want you to love your ClickBook. Because each book is custom‑printed, cancellations and refunds are limited to the cases below. This page explains when you can cancel, request a refund, or get a reprint/replacement.
 
-## Cancellations
-- Cancellation is possible only **before printing begins**. Please contact us immediately at support@clickbook.world with your Order ID if you need to cancel.
-- Once printing has started, orders cannot be cancelled because each ClickBook is custom-made for you.
+Order Cancellation
 
-## Refunds
-- Full refund on cancellation before printing.
-- Refunds are issued to the original payment method within **5–10 business days** of approval.
-- For orders placed via Razorpay UPI/card/netbanking, refunds appear as a reversal on the same instrument.
+You may cancel an order only before printing starts.
 
-## Damaged, Defective or Missing Items
-If your ClickBook arrives damaged, defective, or with the wrong content:
-- Notify us within **7 days of delivery** with photos/video and your Order ID at support@clickbook.world.
-- On verification, we will arrange a **free reprint & reship** or a full refund at your choice.
+Once an order is in production/printing, it cannot be cancelled.
 
-## Non-Refundable Situations
-The following are **not eligible** for refund or reprint:
-- User-caused issues such as low-resolution uploads, typos, cropping mistakes, or wrong layout choices — please review your ClickBook fully on the "Review your ClickBook" screen before ordering.
-- Minor colour variance from screen (due to print/monitor calibration differences).
-- Courier delays beyond our reasonable control.
-- Change of mind after printing has started.
+To cancel quickly, email with your Order ID.
 
-## Return-to-Origin (RTO)
-If a parcel is returned due to an incorrect address or unavailable recipient:
-- We will contact you to arrange a reship.
-- **Reship charges may apply.**
+Eligibility for Refunds / Reprints
 
-## How to Request a Refund or Reprint
-1. Email support@clickbook.world with subject "Refund Request – <Order ID>".
-2. Attach clear photos/video showing the defect.
-3. Our team responds within **2 business days** and issues a resolution within **5–10 business days** of verification.
+We offer a refund or free reprint for the following:
 
-## Contact
-support@clickbook.world · Phone: 9999974261""",
+Production defects: incorrect binding, missing pages, severe misprints.
+
+Transit damage: item received damaged due to courier handling.
+
+Wrong item: you received a different product than ordered.
+
+Report within 7 days of delivery with photos/video and your Order ID.
+
+Not Eligible (Common Cases)
+
+User‑uploaded issues: low resolution, pixelation, typos, wrong cropping or layout choices.
+
+Minor color variance between screens and print (due to device calibration and print processes).
+
+Normal manufacturing tolerances (slight trim/position shifts within industry standards).
+
+Delays caused by courier or circumstances beyond our control (weather, strikes, etc.).
+
+Orders placed with incorrect address/contact details provided by the user.
+
+How to File a Claim
+
+Email within 7 days of delivery.
+
+Include Order ID, a description of the issue, and clear photos/video of the defect/damage.
+
+Keep the product and original packaging until we confirm next steps.
+
+We typically resolve claims within 3–5 business days after receiving complete information.
+
+Payments via PhonePe (Important)
+
+Payments are processed securely via PhonePe or other payment gateways. We do not store your card/UPI credentials. Refunds for eligible orders are issued back to the original payment method used at checkout, subject to gateway and bank processing timelines.
+
+Order Not Received / RTO
+
+If tracking shows delivered but you haven’t received it, contact us within 48 hours so we can raise a courier trace.
+
+For RTO (return‑to‑origin) due to incorrect address/unreachable phone, we can reship after address confirmation (reship charges may apply).""",
     },
 
     "shipping": {
-        "title": "Shipping Policy",
-        "updated": "2026-09-11",
-        "body": """We custom-print each ClickBook and ship across India via trusted courier partners. This page explains processing time, shipping timelines, tracking, address rules, and what to do if a parcel is delayed or damaged.
+        "title": "Shipping & Delivery Policy",
+        "updated": "2026-09-26",
+        "body": """We custom‑print each ClickBook and ship across India via trusted courier partners. This page explains processing time, shipping timelines, tracking, address rules, and what to do if a parcel is delayed or damaged.
 
-## Where We Ship
-- We currently ship to serviceable PIN codes across India.
-- International shipping is not available at the moment.
+Where We Ship
 
-## Processing (Printing) Time
-- Each order is custom-made. Printing & QA typically take **2–4 business days** from payment confirmation.
-- Large orders, peak seasons, or reprints may require additional time. We'll notify you if there's a significant delay.
+We currently ship to serviceable PIN codes across India.
 
-## Shipping Time & ETA
-- **Metro & Tier-1 cities:** typically 2–5 business days after dispatch.
-- **Tier-2/Tier-3 & remote areas:** typically 4–8 business days after dispatch.
-- Delivery timelines are estimates and may vary due to courier network conditions, weather, or local restrictions.
+International shipping is not available at the moment.
 
-## Shipping Fees
-- Shipping charges (if any) are shown at checkout based on weight, destination, and promotions.
-- Free-shipping offers, when available, will be clearly indicated on the product/checkout page.
+Processing (Printing) Time
 
-## Tracking Your Order
-- Once dispatched, we share a tracking link by email/WhatsApp/SMS. It may take a few hours for scans to appear.
-- If tracking doesn't update for over 48 hours, contact us at support@clickbook.world.
+Each order is custom‑made. Printing & QA typically take 2–4 business days from payment confirmation.
 
-## Address Accuracy & Delivery Attempts
-- Please provide a complete address and an active phone number. Couriers may call for delivery coordination.
-- Incorrect/incomplete addresses or unreachable phone numbers can cause delays or return-to-origin (RTO).
-- Most couriers attempt delivery up to 2–3 times before marking RTO.
+Large orders, peak seasons, or reprints may require additional time. We’ll notify you if there’s a significant delay.
 
-## Change of Address After Order
-Address changes are possible only before dispatch. After dispatch, rerouting is subject to courier policy and may not be guaranteed. Contact us ASAP with your Order ID.
+Shipping Time & ETA
 
-## Missed Delivery / RTO
-- If the parcel is returned due to address/phone issues, we can reship after confirmation; reship charges may apply.
-- If tracking shows "delivered" but you haven't received it, notify us within 48 hours so we can raise a trace.
+Metro & Tier‑1 cities: typically 2–5 business days after dispatch.
 
-## Damaged or Lost in Transit
-- Inspect your package upon delivery. If damaged, contact us within 7 days with photos/video and Order ID.
-- For confirmed damage/loss, we'll arrange a free reprint & reship or provide a refund as per our Refund Policy.
+Tier‑2/Tier‑3 & remote areas: typically 4–8 business days after dispatch.
 
-## Packaging
-Orders are securely packed to minimize transit damage. Packaging type may vary by product size and quantity.
+Delivery timelines are estimates and may vary due to courier network conditions, weather, or local restrictions.
 
-## Force Majeure
-Delays caused by events beyond our control (natural disasters, strikes, lockdowns, etc.) are excluded from guaranteed timelines.
+Shipping Fees
 
-## Contact
-Need help with delivery? Email support@clickbook.world.""",
+Shipping charges (if any) are shown at checkout based on weight, destination, and promotions.
+
+Free‑shipping offers, when available, will be clearly indicated on the product/checkout page.
+
+Tracking Your Order
+
+Once dispatched, we share a tracking link by email/SMS. It may take a few hours for scans to appear.
+
+If tracking doesn’t update for over 48 hours, contact us at .
+
+Missed Delivery / RTO
+
+If the parcel is returned due to address/phone issues, we can reship after confirmation; reship charges may apply.
+
+If tracking shows “delivered” but you haven’t received it, notify us within 48 hours so we can raise a trace.
+
+Damaged or Lost in Transit
+
+Inspect your package upon delivery. If damaged, contact us within 7 days with photos/video and Order ID.
+
+For confirmed damage/loss, we’ll arrange a free reprint & reship or provide a refund as per our Refund Policy.
+
+Force Majeure
+
+Delays caused by events beyond our control (natural disasters, strikes, lockdowns, etc.) are excluded from guaranteed timelines.""",
     },
 }

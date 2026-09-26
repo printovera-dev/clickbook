@@ -1,5 +1,5 @@
-import { View, Text, ScrollView, StyleSheet, Pressable, RefreshControl } from "react-native";
-import { Image } from "expo-image";
+import { View, Text, FlatList, StyleSheet, Pressable, RefreshControl } from "react-native";
+import { Thumb } from "@/src/components/thumb";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
@@ -20,11 +20,15 @@ export default function Albums() {
         <Text style={[s.h1]}>My ClickBooks</Text>
         <Text style={[s.bodyMuted, { marginTop: 4 }]}>Drafts and ordered albums</Text>
       </View>
-      <ScrollView
+      <FlatList
+        data={albums}
+        keyExtractor={(a: any) => a.id}
+        initialNumToRender={8}
+        windowSize={5}
+        removeClippedSubviews
         contentContainerStyle={{ padding: spacing.xl, paddingBottom: spacing.xxxl }}
         refreshControl={<RefreshControl refreshing={q.isFetching} onRefresh={q.refetch} tintColor={colors.brandPrimary} />}
-      >
-        {albums.length === 0 ? (
+        ListEmptyComponent={
           <View style={styles.empty}>
             <Feather name="book-open" size={44} color={colors.muted} />
             <Text style={[s.h2, { marginTop: spacing.md }]}>No albums yet</Text>
@@ -32,33 +36,31 @@ export default function Albums() {
               Tap "Create your ClickBook" on Home to start.
             </Text>
           </View>
-        ) : (
-          albums.map((a: any) => (
-            <Pressable
-              key={a.id}
-              testID={`album-card-${a.id}`}
-              style={styles.card}
-              onPress={() =>
-                a.status === "draft"
-                  ? router.push({ pathname: "/album/[id]/editor", params: { id: a.id } })
-                  : router.push({ pathname: "/album/[id]/preview", params: { id: a.id } })
-              }
-            >
-              <Image source={{ uri: a.cover_snapshot?.image_url }} style={styles.thumb} contentFit="cover" />
-              <View style={{ flex: 1, marginLeft: spacing.md }}>
-                <Text style={s.h2} numberOfLines={1}>{a.name}</Text>
-                <Text style={s.bodyMuted}>{a.photos?.length || 0} photos · {a.sheets || 0} sheets</Text>
-                <View style={styles.badge}>
-                  <Text style={{ color: colors.brandPrimary, fontFamily: fonts.text, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6 }}>
-                    {a.status}
-                  </Text>
-                </View>
+        }
+        renderItem={({ item: a }: { item: any }) => (
+          <Pressable
+            testID={`album-card-${a.id}`}
+            style={styles.card}
+            onPress={() =>
+              a.status === "draft"
+                ? router.push({ pathname: "/album/[id]/editor", params: { id: a.id } })
+                : router.push({ pathname: "/album/[id]/preview", params: { id: a.id } })
+            }
+          >
+            <Thumb uri={a.cover_snapshot?.thumbnail_url || a.cover_snapshot?.image_url} recyclingKey={a.id} style={styles.thumb} />
+            <View style={{ flex: 1, marginLeft: spacing.md }}>
+              <Text style={s.h2} numberOfLines={1}>{a.name}</Text>
+              <Text style={s.bodyMuted}>{a.photos?.length || 0} photos · {a.sheets || 0} sheets</Text>
+              <View style={styles.badge}>
+                <Text style={{ color: colors.brandPrimary, fontFamily: fonts.text, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6 }}>
+                  {a.status}
+                </Text>
               </View>
-              <Feather name="chevron-right" color={colors.muted} size={22} />
-            </Pressable>
-          ))
+            </View>
+            <Feather name="chevron-right" color={colors.muted} size={22} />
+          </Pressable>
         )}
-      </ScrollView>
+      />
     </View>
   );
 }

@@ -98,3 +98,8 @@ backend/storage/
 !frontend/.env.example
 !backend/.env.production.example
 !backend/deploy/.env.example
+
+# Seeded home-page assets must ship with the repo (served at /api/files/home/*)
+!backend/storage/
+backend/storage/*
+!backend/storage/home/

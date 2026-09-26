@@ -5,6 +5,7 @@ from typing import List, Optional, Any, Dict
 
 from core import db, now_utc, now_iso, new_id, get_current_customer, get_settings_doc
 from storage_manager import save_original, public_url
+from routers.catalog import with_thumbnails
 from design import STYLE_RHYTHMS, DEFAULT_STYLE, default_transform, default_cover_design
 
 router = APIRouter(tags=["albums"])
@@ -67,6 +68,7 @@ async def create_album(payload: AlbumCreate, customer: dict = Depends(get_curren
     cover = await db.covers.find_one({"id": payload.cover_id, "active": True}, {"_id": 0})
     if not cover:
         raise HTTPException(400, "Invalid cover")
+    cover = (await with_thumbnails([cover]))[0]
     album = {
         "id": new_id(),
         "customer_id": customer["id"],

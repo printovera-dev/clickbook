@@ -93,18 +93,19 @@ def save_original(customer_id: str, album_id: str, filename: str, data: bytes) -
     base = uuid.uuid4().hex
     key = f"{base}{ext}"
     jpg_key = f"{base}.jpg"
+    webp_key = f"{base}.webp"
     rel = f"clickbook/customers/{customer_id}/albums/{album_id}"
     content_type = "image/jpeg" if ext in (".jpg", ".jpeg") else "image/png" if ext == ".png" else "image/webp" if ext == ".webp" else "application/octet-stream"
     derivs = make_derivatives(data)
     _put(f"{rel}/originals/{key}", data, content_type)
-    _put(f"{rel}/thumbnails/{jpg_key}", derivs["thumbnail"], "image/jpeg")
-    _put(f"{rel}/previews/{jpg_key}", derivs["preview"], "image/jpeg")
+    _put(f"{rel}/thumbnails/{webp_key}", derivs["thumbnail"], "image/webp")
+    _put(f"{rel}/previews/{webp_key}", derivs["preview"], "image/webp")
     _put(f"{rel}/print/{jpg_key}", derivs["print"], "image/jpeg")
     return {
         "storage_key": key,
         "original_path": f"{rel}/originals/{key}",
-        "thumbnail_path": f"{rel}/thumbnails/{jpg_key}",
-        "preview_path": f"{rel}/previews/{jpg_key}",
+        "thumbnail_path": f"{rel}/thumbnails/{webp_key}",
+        "preview_path": f"{rel}/previews/{webp_key}",
         "print_path": f"{rel}/print/{jpg_key}",
         "size_bytes": len(data),
         "width": derivs["width"],

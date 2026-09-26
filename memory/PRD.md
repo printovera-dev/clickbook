@@ -61,6 +61,12 @@ ClickBook is a premium photo-album service that lets customers create beautifull
 - **Notification system** (`routers/notifications.py`): admin composes to one customer or broadcasts to all (types general/offer/correction/status), history with read counts; system auto-notifies on payment confirmation and on every admin status change (process bot message or admin note as body). Customers: Home bell + unread badge, `/notifications` inbox (tap = read + open linked order, mark all read). Admin order modal has "Message customer" (prefilled).
 - Tests: `tests/test_iteration9_downloads_notifications.py` (9), frontend E2E iteration_9 all pass.
 
+## Feature updates (2026-09-18, iteration 10 — large catalogs / Expo Go memory)
+- **Root cause of the ~30-photo crash**: `expo-image-picker` was invoked with `quality: 0.85` + multi-select, which decodes and re-encodes every selected asset in memory before returning (~48 MB per 12 MP frame) → Expo Go OOM at ~30 selections. Fixed with `quality: 1`, `exif/base64: false`, `preferredAssetRepresentationMode: Current`, no selection limit; uploads stay sequential with a live progress bar.
+- **Virtualization** everywhere images are listed: upload grid (FlatList, 3 columns), editor Photos tab, Choose Cover (infinite scroll over paginated `/covers`), Choose Style cover strip, page-editor Change Image strip, My Books. `src/components/thumb.tsx` = expo-image with `recyclingKey`, `memory-disk` cache, downscaling.
+- **Right-sized images**: thumbnails (400px) in grids, previews (1200px) in book/editor, originals only in the print pipeline. Backend derivatives are now **WebP** (thumbnail/preview), print stays JPEG. Catalog endpoints (`/covers`, `/layouts`, `/backgrounds`) accept `offset`/`limit` and return `total`/`next_offset`, and expose `thumbnail_url` (admin uploads → stored 400px derivative). Admin can add unlimited assets with no app change.
+- Verified with a 120-photo / 80-page stress album on web (virtualization confirmed by the testing agent); backend 89/89.
+
 ## Deferred (roadmap)
 - Real WhatsApp/SMS provider (playbook-driven), real Razorpay integration, ML-driven auto-layout selection (currently rhythm-based), image cropping/zoom inside placeholders, 3+ photo layouts, Lottie process-bot animations.
 

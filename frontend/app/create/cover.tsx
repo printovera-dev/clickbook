@@ -1,20 +1,29 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
+import { View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator } from "react-native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { api } from "@/src/api";
 import { Button, s } from "@/src/ui";
 import { colors, spacing, radius, fonts } from "@/src/theme";
 import Feather from "@react-native-vector-icons/feather";
+
+const PAGE = 10;
 
 export default function ChooseCover() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const q = useQuery({ queryKey: ["covers"], queryFn: () => api.listCovers() });
+  // Infinite scroll: covers arrive 10 at a time, so an admin catalog of any size stays light.
+  const q = useInfiniteQuery({
+    queryKey: ["covers"],
+    queryFn: ({ pageParam }) => api.listCovers(pageParam, PAGE),
+    initialPageParam: 0,
+    getNextPageParam: (last) => last.next_offset ?? undefined,
+  });
+  const covers = q.data?.pages.flatMap((p) => p.covers) || [];
 
   const next = async () => {
     if (!selected) return;
@@ -34,32 +43,44 @@ export default function ChooseCover() {
         <Text style={s.label}>Step 1 of 3</Text>
         <View style={{ width: 22 }} />
       </View>
-      <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 140 }}>
-        <Text style={s.h1}>Choose a cover</Text>
-        <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>Every ClickBook comes as an 8 × 8 inch premium hardcover.</Text>
-        <View style={{ marginTop: spacing.xl, gap: spacing.lg }}>
-          {(q.data?.covers || []).map((c: any) => (
-            <Pressable
-              key={c.id}
-              testID={`cover-${c.id}`}
-              onPress={() => setSelected(c.id)}
-              style={[styles.card, selected === c.id && styles.cardSelected]}
-            >
-              <Image source={{ uri: c.image_url }} style={styles.coverImg} contentFit="cover" />
-              <View style={{ padding: spacing.lg }}>
-                <Text style={s.h2}>{c.name}</Text>
-                <Text style={s.bodyMuted}>{c.description}</Text>
-                {selected === c.id && (
-                  <View style={styles.selectedBadge}>
-                    <Feather name="check" size={14} color={colors.onBrandPrimary} />
-                    <Text style={{ color: colors.onBrandPrimary, marginLeft: 4, fontFamily: fonts.text }}>Selected</Text>
-                  </View>
-                )}
-              </View>
-            </Pressable>
-          ))}
-        </View>
-      </ScrollView>
+      <FlatList
+        testID="cover-list"
+        data={covers}
+        keyExtractor={(c) => c.id}
+        extraData={selected}
+        initialNumToRender={4}
+        windowSize={5}
+        removeClippedSubviews
+        onEndReachedThreshold={0.6}
+        onEndReached={() => { if (q.hasNextPage && !q.isFetchingNextPage) q.fetchNextPage(); }}
+        contentContainerStyle={{ padding: spacing.xl, paddingBottom: 140, gap: spacing.lg }}
+        ListHeaderComponent={
+          <View>
+            <Text style={s.h1}>Choose a cover</Text>
+            <Text style={[s.bodyMuted, { marginTop: spacing.sm, marginBottom: spacing.sm }]}>Every ClickBook comes as an 8 × 8 inch premium hardcover.</Text>
+          </View>
+        }
+        ListFooterComponent={q.isFetchingNextPage ? <ActivityIndicator color={colors.brandPrimary} style={{ marginVertical: spacing.md }} /> : null}
+        renderItem={({ item: c }) => (
+          <Pressable
+            testID={`cover-${c.id}`}
+            onPress={() => setSelected(c.id)}
+            style={[styles.card, selected === c.id && styles.cardSelected]}
+          >
+            <Image source={{ uri: c.image_url }} recyclingKey={c.id} cachePolicy="memory-disk" allowDownscaling style={styles.coverImg} contentFit="cover" transition={100} />
+            <View style={{ padding: spacing.lg }}>
+              <Text style={s.h2}>{c.name}</Text>
+              <Text style={s.bodyMuted}>{c.description}</Text>
+              {selected === c.id && (
+                <View style={styles.selectedBadge}>
+                  <Feather name="check" size={14} color={colors.onBrandPrimary} />
+                  <Text style={{ color: colors.onBrandPrimary, marginLeft: 4, fontFamily: fonts.text }}>Selected</Text>
+                </View>
+              )}
+            </View>
+          </Pressable>
+        )}
+      />
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
         <Button testID="cover-continue" label="Continue" onPress={next} disabled={!selected} loading={busy} />
       </View>

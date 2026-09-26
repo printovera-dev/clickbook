@@ -1,12 +1,12 @@
-import { useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView, TextInput } from "react-native";
-import { Image } from "expo-image";
+import { useCallback, useState } from "react";
+import { View, Text, StyleSheet, Pressable, ScrollView, FlatList } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/src/api";
 import { BookPreview } from "@/src/components/book-preview";
 import { PageOrderList } from "@/src/components/page-order-list";
+import { Thumb } from "@/src/components/thumb";
 import { Button, s } from "@/src/ui";
 import { colors, spacing, radius, fonts } from "@/src/theme";
 import Feather from "@react-native-vector-icons/feather";
@@ -102,45 +102,112 @@ export default function Editor() {
     commit(next);
   };
 
+  const header = (
+    <View style={styles.topbar}>
+      <Pressable onPress={() => router.back()} testID="editor-back"><Feather name="arrow-left" size={22} color={colors.onSurface} /></Pressable>
+      <Text style={s.label}>Edit ClickBook</Text>
+      <View style={{ flexDirection: "row", gap: spacing.md }}>
+        <Pressable onPress={() => router.push({ pathname: "/album/[id]/preview", params: { id: String(id) } })} testID="editor-3d-preview"><Feather name="book-open" size={20} color={colors.brandPrimary} /></Pressable>
+        <Pressable onPress={undo} testID="editor-undo"><Feather name="corner-up-left" size={20} color={history.length ? colors.onSurface : colors.muted} /></Pressable>
+        <Pressable onPress={redo} testID="editor-redo"><Feather name="corner-up-right" size={20} color={redoStack.length ? colors.onSurface : colors.muted} /></Pressable>
+      </View>
+    </View>
+  );
+
+  const previewArea = (
+    <View style={styles.previewArea}>
+      {album ? (
+        <BookPreview
+          cover={album.cover_snapshot} coverDesign={album.cover_design}
+          pages={pages}
+          photos={album.photos || []}
+          albumName={album.name}
+          size={300}
+          onEditPage={(i) => router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: String(i) } })} onEditCover={() => router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: "cover" } })}
+        />
+      ) : null}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, marginTop: spacing.sm }}>
+        <Text style={s.bodyMuted}>Page {pageIdx + 1} of {pages.length}</Text>
+        <Pressable testID="editor-edit-page" onPress={() => router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: String(pageIdx) } })} style={{ flexDirection: "row", alignItems: "center", gap: 4, minHeight: 32 }}>
+          <Feather name="edit-3" size={14} color={colors.brandPrimary} /><Text style={{ color: colors.brandPrimary, fontFamily: fonts.text, fontSize: 13 }}>Edit Page</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  const toolTabs = (
+    <View style={styles.toolTabs}>
+      {(["background", "layout", "pages", "photos", "text"] as Tool[]).map((t) => (
+        <Pressable key={t} testID={`editor-tool-${t}`} onPress={() => setTool(t)} style={[styles.toolTab, tool === t && styles.toolTabActive]}>
+          <Feather name={t === "background" ? "droplet" : t === "layout" ? "grid" : t === "pages" ? "layers" : t === "photos" ? "image" : "type"} size={16} color={tool === t ? colors.onBrandPrimary : colors.onSurface} />
+          <Text style={{ marginLeft: 6, color: tool === t ? colors.onBrandPrimary : colors.onSurface, fontFamily: fonts.text, fontSize: 12, textTransform: "capitalize" }}>{t}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+
+  const footer = (
+    <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
+      <Button testID="editor-review-button" label="Review & Order" onPress={() => router.push({ pathname: "/album/[id]/review", params: { id: String(id) } })} />
+    </View>
+  );
+
+  const renderPhotoRow = useCallback(({ item: p, index: pi }: { item: any; index: number }) => (
+    <View style={[styles.pageRow, pi === pageIdx && { borderColor: colors.brandPrimary, borderWidth: 2 }]} testID={`photos-page-${pi}`}>
+      <View style={[styles.pageChip, { backgroundColor: p.background }]}>
+        <Text style={{ color: p.background === "#1C1917" ? "#FFF" : colors.onSurface, fontFamily: fonts.text, fontSize: 11 }}>{pi + 1}</Text>
+      </View>
+      <View style={{ flex: 1, flexDirection: "row", gap: spacing.sm, marginLeft: spacing.md }}>
+        {p.photo_ids.map((pid: string, slot: number) => {
+          const photo = photosById[pid];
+          const isSel = sel?.pi === pi && sel?.slot === slot;
+          return (
+            <Pressable key={`${pi}-${slot}`} testID={`photos-slot-${pi}-${slot}`} onPress={() => onSlotPress(pi, slot)} style={[styles.slotThumb, isSel && styles.slotThumbSelected]}>
+              <Thumb uri={photo?.thumbnail_url} recyclingKey={pid} style={{ flex: 1 }} />
+              {isSel ? <View style={styles.slotSelBadge}><Feather name="check" size={12} color="#FFF" /></View> : null}
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  ), [pageIdx, photosById, sel, onSlotPress]);
+
+  if (tool === "photos") {
+    // Virtualized: a 75-sheet album has 150 rows × up to 4 thumbnails — only the visible window is mounted.
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.surface, paddingTop: insets.top }}>
+        {header}
+        {previewArea}
+        {toolTabs}
+        <FlatList
+          testID="editor-photos-list"
+          data={pages}
+          keyExtractor={(p) => p.id}
+          renderItem={renderPhotoRow}
+          extraData={`${pageIdx}-${sel?.pi}-${sel?.slot}`}
+          initialNumToRender={8}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          removeClippedSubviews
+          style={styles.sheet}
+          contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + 120, gap: spacing.md }}
+          ListHeaderComponent={
+            <View>
+              <Text style={s.label}>Rearrange photos</Text>
+              <Text style={[s.bodyMuted, { marginTop: 4 }]}>Tap a photo to select it, then tap any other photo slot (same or another page) to swap.</Text>
+            </View>
+          }
+        />
+        {footer}
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface, paddingTop: insets.top }}>
-      <View style={styles.topbar}>
-        <Pressable onPress={() => router.back()} testID="editor-back"><Feather name="arrow-left" size={22} color={colors.onSurface} /></Pressable>
-        <Text style={s.label}>Edit ClickBook</Text>
-        <View style={{ flexDirection: "row", gap: spacing.md }}>
-          <Pressable onPress={() => router.push({ pathname: "/album/[id]/preview", params: { id: String(id) } })} testID="editor-3d-preview"><Feather name="book-open" size={20} color={colors.brandPrimary} /></Pressable>
-          <Pressable onPress={undo} testID="editor-undo"><Feather name="corner-up-left" size={20} color={history.length ? colors.onSurface : colors.muted} /></Pressable>
-          <Pressable onPress={redo} testID="editor-redo"><Feather name="corner-up-right" size={20} color={redoStack.length ? colors.onSurface : colors.muted} /></Pressable>
-        </View>
-      </View>
-
-      <View style={styles.previewArea}>
-        {album ? (
-          <BookPreview
-            cover={album.cover_snapshot} coverDesign={album.cover_design}
-            pages={pages}
-            photos={album.photos || []}
-            albumName={album.name}
-            size={300}
-            onEditPage={(i) => router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: String(i) } })} onEditCover={() => router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: "cover" } })}
-          />
-        ) : null}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, marginTop: spacing.sm }}>
-          <Text style={s.bodyMuted}>Page {pageIdx + 1} of {pages.length}</Text>
-          <Pressable testID="editor-edit-page" onPress={() => router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: String(pageIdx) } })} style={{ flexDirection: "row", alignItems: "center", gap: 4, minHeight: 32 }}>
-            <Feather name="edit-3" size={14} color={colors.brandPrimary} /><Text style={{ color: colors.brandPrimary, fontFamily: fonts.text, fontSize: 13 }}>Edit Page</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      <View style={styles.toolTabs}>
-        {(["background", "layout", "pages", "photos", "text"] as Tool[]).map((t) => (
-          <Pressable key={t} testID={`editor-tool-${t}`} onPress={() => setTool(t)} style={[styles.toolTab, tool === t && styles.toolTabActive]}>
-            <Feather name={t === "background" ? "droplet" : t === "layout" ? "grid" : t === "pages" ? "layers" : t === "photos" ? "image" : "type"} size={16} color={tool === t ? colors.onBrandPrimary : colors.onSurface} />
-            <Text style={{ marginLeft: 6, color: tool === t ? colors.onBrandPrimary : colors.onSurface, fontFamily: fonts.text, fontSize: 12, textTransform: "capitalize" }}>{t}</Text>
-          </Pressable>
-        ))}
-      </View>
+      {header}
+      {previewArea}
+      {toolTabs}
 
       <ScrollView style={styles.sheet} contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + 120 }}>
         {tool === "background" && (
@@ -206,48 +273,6 @@ export default function Editor() {
             />
           </>
         )}
-        {tool === "photos" && (
-          <>
-            <Text style={s.label}>Rearrange photos</Text>
-            <Text style={[s.bodyMuted, { marginTop: 4, marginBottom: spacing.md }]}>
-              Tap a photo to select it, then tap any other photo slot (same or another page) to swap.
-            </Text>
-            <View style={{ gap: spacing.md }}>
-              {pages.map((p, pi) => (
-                <View key={p.id} style={[styles.pageRow, pi === pageIdx && { borderColor: colors.brandPrimary, borderWidth: 2 }]} testID={`photos-page-${pi}`}>
-                  <View style={[styles.pageChip, { backgroundColor: p.background }]}>
-                    <Text style={{ color: p.background === "#1C1917" ? "#FFF" : colors.onSurface, fontFamily: fonts.text, fontSize: 11 }}>{pi + 1}</Text>
-                  </View>
-                  <View style={{ flex: 1, flexDirection: "row", gap: spacing.sm, marginLeft: spacing.md }}>
-                    {p.photo_ids.map((pid: string, slot: number) => {
-                      const photo = photosById[pid];
-                      const isSel = sel?.pi === pi && sel?.slot === slot;
-                      return (
-                        <Pressable
-                          key={`${pi}-${slot}`}
-                          testID={`photos-slot-${pi}-${slot}`}
-                          onPress={() => onSlotPress(pi, slot)}
-                          style={[styles.slotThumb, isSel && styles.slotThumbSelected]}
-                        >
-                          {photo?.thumbnail_url ? (
-                            <Image source={{ uri: photo.thumbnail_url }} style={{ flex: 1 }} contentFit="cover" />
-                          ) : (
-                            <View style={{ flex: 1, backgroundColor: colors.surfaceTertiary }} />
-                          )}
-                          {isSel ? (
-                            <View style={styles.slotSelBadge}>
-                              <Feather name="check" size={12} color="#FFF" />
-                            </View>
-                          ) : null}
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
-              ))}
-            </View>
-          </>
-        )}
         {tool === "text" && (
           <>
             <Text style={s.label}>Text on page {pageIdx + 1}</Text>
@@ -260,9 +285,7 @@ export default function Editor() {
         )}
       </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
-        <Button testID="editor-review-button" label="Review & Order" onPress={() => router.push({ pathname: "/album/[id]/review", params: { id: String(id) } })} />
-      </View>
+      {footer}
     </View>
   );
 }

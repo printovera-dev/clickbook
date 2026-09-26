@@ -7,6 +7,7 @@ import {
   Page, Photo, TextObject, slotRects, imageDrawRect, defaultTransform, fontFamilyFor,
 } from "@/src/design";
 import { colors } from "@/src/theme";
+import { fileUrl } from "@/src/api";
 
 type Props = {
   page: Page;
@@ -35,12 +36,18 @@ export function PageCanvas({ page, photosById, size, pageNumber, numberSide = "r
         const d = dims[pid] || (photo?.width && photo?.height ? { w: photo.width, h: photo.height } : null);
         const draw = d ? imageDrawRect(sw, sh, d.w, d.h, tr) : { dx: 0, dy: 0, dw: sw, dh: sh };
         const selected = selectedSlot === i;
+        // small renders (page-order rows, strips) use the 400px derivative; the book/editor use the 1200px preview.
+        // Full-resolution originals are never loaded in the app — only the print pipeline reads them.
+        const uri = Math.max(sw, sh) <= 130 ? (photo?.thumbnail_url || photo?.preview_url) : (photo?.preview_url || photo?.thumbnail_url);
         return (
           <Pressable key={pid + i} disabled={!onSlotPress} onPress={() => onSlotPress?.(i)}
             style={{ position: "absolute", left: r.x * size, top: r.y * size, width: sw, height: sh, overflow: "hidden", backgroundColor: colors.surfaceTertiary }}>
-            {photo?.preview_url ? (
+            {uri ? (
               <Image
-                source={{ uri: photo.preview_url }}
+                source={{ uri: fileUrl(uri) }}
+                recyclingKey={pid}
+                cachePolicy="memory-disk"
+                allowDownscaling
                 style={{ position: "absolute", left: draw.dx, top: draw.dy, width: draw.dw, height: draw.dh }}
                 contentFit={d ? "fill" : "cover"}
                 transition={120}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
+import { View, Text, StyleSheet, Pressable, ScrollView, FlatList } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Feather from "@react-native-vector-icons/feather";
@@ -7,7 +7,7 @@ import { Button, s } from "@/src/ui";
 import { colors, spacing, radius, fonts } from "@/src/theme";
 import { ALBUM_STYLES, StyleKey } from "@/src/design";
 import { useQuery } from "@tanstack/react-query";
-import { Image } from "expo-image";
+import { Thumb } from "@/src/components/thumb";
 import { api } from "@/src/api";
 
 export default function ChooseStyle() {
@@ -30,14 +30,24 @@ export default function ChooseStyle() {
       <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 140 }}>
         <Text style={s.label}>Cover photo</Text>
         <Text style={[s.bodyMuted, { marginTop: 4 }]}>Pick the photograph for your front cover. You can change it later.</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, paddingVertical: spacing.md }}>
-          {photos.map((p) => (
-            <Pressable key={p.id} testID={`cover-photo-${p.id}`} onPress={() => setCoverPhoto(p.id)} style={[styles.thumb, selectedCover === p.id && styles.thumbActive]}>
-              <Image source={{ uri: p.thumbnail_url }} style={{ flex: 1 }} contentFit="cover" />
+        <FlatList
+          horizontal
+          data={photos}
+          keyExtractor={(p) => p.id}
+          showsHorizontalScrollIndicator={false}
+          initialNumToRender={6}
+          windowSize={3}
+          removeClippedSubviews
+          getItemLayout={(_, i) => ({ length: 84 + spacing.sm, offset: (84 + spacing.sm) * i, index: i })}
+          contentContainerStyle={{ gap: spacing.sm, paddingVertical: spacing.md }}
+          extraData={selectedCover}
+          renderItem={({ item: p }) => (
+            <Pressable testID={`cover-photo-${p.id}`} onPress={() => setCoverPhoto(p.id)} style={[styles.thumb, selectedCover === p.id && styles.thumbActive]}>
+              <Thumb uri={p.thumbnail_url} recyclingKey={p.id} style={{ flex: 1 }} />
               {selectedCover === p.id ? <View style={styles.thumbBadge}><Feather name="check" size={12} color={colors.onBrandPrimary} /></View> : null}
             </Pressable>
-          ))}
-        </ScrollView>
+          )}
+        />
         <Text style={[s.h1, { marginTop: spacing.lg }]}>Choose your album style</Text>
         <Text style={[s.bodyMuted, { marginTop: 4 }]}>Choose how you want your photos arranged. You can fine-tune everything later.</Text>
         <View style={{ marginTop: spacing.xl, gap: spacing.md }}>

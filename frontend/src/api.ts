@@ -117,10 +117,10 @@ export const api = {
   me: () => request<{ customer: any }>("/me"),
   updateMe: (data: any) => request<{ customer: any }>("/me", { method: "PUT", body: data }),
 
-  // Catalog
-  listCovers: () => request<{ covers: any[] }>("/covers"),
-  listLayouts: () => request<{ layouts: any[] }>("/layouts"),
-  listBackgrounds: () => request<{ backgrounds: any[] }>("/backgrounds"),
+  // Catalog (paginated: {items, total, next_offset}; admin can add unlimited assets)
+  listCovers: (offset = 0, limit = 20) => request<{ covers: any[]; total: number; next_offset: number | null }>(`/covers?offset=${offset}&limit=${limit}`),
+  listLayouts: () => request<{ layouts: any[]; total: number }>("/layouts?limit=100"),
+  listBackgrounds: (offset = 0, limit = 100) => request<{ backgrounds: any[]; total: number; next_offset: number | null }>(`/backgrounds?offset=${offset}&limit=${limit}`),
   listOffers: () => request<{ offers: any[] }>("/offers"),
   getSettings: () => request<{ settings: any }>("/settings"),
 
@@ -156,6 +156,11 @@ export const api = {
   listMyOrders: () => request<{ orders: any[] }>("/orders"),
   getOrder: (id: string) => request<{ order: any; process_bots: any[] }>(`/orders/${id}`),
 
+  // Home page CMS
+  homeContent: () => request<{ content: any; pricing: any }>("/home", { auth: false }),
+  adminHome: () => request<{ content: any }>("/admin/home", { admin: true }),
+  adminUpdateHome: (data: any) => request<{ content: any }>("/admin/home", { method: "PUT", body: data, admin: true }),
+
   // Notifications (customer)
   listNotifications: () => request<{ notifications: any[]; unread_count: number }>("/notifications"),
   readNotification: (id: string) => request(`/notifications/${id}/read`, { method: "POST", body: {} }),
@@ -179,7 +184,7 @@ export const api = {
   adminSendNotification: (data: { title: string; body: string; type: string; customer_id?: string | null; order_id?: string | null }) =>
     request<{ sent: number; broadcast: boolean }>("/admin/notifications", { method: "POST", body: data, admin: true }),
   adminNotifications: () => request<{ notifications: any[] }>("/admin/notifications", { admin: true }),
-  adminListCovers: () => request<{ covers: any[] }>("/covers?admin=true", { admin: true }),
+  adminListCovers: () => request<{ covers: any[] }>("/covers?admin=true&limit=100", { admin: true }),
   adminCreateCover: (data: any) => request("/admin/covers", { method: "POST", body: data, admin: true }),
   adminUpdateCover: (id: string, data: any) => request(`/admin/covers/${id}`, { method: "PUT", body: data, admin: true }),
   adminDeleteCover: (id: string) => request(`/admin/covers/${id}`, { method: "DELETE", admin: true }),

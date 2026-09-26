@@ -38,10 +38,12 @@ export default function Notifications() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface, paddingTop: insets.top }}>
       <View style={styles.topbar}>
-        <Pressable onPress={() => router.back()} testID="notifications-back" hitSlop={12}>
-          <Feather name="arrow-left" size={22} color={colors.onSurface} />
-        </Pressable>
-        <Text style={s.h2}>Notifications</Text>
+        {router.canGoBack() ? (
+          <Pressable onPress={() => router.back()} testID="notifications-back" hitSlop={12}>
+            <Feather name="arrow-left" size={22} color={colors.onSurface} />
+          </Pressable>
+        ) : <View style={{ width: 22 }} />}
+        <Text style={s.h2}>Messages</Text>
         {unread > 0 ? (
           <Pressable onPress={readAll} testID="notifications-read-all" hitSlop={12}>
             <Text style={{ color: colors.brandPrimary, fontFamily: fonts.text, fontSize: 13 }}>Mark all read</Text>
