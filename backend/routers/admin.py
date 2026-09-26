@@ -50,6 +50,7 @@ class SettingsUpdate(BaseModel):
     min_sheets: Optional[int] = None
     max_sheets: Optional[int] = None
     gift_wrap_fee: Optional[float] = None
+    support_whatsapp: Optional[str] = None
 
 
 class StatusUpdate(BaseModel):

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView, FlatList } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -29,6 +29,8 @@ export default function Editor() {
 
   const album = q.data?.album;
   const pages: any[] = album?.pages || [];
+  // Paid albums are view-only: the server rejects edits (409), so never show the editor for them.
+  useEffect(() => { if (album?.locked) router.replace({ pathname: "/album/[id]/preview", params: { id: String(id) } }); }, [album?.locked, id, router]);
   const backgrounds = bgsQ.data?.backgrounds || [];
   const layouts = layoutsQ.data?.layouts || [];
   const photosById: Record<string, any> = Object.fromEntries((album?.photos || []).map((p: any) => [p.id, p]));
@@ -140,7 +142,7 @@ export default function Editor() {
       {(["background", "layout", "pages", "photos", "text"] as Tool[]).map((t) => (
         <Pressable key={t} testID={`editor-tool-${t}`} onPress={() => setTool(t)} style={[styles.toolTab, tool === t && styles.toolTabActive]}>
           <Feather name={t === "background" ? "droplet" : t === "layout" ? "grid" : t === "pages" ? "layers" : t === "photos" ? "image" : "type"} size={16} color={tool === t ? colors.onBrandPrimary : colors.onSurface} />
-          <Text style={{ marginLeft: 6, color: tool === t ? colors.onBrandPrimary : colors.onSurface, fontFamily: fonts.text, fontSize: 12, textTransform: "capitalize" }}>{t}</Text>
+          <Text style={{ marginLeft: 6, color: tool === t ? colors.onBrandPrimary : colors.onSurface, fontFamily: fonts.text, fontSize: 12, textTransform: "capitalize" }}>{t === "photos" ? "Swap Images" : t}</Text>
         </Pressable>
       ))}
     </View>
@@ -193,7 +195,7 @@ export default function Editor() {
           contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + 120, gap: spacing.md }}
           ListHeaderComponent={
             <View>
-              <Text style={s.label}>Rearrange photos</Text>
+              <Text style={s.label}>Swap Images</Text>
               <Text style={[s.bodyMuted, { marginTop: 4 }]}>Tap a photo to select it, then tap any other photo slot (same or another page) to swap.</Text>
             </View>
           }

@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList, useWindowDimensions } from "react-native";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList, useWindowDimensions, Alert, Platform } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -44,7 +44,26 @@ export default function UploadStep() {
         preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
       });
       if (res.canceled) return;
-      const assets = res.assets;
+      // Duplicate detection: same file name + byte size (within this selection and against already-uploaded photos).
+      const seen = new Set<string>(photos.map((p: any) => `${p.filename}|${p.size_bytes}`));
+      const unique: typeof res.assets = []; let dupes = 0;
+      for (const a of res.assets) {
+        const key = `${a.fileName || ""}|${a.fileSize || 0}`;
+        if (a.fileName && a.fileSize && seen.has(key)) { dupes += 1; continue; }
+        seen.add(key); unique.push(a);
+      }
+      let assets = res.assets;
+      if (dupes > 0) {
+        const skip = await new Promise<boolean>((resolve) => {
+          if (Platform.OS === "web") return resolve(window.confirm(`Duplicate images found (${dupes}). Do you want to skip the duplicate images?`));
+          Alert.alert("Duplicate images found", `${dupes} duplicate image${dupes > 1 ? "s" : ""} found. Do you want to skip the duplicate images?`, [
+            { text: "Keep all", style: "cancel", onPress: () => resolve(false) },
+            { text: "Skip duplicates", onPress: () => resolve(true) },
+          ]);
+        });
+        if (skip) assets = unique;
+      }
+      if (!assets.length) return;
       setProgress({ done: 0, total: assets.length });
       let failed = 0;
       let lastError = "";
@@ -87,16 +106,25 @@ export default function UploadStep() {
       : router.replace({ pathname: "/create/style", params: { albumId: String(albumId) } });
   };
 
-  const renderItem = useCallback(({ item: p, index }: { item: any; index: number }) => (
-    <View style={{ width: cell, height: cell, marginLeft: index % COLS === 0 ? 0 : GAP, marginBottom: GAP }} testID={`upload-photo-${p.id}`}>
-      <Thumb uri={p.thumbnail_url} recyclingKey={p.id} style={styles.thumb} />
-      <Pressable style={styles.thumbRemove} onPress={() => removePhoto(p.id)} testID={`upload-remove-${p.id}`} hitSlop={6}>
-        <Feather name="x" size={14} color="#FFF" />
-      </Pressable>
-    </View>
-  ), [cell, removePhoto]);
+  const renderItem = useCallback(({ item: p, index }: { item: any; index: number }) => {
+    const ready = !!p.id && !!p.thumbnail_url && !p.pending;
+    return (
+      <View style={{ width: cell, height: cell, marginLeft: index % COLS === 0 ? 0 : GAP, marginBottom: GAP }} testID={ready ? `upload-photo-${p.id}` : `upload-pending-${index}`} pointerEvents={ready ? "auto" : "none"}>
+        {ready ? <Thumb uri={p.thumbnail_url} recyclingKey={p.id} style={styles.thumb} /> : (
+          <View style={[styles.thumb, { alignItems: "center", justifyContent: "center" }]}><ActivityIndicator color={colors.brandPrimary} /></View>
+        )}
+        {ready ? (
+          <Pressable style={styles.thumbRemove} onPress={() => removePhoto(p.id)} testID={`upload-remove-${p.id}`} hitSlop={6}>
+            <Feather name="x" size={14} color="#FFF" />
+          </Pressable>
+        ) : null}
+      </View>
+    );
+  }, [cell, removePhoto]);
 
   const uploading = !!progress;
+  const pendingTiles = progress ? Array.from({ length: Math.max(0, progress.total - progress.done) }, (_, i) => ({ id: "", pending: true, key: `pending-${i}` })) : [];
+  const gridData = [...photos, ...pendingTiles];
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface, paddingTop: insets.top }}>
@@ -107,8 +135,8 @@ export default function UploadStep() {
       </View>
       <FlatList
         testID="upload-photo-grid"
-        data={photos}
-        keyExtractor={(p) => p.id}
+        data={gridData}
+        keyExtractor={(p: any) => p.id || p.key}
         numColumns={COLS}
         renderItem={renderItem}
         // virtualization: only ~2 screens of thumbnails are mounted; off-screen rows are released

@@ -43,8 +43,10 @@ async def _owned_album(album_id: str, customer: dict) -> dict:
 
 
 def _ensure_locked(album: dict) -> None:
-    if album.get("status") in ("ordered", "delivered") or album.get("locked"):
-        raise HTTPException(409, "This ClickBook has been ordered and its design is locked")
+    """Server-side payment lock: only a *paid* order locks the album (set by mark_order_paid). Placing an order,
+    or a pending/failed/cancelled payment, leaves the album fully editable."""
+    if album.get("locked") or album.get("status") in ("ordered", "delivered"):
+        raise HTTPException(409, "This album has been locked because payment has been completed. Further editing is not available.")
 
 
 async def _save_design(album: dict, pages: list, kind: str, extra: Optional[dict] = None) -> dict:
@@ -60,7 +62,7 @@ async def _save_design(album: dict, pages: list, kind: str, extra: Optional[dict
         "id": new_id(), "album_id": album["id"], "version": version, "kind": kind,
         "snapshot": {"pages": pages, "sheets": sheets, **(extra or {})}, "created_at": now_iso(),
     })
-    return await db.albums.find_one({"id": album["id"]}, {"_id": 0})
+    return _decorate(await db.albums.find_one({"id": album["id"]}, {"_id": 0}))
 
 
 @router.post("/albums")
@@ -87,18 +89,39 @@ async def create_album(payload: AlbumCreate, customer: dict = Depends(get_curren
         "updated_at": now_iso(),
     }
     await db.albums.insert_one(dict(album))
-    return {"album": album}
+    return {"album": _decorate(album)}
+
+
+def _decorate(album: dict) -> dict:
+    """Derived fields the app relies on: lifecycle `state` and the real front-cover thumbnail."""
+    photos = album.get("photos") or []
+    pages = album.get("pages") or []
+    if album.get("locked"):
+        state = "delivered" if album.get("status") == "delivered" else "locked"
+    elif not photos:
+        state = "creating"
+    elif not pages:
+        state = "uploading"
+    else:
+        state = "draft"
+    album["state"] = state
+    album["is_complete"] = bool(pages) and bool(album.get("cover_design"))
+    cd = album.get("cover_design") or {}
+    photo = next((p for p in photos if p.get("id") == cd.get("photo_id")), None)
+    album["cover_thumbnail_url"] = (photo or {}).get("thumbnail_url") or (album.get("cover_snapshot") or {}).get("thumbnail_url") or (album.get("cover_snapshot") or {}).get("image_url")
+    album["cover_preview_url"] = (photo or {}).get("preview_url") or (album.get("cover_snapshot") or {}).get("image_url")
+    return album
 
 
 @router.get("/albums")
 async def list_my_albums(customer: dict = Depends(get_current_customer)):
     albums = await db.albums.find({"customer_id": customer["id"]}, {"_id": 0}).sort("updated_at", -1).to_list(200)
-    return {"albums": albums}
+    return {"albums": [_decorate(a) for a in albums]}
 
 
 @router.get("/albums/{album_id}")
 async def get_album(album_id: str, customer: dict = Depends(get_current_customer)):
-    return {"album": await _owned_album(album_id, customer)}
+    return {"album": _decorate(await _owned_album(album_id, customer))}
 
 
 @router.put("/albums/{album_id}")
@@ -116,12 +139,12 @@ async def update_album(album_id: str, payload: AlbumUpdate, customer: dict = Dep
                 "id": new_id(), "album_id": album_id, "version": album.get("version", 1), "kind": "cover",
                 "snapshot": {"cover_design": update["cover_design"]}, "created_at": now_iso(),
             })
-    return {"album": await db.albums.find_one({"id": album_id}, {"_id": 0})}
+    return {"album": _decorate(await db.albums.find_one({"id": album_id}, {"_id": 0}))}
 
 
 @router.post("/albums/{album_id}/photos")
 async def upload_photo(album_id: str, file: UploadFile = File(...), customer: dict = Depends(get_current_customer)):
-    await _owned_album(album_id, customer)
+    _ensure_locked(await _owned_album(album_id, customer))
     data = await file.read()
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(400, "File too large (max 20MB)")
@@ -151,6 +174,7 @@ async def upload_photo(album_id: str, file: UploadFile = File(...), customer: di
 
 @router.delete("/albums/{album_id}/photos/{photo_id}")
 async def delete_photo(album_id: str, photo_id: str, customer: dict = Depends(get_current_customer)):
+    _ensure_locked(await _owned_album(album_id, customer))
     await db.albums.update_one(
         {"id": album_id, "customer_id": customer["id"]},
         {"$pull": {"photos": {"id": photo_id}}, "$set": {"updated_at": now_iso()}},

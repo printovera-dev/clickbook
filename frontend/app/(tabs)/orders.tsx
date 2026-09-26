@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { StatusBadge } from "@/src/components/status-badge";
+import { Thumb } from "@/src/components/thumb";
 import { api } from "@/src/api";
 import { s } from "@/src/ui";
 import { colors, spacing, radius, fonts } from "@/src/theme";
@@ -36,6 +37,7 @@ export default function Orders() {
               style={styles.card}
               onPress={() => router.push({ pathname: "/order/[id]", params: { id: o.id } })}
             >
+              <Thumb uri={o.cover_thumbnail_url || o.cover_snapshot?.thumbnail_url || o.cover_snapshot?.image_url} recyclingKey={o.id} style={{ width: 64, height: 64, borderRadius: radius.sm, marginRight: spacing.md }} testID={`order-thumb-${o.id}`} />
               <View style={{ flex: 1 }}>
                 <Text style={s.h2}>{o.order_no}</Text>
                 <Text style={s.bodyMuted}>

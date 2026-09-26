@@ -70,6 +70,7 @@ async def create_order(payload: OrderCreate, customer: dict = Depends(get_curren
         "album_snapshot": album,  # design version freeze
         "sheets": sheets,
         "cover_snapshot": album.get("cover_snapshot"),
+        "cover_thumbnail_url": next((p.get("thumbnail_url") for p in album.get("photos", []) if p.get("id") == (album.get("cover_design") or {}).get("photo_id")), None),
         "gift_wrap": payload.gift_wrap,
         "gift_note": (payload.gift_note or "").strip()[:200] if payload.gift_wrap else "",
         "price": price,

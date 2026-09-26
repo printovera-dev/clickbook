@@ -66,4 +66,7 @@ async def get_settings_doc() -> dict:
     if "gift_wrap_fee" not in s:
         s["gift_wrap_fee"] = 150
         await db.settings.update_one({"id": "default"}, {"$set": {"gift_wrap_fee": 150}})
+    if "support_whatsapp" not in s:
+        s["support_whatsapp"] = "9999117810"
+        await db.settings.update_one({"id": "default"}, {"$set": {"support_whatsapp": "9999117810"}})
     return s

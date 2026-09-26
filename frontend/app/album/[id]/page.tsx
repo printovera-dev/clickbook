@@ -31,6 +31,7 @@ export default function PageEditor() {
   const albumQ = useQuery({ queryKey: ["album", id], queryFn: () => api.getAlbum(String(id)), enabled: !!id });
   const bgQ = useQuery({ queryKey: ["backgrounds"], queryFn: () => api.listBackgrounds() });
   const album = albumQ.data?.album;
+  useEffect(() => { if (album?.locked) router.replace({ pathname: "/album/[id]/preview", params: { id: String(id) } }); }, [album?.locked, id, router]);
   const photos: Photo[] = album?.photos || [];
   const photosById = useMemo(() => Object.fromEntries(photos.map((p) => [p.id, p])), [photos]);
 
@@ -247,7 +248,7 @@ export default function PageEditor() {
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[styles.wrap, { paddingTop: insets.top }]}>
       <View style={styles.topbar}>
         <Pressable onPress={cancel} testID="page-editor-cancel" style={styles.topBtn}><Text style={styles.topBtnText}>Cancel</Text></Pressable>
-        <Text style={s.label}>{isCover ? "Edit Cover" : `Edit Page ${pageIndex + 1}`}</Text>
+        <Text style={s.label} testID="page-editor-title">{isCover ? "Edit Cover" : `Edit Page ${pageIndex + 1} of ${album?.pages?.length || 0}`}</Text>
         <View style={{ flexDirection: "row", gap: spacing.md }}>
           <Pressable onPress={undo} disabled={!history.length} testID="page-editor-undo" style={styles.iconBtn}><Feather name="corner-up-left" size={20} color={history.length ? colors.onSurface : colors.muted} /></Pressable>
           <Pressable onPress={redoFn} disabled={!redo.length} testID="page-editor-redo" style={styles.iconBtn}><Feather name="corner-up-right" size={20} color={redo.length ? colors.onSurface : colors.muted} /></Pressable>

@@ -12,7 +12,11 @@ export default function Albums() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const q = useQuery({ queryKey: ["albums"], queryFn: () => api.listMyAlbums() });
-  const albums = q.data?.albums || [];
+  const all: any[] = q.data?.albums || [];
+  // Only albums whose design exists are "ClickBooks"; interrupted creations (crash / failed upload) are listed
+  // separately as "Continue" cards instead of pretending to be finished albums.
+  const albums = [...all.filter((a) => a.is_complete), ...all.filter((a) => !a.is_complete)];
+  const label = (a: any) => a.state === "locked" ? "ordered · view only" : a.state === "delivered" ? "delivered" : a.state === "draft" ? "draft" : a.state === "uploading" ? "incomplete · continue uploading" : "incomplete · continue";
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface, paddingTop: insets.top }}>
@@ -42,18 +46,20 @@ export default function Albums() {
             testID={`album-card-${a.id}`}
             style={styles.card}
             onPress={() =>
-              a.status === "draft"
-                ? router.push({ pathname: "/album/[id]/editor", params: { id: a.id } })
-                : router.push({ pathname: "/album/[id]/preview", params: { id: a.id } })
+              !a.is_complete
+                ? router.push({ pathname: "/create/upload", params: { albumId: a.id } })
+                : a.state === "draft"
+                  ? router.push({ pathname: "/album/[id]/editor", params: { id: a.id } })
+                  : router.push({ pathname: "/album/[id]/preview", params: { id: a.id } })
             }
           >
-            <Thumb uri={a.cover_snapshot?.thumbnail_url || a.cover_snapshot?.image_url} recyclingKey={a.id} style={styles.thumb} />
+            <Thumb uri={a.cover_thumbnail_url} recyclingKey={a.id} style={[styles.thumb, !a.is_complete && { opacity: 0.6 }]} />
             <View style={{ flex: 1, marginLeft: spacing.md }}>
               <Text style={s.h2} numberOfLines={1}>{a.name}</Text>
               <Text style={s.bodyMuted}>{a.photos?.length || 0} photos · {a.sheets || 0} sheets</Text>
               <View style={styles.badge}>
                 <Text style={{ color: colors.brandPrimary, fontFamily: fonts.text, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6 }}>
-                  {a.status}
+                  {label(a)}
                 </Text>
               </View>
             </View>

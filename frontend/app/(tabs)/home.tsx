@@ -1,9 +1,9 @@
 // ClickBook Home — CMS-driven landing page (GET /home). Sections are rendered through a FlatList so lower
 // sections mount lazily as the user scrolls; sliders/videos/heroes are all editable from Admin → Home Page.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, FlatList, Pressable, StyleSheet, Animated, RefreshControl, useWindowDimensions, ScrollView } from "react-native";
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Feather from "@react-native-vector-icons/feather";
 import { useQuery } from "@tanstack/react-query";
@@ -28,6 +28,7 @@ export default function Home() {
   const pop = useRef(new Animated.Value(0.85)).current;
 
   useEffect(() => { getToken().then((t) => setLoggedIn(!!t)); }, []);
+  useFocusEffect(useCallback(() => { getToken().then((t) => setLoggedIn(!!t)); }, []));
   useEffect(() => {
     Animated.spring(pop, { toValue: 1, useNativeDriver: true, friction: 6 }).start();
     const t = setTimeout(() => Animated.timing(fade, { toValue: 0, duration: 450, useNativeDriver: true }).start(() => setSplash(false)), 1100);
@@ -43,7 +44,7 @@ export default function Home() {
   const pricing = home.data?.pricing;
   const t = c?.texts || {};
   const hero = (key: string) => c?.heroes?.find((h: any) => h.key === key)?.image_url;
-  const drafts = (albums.data?.albums || []).filter((a: any) => a.status === "draft");
+  const drafts = (albums.data?.albums || []).filter((a: any) => a.state === "draft" && a.is_complete);
   const activeOrder = (orders.data?.orders || []).find((o: any) => ["processing", "printing", "packaging", "out_for_delivery"].includes(o.production_status));
   const unread = notifs.data?.unread_count || 0;
   const heroH = Math.round((width - spacing.lg * 2) / (16 / 9));
@@ -74,8 +75,8 @@ export default function Home() {
         {drafts.length ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md, paddingTop: spacing.md }}>
             {drafts.slice(0, 8).map((a: any) => (
-              <Pressable key={a.id} testID={`home-draft-${a.id}`} style={styles.draftCard} onPress={() => router.push({ pathname: a.pages?.length ? "/album/[id]/preview" : "/album/[id]/editor", params: { id: a.id } })}>
-                <Thumb uri={a.cover_snapshot?.thumbnail_url || a.cover_snapshot?.image_url} recyclingKey={a.id} style={{ width: "100%", height: 110 }} />
+              <Pressable key={a.id} testID={`home-draft-${a.id}`} style={styles.draftCard} onPress={() => router.push({ pathname: "/album/[id]/preview", params: { id: a.id } })}>
+                <Thumb uri={a.cover_thumbnail_url} recyclingKey={a.id} style={{ width: "100%", height: 110 }} />
                 <View style={{ padding: spacing.md }}>
                   <Text style={styles.cardTitle} numberOfLines={1}>{a.name}</Text>
                   <Text style={styles.muted}>{a.photos?.length || 0} photos · draft</Text>
@@ -171,7 +172,7 @@ export default function Home() {
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <Pressable onPress={() => setMenu(true)} testID="home-menu" style={styles.iconBtn} hitSlop={8}><Feather name="menu" size={22} color={colors.homeCharcoal} /></Pressable>
         <View style={{ alignItems: "center" }}>
-          {c?.logo_url ? <Image source={{ uri: fileUrl(c.logo_url) }} style={{ width: 132, height: 44 }} contentFit="contain" cachePolicy="memory-disk" /> : <Text style={styles.brand}>Click<Text style={{ color: colors.homePink }}>Book</Text></Text>}
+          {c?.logo_url ? <Image source={{ uri: fileUrl(c.logo_url) }} style={{ width: Math.min(264, width - 140), height: 88 }} contentFit="contain" cachePolicy="memory-disk" /> : <Text style={styles.brand}>Click<Text style={{ color: colors.homePink }}>Book</Text></Text>}
         </View>
         <Pressable onPress={() => router.push(loggedIn ? "/notifications" : "/login")} testID="home-notifications-bell" style={styles.iconBtn} hitSlop={8}>
           <Feather name="bell" size={22} color={colors.homeCharcoal} />

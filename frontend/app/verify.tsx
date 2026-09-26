@@ -21,7 +21,8 @@ export default function Verify() {
     try {
       const res = await api.verifyOtp(String(mobile), otp);
       await setToken(res.token);
-      router.replace("/(tabs)/home");
+      // Home tabs are already underneath (public landing) — pop back to them instead of mounting a second tabs tree.
+      router.dismissTo("/(tabs)/home");
     } catch (e: any) {
       setErr(e.message || "Invalid OTP");
     } finally {

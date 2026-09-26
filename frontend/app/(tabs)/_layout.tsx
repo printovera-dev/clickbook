@@ -11,7 +11,14 @@ export default function TabsLayout() {
   useEffect(() => { getToken().then((t) => setAuthed(!!t)); }, []);
 
   // Home is public; the other tabs need a signed-in customer → send guests to the existing login flow.
-  const guard = { tabPress: (e: any) => { if (authed === false) { e.preventDefault(); router.push("/login"); } } };
+  // Token is re-read on every press so signing in (or out) never leaves the guard stale.
+  const guard = (name: string) => ({
+    tabPress: (e: any) => {
+      if (authed !== false) return;
+      e.preventDefault();
+      getToken().then((t) => { if (t) { setAuthed(true); router.push(`/(tabs)/${name}` as any); } else router.push("/login"); });
+    },
+  });
 
   return (
     <Tabs
@@ -34,21 +41,21 @@ export default function TabsLayout() {
       />
       <Tabs.Screen
         name="chat"
-        listeners={guard}
+        listeners={guard("chat")}
         options={{ title: "Chat", tabBarIcon: ({ color, size }) => <Feather name="message-circle" color={color} size={size} /> }}
       />
       <Tabs.Screen
         name="orders"
-        listeners={guard}
+        listeners={guard("orders")}
         options={{ title: "Orders", tabBarIcon: ({ color, size }) => <Feather name="shopping-cart" color={color} size={size} /> }}
       />
       <Tabs.Screen
         name="profile"
-        listeners={guard}
+        listeners={guard("profile")}
         options={{ title: "Profile", tabBarIcon: ({ color, size }) => <Feather name="user" color={color} size={size} /> }}
       />
       {/* My Books stays reachable (Home → "See all", Profile) but is not a bottom tab */}
-      <Tabs.Screen name="albums" listeners={guard} options={{ href: null, title: "My ClickBooks" }} />
+      <Tabs.Screen name="albums" listeners={guard("albums")} options={{ href: null, title: "My ClickBooks" }} />
     </Tabs>
   );
 }
