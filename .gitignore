@@ -98,3 +98,6 @@ backend/storage/
 !backend/storage/
 backend/storage/*
 !backend/storage/home/
+.env
+.env.*
+*.env
