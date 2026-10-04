@@ -52,7 +52,7 @@ export default function OrderTracking() {
             <Feather name="check-circle" size={22} color={colors.success} />
             <View style={{ marginLeft: spacing.md, flex: 1 }}>
               <Text style={s.h2}>Order placed!</Text>
-              <Text style={s.bodyMuted}>Payment successful. We'll start printing shortly.</Text>
+              <Text style={s.bodyMuted}>Payment successful. We&apos;ll start printing shortly.</Text>
             </View>
           </View>
         ) : null}

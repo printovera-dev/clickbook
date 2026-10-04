@@ -32,7 +32,7 @@ export default function Profile() {
 
   const logout = async () => {
     await setToken(null);
-    router.replace("/login");
+    router.replace("/(tabs)/home");
   };
 
   return (

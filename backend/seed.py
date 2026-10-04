@@ -1,5 +1,6 @@
 """Idempotent seed data: settings, covers, layouts, backgrounds, offers, process bots, admin."""
-from core import db, now_iso, new_id
+import os
+from core import db, now_iso, new_id, hash_password
 from design import COVER_STYLES
 
 
@@ -70,8 +71,17 @@ async def seed():
             {"id": new_id(), "stage": "delivered", "label": "Delivered", "icon": "heart",
              "message": "Your memories have arrived.", "active": True, "order": 5},
         ])
-    await db.admins.update_one(
-        {"username": "admin"},
-        {"$setOnInsert": {"username": "admin", "password": "clickbook@2026", "role": "super", "created_at": now_iso()}},
-        upsert=True,
-    )
+    # Admin account: seeded from env (never hard-coded in the client). Idempotent — an existing admin's
+    # password is not overwritten. Legacy plaintext `password` docs are migrated to bcrypt hashes.
+    username = os.environ.get("ADMIN_USERNAME", "admin")
+    password = os.environ.get("ADMIN_PASSWORD")
+    await db.admins.create_index("username", unique=True)
+    legacy = await db.admins.find_one({"password": {"$exists": True}}, {"_id": 0, "username": 1, "password": 1})
+    if legacy:
+        await db.admins.update_one({"username": legacy["username"]},
+                                   {"$set": {"password_hash": hash_password(legacy["password"]), "active": True},
+                                    "$unset": {"password": "", "token": ""}})
+    if password and not await db.admins.find_one({"username": username}):
+        await db.admins.insert_one({"username": username, "password_hash": hash_password(password), "role": "super",
+                                    "active": True, "created_at": now_iso()})
+    await db.admins.update_many({}, {"$unset": {"token": ""}})

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, FlatList, Pressable, StyleSheet, useWindowDimensions, NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
+import { MAX_CONTENT_W } from "@/src/layout";
 import { colors, fonts, radius, spacing } from "@/src/theme";
 import { fileUrl } from "@/src/api";
 
@@ -14,7 +15,7 @@ const RESUME_AFTER_MS = 5000;
 
 export function AutoSlider({ slides, intervalMs = 4500, testID, sidePadding = spacing.lg }: { slides: Slide[]; intervalMs?: number; testID?: string; sidePadding?: number }) {
   const { width: screenW } = useWindowDimensions();
-  const width = screenW - sidePadding * 2;
+  const width = Math.min(screenW, MAX_CONTENT_W) - sidePadding * 2;
   const height = Math.round(width / RATIO);
   const router = useRouter();
   const list = useRef<FlatList<Slide>>(null);

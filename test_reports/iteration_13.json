@@ -1,0 +1,50 @@
+{
+  "summary": "Iteration 13 (ClickBook: PWA + admin dashboard + home redesign + album last-page + editor fixes). BACKEND: 20/21 pytest cases PASS in /app/backend/tests/test_iteration13_admin_pwa.py (admin JWT login/me/password, dashboard shape with 14-day daily series, payments summary {collected,paid,pending,pending_amount}, albums rows with photo_count+customer_name+cover_thumbnail_url, customers with order_count/total_spent/album_count, layouts & backgrounds full CRUD + 400 on photo_count mismatch, GET /api/home.content.last_page_url == '/api/files/home/last-page.webp' and that file streams back ~bytes >0, admin/home endpoint includes last_page_url, PUT /admin/home accepts the value, production POST /api/admin/orders/{id}/pdf returns package.pages == len(album_snapshot.pages)+1 and PDF URL downloadable). The one failing test is PWA head-tags over the DEV-served HTML at `/` — see action items. ADMIN FRONTEND (1280x860): /admin → /admin/login; login admin/clickbook@2026 opens dashboard with admin-sidebar; all 17 sidebar items (orders, payments, customers, albums, production, home, heroes, sliders, videos, covers, designs, layouts, backgrounds, offers, notifications, bots, settings) render without blank/error (text length verified). Orders table shows all 9 required columns (CLIENT NAME, DATE OF PAYMENT, SHEETS, ORDER ID, PAYMENT STATUS, PRODUCTION STATUS, ALBUM PDF, PRINT FOLDER, COVER FOLDER); clicking admin-orders-table-row-* opens the order modal; admin-order-close dismisses it. Layouts page: layout-name-input + layout-count-3 + layout-add adds the card; the per-card layout-delete-<id> removes it (confirm dialog auto-accepted). Backgrounds page: bg-name-input/bg-color-input/bg-add adds TestBG card; bg-delete-<id> removes it. Settings page shows settings-whatsapp (10-digit tel 9999117810) and settings-change-password; filling settings-current-password='wrong-pass' + settings-new-password='new-password-123' and submitting shows an error message. admin-side-logout returns to /admin/login; direct navigation to /admin/dashboard while logged out redirects back to /admin/login (guard works). MOBILE WEB (390x844, logged out): / shows home-slider1; tapping the Orders tab navigates to /home?login=1&next=orders with home-signin-hint + home-login1-mobile visible (NO legacy login screen); Chat tab → /home?login=1&next=chat; Profile tab → /home?login=1&next=profile; visiting /login redirects to /home?login=1 — all four flows verified. DESKTOP WEB (1280x860, logged out): / renders centered; home-slider1 and home-pricing both measure width=1080px and left=100px (1280-1080=200 split equally → centered); document.scrollWidth == window.innerWidth (no horizontal overflow); home-steps contains 5 numbered rows laid out as 2 columns of ~520px each (steps 1-4 pair at y=894/962) with the 5th spanning 1048px; no overflow. CUSTOMER EDITOR (390x844, OTP mobile 9876500777 via dev_hint): /album/09fdba3e1551453ca11fd0b9b881dae1/preview — repeatedly clicking preview-next shows preview-last-page face (ClickBook logo + www.clickbook.world watermark) with label changing from 'Pages X–Y of 80' to 'Last page' before the back cover. /album/.../page?index=0 — Adjust Image panel contains img-rotate (visible); tapping page-tool-text adds a text layer and page-editor-text-delete button is rendered on canvas. /album/.../editor — editor-tool-pages tab + page-3-select present; selecting page 3 updates the live 3D preview label to 'Pages 3–4' (book follows active page, not reset to cover). PWA assets: GET /manifest.json → 200 with display='standalone' and icons sizes {192x192, 512x512} present; GET /sw.js → 200.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/ (web shell)", "issue": "The HTML served at `/` by Expo's web dev server does NOT include the PWA tags from app/+html.tsx (<link rel='manifest'>, <meta name='apple-mobile-web-app-capable'>, <meta name='theme-color'>). +html.tsx is only applied by expo-router's STATIC rendering output; current app.json has `web.output = 'single'` (SPA), so in the preview/dev build the base template is served instead. In a production export this would include the tags, but on the live preview URL the PWA head tags are currently missing (verified via Playwright DOM: manifest=false, themeColor=null, appleCapable=null). manifest.json and sw.js themselves are reachable."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "PWA installability on preview URL", "issue": "Browser cannot discover the manifest because `<link rel='manifest'>` is absent from the dev-served `/` HTML (see backend minor issue). Fix suggestion: switch `web.output` to `static` in app.json so +html.tsx is used, OR change expo-router dev index to a plain `web/index.html` that already contains the manifest/theme-color/apple-mobile-web-app-capable tags and the SW register script.", "affected_testIDs": []}
+    ],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration13_admin_pwa.py",
+    "/app/test_reports/pytest/pytest_results_iter13.xml",
+    "/tmp/admin_dash.png",
+    "/tmp/order_modal.png",
+    "/tmp/home_1280.png",
+    "/tmp/home_steps_1280.png",
+    "/tmp/preview_last_v2.png",
+    "/tmp/page_editor.png",
+    "/tmp/editor_pages.png"
+  ],
+  "action_items": [
+    "HIGH: PWA head tags missing on the live /. app/+html.tsx is correctly written but Expo only runs it for `web.output: 'static'` (currently 'single' in app.json). Either (a) switch app.json → web.output='static' and re-export so +html.tsx is applied, or (b) inject the three required tags (<link rel='manifest' href='/manifest.json'>, <meta name='theme-color' content='#2B2B2E'>, <meta name='apple-mobile-web-app-capable' content='yes'>) into the dev template / public/index.html so they are present on the dev server too. All other PWA pieces (manifest.json served, sw.js served, icon files, SW register script) are in place.",
+    "LOW (cosmetic, carry-over from iter 12): 'props.pointerEvents is deprecated' and 'Animated: useNativeDriver is not supported' warnings still appear in the web console."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/routers/admin.py:70-77 — admin_login correctly returns {token, expires_in, admin}; still backward compatible with older tests that read response['token'].",
+    "/app/backend/routers/admin.py:192-202 — generate_pdf returns pages = pkg['pages'] + 1 so the ClickBook last page is reflected in the top-level 'pages' count; the nested 'package.pages' then equals snapshot.pages+1 as required.",
+    "/app/backend/routers/admin.py:354-360 — create_layout validates photo_count == len(positions) and raises 400 as required.",
+    "/app/frontend/app/(tabs)/home.tsx:133-146 — home-steps uses flexBasis='48%' on isTablet → 2 columns at >=768px wide (verified: 1280 viewport gives 2 columns at l=116/644).",
+    "/app/frontend/src/components/book-preview.tsx:266-267 — The appended lastPage face is rendered with testID='preview-last-page' using home.content.last_page_url (fallback '/api/files/home/last-page.webp'); verified visually before the back cover.",
+    "/app/frontend/app/+html.tsx:20-29 — PWA meta/link tags are correctly declared, but their presence in production depends on expo-router static rendering being enabled; see HIGH action item."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "20/21 pytest cases pass (95%). The single failure is the PWA head-tag assertion on the dev-served `/` HTML — a real but environment-scoped issue (dev vs static export).",
+    "frontend": "All 7 iteration-13 UI checklists verified end-to-end. 0 UI bugs. 1 integration gap (PWA tags on dev HTML)."
+  },
+  "seed_data_creation": "None (reused existing seeded admin/clickbook@2026, customer 9876500777 and album 09fdba3e1551453ca11fd0b9b881dae1 'Stress 120'). Test data (TEST_LAYOUT_A, TEST_UI_LAYOUT, TEST_BG_X, TestBG) was created and deleted within the same test runs; admin password re-set to the same value and immediately verified.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Admin login JWT is in body.token (backward compatible). Customer OTP: POST /api/auth/otp/send returns dev_hint; POST /api/auth/otp/verify returns {token, customer}; set localStorage.clickbook.customerToken then page.goto('/home'). preview-next advances one spread per tap but the 3D flip animation is ~400-500ms — use ≥500ms wait between clicks or clicks will be dropped (41 clicks at 600ms reached preview-last-page on an 80-page album). The 3D book preview switches its label from 'Pages X–Y of N' to 'Last page' when on the appended ClickBook sheet. Mobile Chat/Orders/Profile tabs push /home?login=1&next=<tab> — guard behaviour already correct. All 17 admin sidebar testIDs are of the form admin-side-<name>; order rows are admin-orders-table-row-<orderId>; layout/bg delete buttons are per-card children layout-delete-<id> / bg-delete-<id>.",
+  "rca_of_issue": "PWA head-tag gap: Expo Router's app/+html.tsx is a STATIC-rendering hook. app.json currently sets web.output='single' (SPA), which uses the default web/index.html shell during both dev and export. That default shell does not carry a <link rel='manifest'>, so when the preview URL serves the SPA shell, the browser never discovers the manifest and PWA install cannot be triggered through standard browser UI (even though manifest.json and sw.js are both served correctly). Mitigation A: set web.output='static' in app.json and expo export → +html.tsx shell is written to disk and includes all PWA tags. Mitigation B: author a `web/index.html` (or metro `publicPath` HTML) with the three required tags and the service-worker register snippet, so the dev shell also carries them. Mitigation A is preferred because +html.tsx is already correct."
+}

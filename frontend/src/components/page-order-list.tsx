@@ -6,7 +6,7 @@ import { runOnJS } from "react-native-reanimated";
 import Feather from "@react-native-vector-icons/feather";
 import { colors, spacing, radius, fonts } from "@/src/theme";
 import { s } from "@/src/ui";
-import { PageCanvas } from "@/src/components/page-canvas";
+import { Thumb } from "@/src/components/thumb";
 import type { Page, Photo } from "@/src/design";
 
 const ROW_H = 64;
@@ -48,8 +48,9 @@ export function PageOrderList({ pages, photosById, selected, onSelect, onReorder
               <View testID={`page-${i}-drag`} style={styles.handle}><Feather name="menu" size={18} color={colors.muted} /></View>
             </GestureDetector>
             <Pressable onPress={() => onSelect(i)} testID={`page-${i}-select`} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.md }}>
-              <View style={{ borderRadius: 3, overflow: "hidden", borderWidth: 1, borderColor: colors.border }}>
-                <PageCanvas page={p} photosById={photosById} size={48} />
+              <View style={{ borderRadius: 3, overflow: "hidden", borderWidth: 1, borderColor: colors.border, width: 48, height: 48, backgroundColor: p.background || "#FFF", padding: 3 }}>
+                {/* Lightweight row thumbnail (400px derivative of the first photo) — a full PageCanvas per row froze long albums. */}
+                <Thumb uri={photosById[p.photo_ids[0]]?.thumbnail_url} recyclingKey={p.photo_ids[0]} style={{ flex: 1 }} />
               </View>
               <View>
                 <Text style={s.body}>Page {isDragging ? target + 1 : i + 1}</Text>

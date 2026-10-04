@@ -173,7 +173,20 @@ export const api = {
   // Admin
   adminLogin: (username: string, password: string) =>
     request<{ token: string; admin: any }>("/admin/login", { method: "POST", body: { username, password } }),
+  adminMe: () => request<{ admin: any }>("/admin/me", { admin: true }),
+  adminChangePassword: (current_password: string, new_password: string) =>
+    request("/admin/password", { method: "PUT", body: { current_password, new_password }, admin: true }),
   adminDashboard: () => request<any>("/admin/dashboard", { admin: true }),
+  adminPayments: () => request<{ payments: any[]; summary: any }>("/admin/payments", { admin: true }),
+  adminAlbums: (status?: string) => request<{ albums: any[] }>(`/admin/albums${status ? `?status=${status}` : ""}`, { admin: true }),
+  adminLayouts: () => request<{ layouts: any[] }>("/admin/layouts", { admin: true }),
+  adminCreateLayout: (data: any) => request("/admin/layouts", { method: "POST", body: data, admin: true }),
+  adminUpdateLayout: (id: string, data: any) => request(`/admin/layouts/${id}`, { method: "PUT", body: data, admin: true }),
+  adminDeleteLayout: (id: string) => request(`/admin/layouts/${id}`, { method: "DELETE", admin: true }),
+  adminBackgrounds: () => request<{ backgrounds: any[] }>("/admin/backgrounds", { admin: true }),
+  adminCreateBackground: (data: any) => request("/admin/backgrounds", { method: "POST", body: data, admin: true }),
+  adminUpdateBackground: (id: string, data: any) => request(`/admin/backgrounds/${id}`, { method: "PUT", body: data, admin: true }),
+  adminDeleteBackground: (id: string) => request(`/admin/backgrounds/${id}`, { method: "DELETE", admin: true }),
   adminOrders: (status?: string) =>
     request<{ orders: any[] }>(`/admin/orders${status ? `?status=${status}` : ""}`, { admin: true }),
   adminUpdateOrderStatus: (id: string, data: any) =>

@@ -5,7 +5,9 @@ from starlette.concurrency import run_in_threadpool
 
 from core import db, now_iso, logger
 from pdf_renderer import render_production_package
-from storage_manager import save_production_package, public_url, safe_folder_name
+from storage_manager import save_production_package, public_url, safe_folder_name, get_file_bytes
+
+DEFAULT_LAST_PAGE_URL = "/api/files/home/last-page.webp"
 
 
 def package_folder(order: dict) -> str:
@@ -21,7 +23,10 @@ async def build_production_package(order_id: str) -> dict:
         album = order.get("album_snapshot") or {}
         layouts = await db.layouts.find({}, {"_id": 0}).to_list(50)
         layouts_by_id = {l["id"]: l for l in layouts}
-        rendered = await run_in_threadpool(render_production_package, album, layouts_by_id)
+        home = await db.home_content.find_one({"id": "default"}, {"_id": 0, "last_page_url": 1}) or {}
+        last_page_url = home.get("last_page_url") or DEFAULT_LAST_PAGE_URL
+        last_page_bytes = await run_in_threadpool(get_file_bytes, last_page_url.replace("/api/files/", "", 1))
+        rendered = await run_in_threadpool(render_production_package, album, layouts_by_id, last_page_bytes)
         manifest = {
             "order_no": order["order_no"],
             "album_name": order.get("album_name"),

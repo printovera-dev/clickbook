@@ -29,12 +29,30 @@ def _color(c: Optional[str], fallback="#1C1917"):
         return ImageColor.getrgb(fallback)
 
 
-def _open_photo(photo: dict) -> Optional[Image.Image]:
+def _open_photo(photo: dict, tr: Optional[dict] = None) -> Optional[Image.Image]:
     data = get_file_bytes(photo.get("print_path") or "") or get_file_bytes(photo.get("original_path") or "")
     if not data:
         return None
-    img = Image.open(io.BytesIO(data))
-    return img.convert("RGB")
+    img = Image.open(io.BytesIO(data)).convert("RGB")
+    rot = int((tr or {}).get("rotate", 0) or 0) % 360
+    if rot:  # same 90° steps as the app's rotate tool
+        img = img.rotate(-rot, expand=True)
+    return img
+
+
+def _load_last_page(size_px: int, last_page_bytes: Optional[bytes]) -> Image.Image:
+    """Fixed closing page for every ClickBook (branding page, admin-replaceable via Home CMS)."""
+    canvas = Image.new("RGB", (size_px, size_px), (255, 255, 255))
+    if not last_page_bytes:
+        return canvas
+    try:
+        img = Image.open(io.BytesIO(last_page_bytes)).convert("RGB")
+    except Exception:  # noqa: BLE001
+        return canvas
+    r = min(size_px / img.width, size_px / img.height)
+    w, h = max(1, int(img.width * r)), max(1, int(img.height * r))
+    canvas.paste(img.resize((w, h), Image.LANCZOS), ((size_px - w) // 2, (size_px - h) // 2))
+    return canvas
 
 
 def _wrap(draw: ImageDraw.ImageDraw, text: str, font, max_w: int):
@@ -85,13 +103,13 @@ def render_page(page: dict, photos_by_id: dict, layouts_by_id: dict, size_px: in
         photo = photos_by_id.get(pid)
         if not photo:
             continue
-        img = _open_photo(photo)
-        if img is None:
-            continue
         pos = positions[i]
         sx, sy = int(pos["x"] * size_px), int(pos["y"] * size_px)
         sw, sh = max(1, int(pos["w"] * size_px)), max(1, int(pos["h"] * size_px))
         tr = images.get(str(i)) or default_transform()
+        img = _open_photo(photo, tr)
+        if img is None:
+            continue
         dx, dy, dw, dh = image_draw_rect(sw, sh, img.width, img.height, tr)
         scaled = img.resize((max(1, int(dw)), max(1, int(dh))), Image.LANCZOS)
         slot = Image.new("RGB", (sw, sh), _color(page.get("background"), "#FFFFFF"))
@@ -111,7 +129,7 @@ def render_cover(album: dict, photos_by_id: dict, size_px: int = PAGE_PX) -> Ima
     canvas = Image.new("RGB", (size_px, size_px), _color(cd.get("background"), "#C56A47"))
     photo = photos_by_id.get(cd.get("photo_id"))
     if photo:
-        img = _open_photo(photo)
+        img = _open_photo(photo, cd.get("image"))
         if img is not None:
             frame = cd.get("frame") or {"x": 0, "y": 0, "w": 1, "h": 1}
             sx, sy = int(frame["x"] * size_px), int(frame["y"] * size_px)
@@ -130,12 +148,13 @@ def render_cover(album: dict, photos_by_id: dict, size_px: int = PAGE_PX) -> Ima
     return canvas
 
 
-def render_frames(album: dict, layouts_by_id: dict):
-    """Returns (cover_image, [page_images]) at 8x8 in @ 300 dpi."""
+def render_frames(album: dict, layouts_by_id: dict, last_page_bytes: Optional[bytes] = None):
+    """Returns (cover_image, [page_images]) at 8x8 in @ 300 dpi. The fixed ClickBook last page is always appended."""
     photos_by_id = {p["id"]: p for p in album.get("photos", [])}
     pages_sorted = sorted(album.get("pages", []), key=lambda p: p.get("order", 0))
     cover = render_cover(album, photos_by_id)
     pages = [render_page(p, photos_by_id, layouts_by_id) for p in pages_sorted]
+    pages.append(_load_last_page(PAGE_PX, last_page_bytes))
     return cover, pages
 
 
@@ -151,14 +170,14 @@ def frame_to_jpeg(img: Image.Image) -> bytes:
     return buf.getvalue()
 
 
-def render_album_pdf(album: dict, layouts_by_id: dict) -> bytes:
-    cover, pages = render_frames(album, layouts_by_id)
+def render_album_pdf(album: dict, layouts_by_id: dict, last_page_bytes: Optional[bytes] = None) -> bytes:
+    cover, pages = render_frames(album, layouts_by_id, last_page_bytes)
     return frames_to_pdf(cover, pages)
 
 
-def render_production_package(album: dict, layouts_by_id: dict) -> dict:
+def render_production_package(album: dict, layouts_by_id: dict, last_page_bytes: Optional[bytes] = None) -> dict:
     """Everything the print facility needs: Album.pdf + full-res cover JPEG + sequential page JPEGs."""
-    cover, pages = render_frames(album, layouts_by_id)
+    cover, pages = render_frames(album, layouts_by_id, last_page_bytes)
     return {
         "pdf": frames_to_pdf(cover, pages),
         "cover": frame_to_jpeg(cover),

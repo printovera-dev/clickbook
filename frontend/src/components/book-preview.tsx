@@ -1,7 +1,7 @@
 // 3D open-book preview: two-page spread, leaves turn around the spine with perspective,
 // drag-to-flip (follows the finger) plus arrow controls. Reanimated + Gesture Handler.
-import { useEffect, useMemo, useState } from "react";
-import { View, StyleSheet, Text, Pressable, Dimensions } from "react-native";
+import { memo, useEffect, useMemo, useState } from "react";
+import { View, StyleSheet, Text, Pressable, Dimensions, Platform } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { GestureDetector, Gesture } from "react-native-gesture-handler";
@@ -9,25 +9,30 @@ import Animated, {
   useSharedValue, useAnimatedStyle, withTiming, interpolate, runOnJS, Extrapolation, Easing,
 } from "react-native-reanimated";
 import Feather from "@react-native-vector-icons/feather";
+import { useQuery } from "@tanstack/react-query";
+import { api, fileUrl } from "@/src/api";
 import { colors, spacing, radius, fonts } from "@/src/theme";
 import { PageCanvas } from "@/src/components/page-canvas";
 import { Page, Photo, CoverDesign, coverToPage } from "@/src/design";
 
-type Face = { kind: "cover" | "back" | "blank" | "page"; page?: Page; number?: number };
+type Face = { kind: "cover" | "back" | "blank" | "page" | "last"; page?: Page; number?: number };
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const FLIP_MS = 520;
 
 export function BookPreview({
-  cover, coverDesign, pages, photos, size = Math.min(SCREEN_W - 32, 400), albumName, onEditPage, onEditCover, onSelectPage, selectedPage,
-}: { cover: any; coverDesign?: CoverDesign | null; pages: Page[]; photos: Photo[]; size?: number; albumName?: string; onEditPage?: (pageIndex: number) => void; onEditCover?: () => void; onSelectPage?: (pageIndex: number | "cover") => void; selectedPage?: number | "cover" | null }) {
+  cover, coverDesign, pages, photos, size = Math.min(SCREEN_W - 32, 400), albumName, onEditPage, onEditCover, onSelectPage, selectedPage, focusPage,
+}: { cover: any; coverDesign?: CoverDesign | null; pages: Page[]; photos: Photo[]; size?: number; albumName?: string; onEditPage?: (pageIndex: number) => void; onEditCover?: () => void; onSelectPage?: (pageIndex: number | "cover") => void; selectedPage?: number | "cover" | null; focusPage?: number | "cover" | null }) {
   const pageW = size / 2;
   const pageH = pageW; // 8x8" square pages
   const photosById = useMemo(() => Object.fromEntries(photos.map((p) => [p.id, p])), [photos]);
+  // Fixed ClickBook closing page (admin-replaceable via Home CMS → Logo & last page).
+  const home = useQuery({ queryKey: ["home"], queryFn: () => api.homeContent(), staleTime: 5 * 60 * 1000 });
+  const lastPageUrl = fileUrl(home.data?.content?.last_page_url || "/api/files/home/last-page.webp");
 
-  // Faces in reading order: cover, p1..pn, (blank filler), back cover. Leaf i = faces[2i] (front) + faces[2i+1] (back).
+  // Faces in reading order: cover, p1..pn, last page, (blank filler), back cover. Leaf i = faces[2i] (front) + faces[2i+1] (back).
   const faces = useMemo<Face[]>(() => {
-    const f: Face[] = [{ kind: "cover" }, ...pages.map((p, i) => ({ kind: "page" as const, page: p, number: i + 1 }))];
+    const f: Face[] = [{ kind: "cover" }, ...pages.map((p, i) => ({ kind: "page" as const, page: p, number: i + 1 })), { kind: "last" }];
     if (f.length % 2 === 0) f.push({ kind: "blank" }); // keep back cover as the back face of the last leaf
     f.push({ kind: "back" });
     return f;
@@ -41,6 +46,15 @@ export function BookPreview({
 
   useEffect(() => { if (!flip) progress.value = 0; }, [flip, progress]);
   useEffect(() => { setTurned((t) => Math.min(t, leaves)); }, [leaves]);
+  // Live-preview sync: when the editor's active page changes, open the book at that spread (no reset to the cover).
+  useEffect(() => {
+    if (focusPage == null) return;
+    const faceIdx = focusPage === "cover" ? 0 : focusPage + 1;
+    const target = faceIdx % 2 === 0 ? faceIdx / 2 : (faceIdx + 1) / 2; // even = right face of leaf f/2, odd = left face
+    setFlip(null); activeDir.value = 0; progress.value = 0;
+    setTurned(Math.max(0, Math.min(leaves, target)));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusPage, leaves]);
 
   const finish = (target: number) => {
     const dir = activeDir.value;
@@ -175,6 +189,7 @@ export function BookPreview({
     : (() => {
         const l = faces[2 * turned - 1]; const r = faces[2 * turned];
         const nums = [l, r].filter((f) => f?.kind === "page").map((f) => f!.number);
+        if ([l, r].some((f) => f?.kind === "last")) return nums.length ? `Page ${nums[0]} · Last page` : "Last page";
         return nums.length === 2 ? `Pages ${nums[0]}–${nums[1]} of ${pages.length}` : nums.length === 1 ? `Page ${nums[0]} of ${pages.length}` : "Inside cover";
       })();
 
@@ -194,14 +209,14 @@ export function BookPreview({
 
             {/* Static left page */}
             <View style={[styles.half, { left: 0, width: pageW, height: pageH }, !leftFace && styles.empty]}>
-              {leftFace ? <FaceView face={leftFace} photosById={photosById} cover={cover} coverDesign={coverDesign} albumName={albumName} side="left" pageSize={pageW} /> : null}
+              {leftFace ? <FaceView face={leftFace} photosById={photosById} cover={cover} coverDesign={coverDesign} albumName={albumName} side="left" pageSize={pageW} lastPageUrl={lastPageUrl} /> : null}
               {leftFace ? <LinearGradient colors={["rgba(0,0,0,0.22)", "rgba(0,0,0,0)"]} start={{ x: 1, y: 0 }} end={{ x: 0.75, y: 0 }} style={StyleSheet.absoluteFill} pointerEvents="none" /> : null}
               {flip && leftFace ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }, leftCast]} /> : null}
               {isSel(leftFace) && !flip ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderWidth: 3, borderColor: colors.brandPrimary }]} /> : null}
             </View>
             {/* Static right page */}
             <View style={[styles.half, { left: pageW, width: pageW, height: pageH }, !rightFace && styles.empty]}>
-              {rightFace ? <FaceView face={rightFace} photosById={photosById} cover={cover} coverDesign={coverDesign} albumName={albumName} side="right" pageSize={pageW} /> : null}
+              {rightFace ? <FaceView face={rightFace} photosById={photosById} cover={cover} coverDesign={coverDesign} albumName={albumName} side="right" pageSize={pageW} lastPageUrl={lastPageUrl} /> : null}
               {rightFace && rightFace.kind !== "cover" ? <LinearGradient colors={["rgba(0,0,0,0.22)", "rgba(0,0,0,0)"]} start={{ x: 0, y: 0 }} end={{ x: 0.25, y: 0 }} style={StyleSheet.absoluteFill} pointerEvents="none" /> : null}
               {flip && rightFace ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }, rightCast]} /> : null}
               {isSel(rightFace) && !flip ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderWidth: 3, borderColor: colors.brandPrimary }]} /> : null}
@@ -210,13 +225,13 @@ export function BookPreview({
             {/* Moving leaf */}
             {flip && flipFront ? (
               <Animated.View style={[styles.half, styles.leaf, { left: pageW, width: pageW, height: pageH }, frontStyle]}>
-                <FaceView face={flipFront} photosById={photosById} cover={cover} coverDesign={coverDesign} albumName={albumName} side="right" pageSize={pageW} />
+                <FaceView face={flipFront} photosById={photosById} cover={cover} coverDesign={coverDesign} albumName={albumName} side="right" pageSize={pageW} lastPageUrl={lastPageUrl} />
                 <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }, frontShade]} />
               </Animated.View>
             ) : null}
             {flip && flipBack_ ? (
               <Animated.View style={[styles.half, styles.leaf, { left: 0, width: pageW, height: pageH }, backStyle]}>
-                <FaceView face={flipBack_} photosById={photosById} cover={cover} coverDesign={coverDesign} albumName={albumName} side="left" pageSize={pageW} />
+                <FaceView face={flipBack_} photosById={photosById} cover={cover} coverDesign={coverDesign} albumName={albumName} side="left" pageSize={pageW} lastPageUrl={lastPageUrl} />
                 <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }, backShade]} />
               </Animated.View>
             ) : null}
@@ -240,11 +255,18 @@ export function BookPreview({
   );
 }
 
-function FaceView({ face, photosById, cover, coverDesign, albumName, side, pageSize }: {
-  face: Face; photosById: Record<string, Photo>; cover: any; coverDesign?: CoverDesign | null; albumName?: string; side: "left" | "right"; pageSize: number;
+const FaceView = memo(function FaceView({ face, photosById, cover, coverDesign, albumName, side, pageSize, lastPageUrl }: {
+  face: Face; photosById: Record<string, Photo>; cover: any; coverDesign?: CoverDesign | null; albumName?: string; side: "left" | "right"; pageSize: number; lastPageUrl?: string;
 }) {
   if (face.kind === "cover") {
     return coverDesign?.photo_id ? <PageCanvas page={coverToPage(coverDesign)} photosById={photosById} size={pageSize} /> : <CoverFace cover={cover} albumName={albumName} />;
+  }
+  if (face.kind === "last") {
+    return (
+      <View style={[styles.face, { backgroundColor: "#FFFFFF" }]} testID="preview-last-page">
+        {lastPageUrl ? <Image source={{ uri: lastPageUrl }} style={StyleSheet.absoluteFill as any} contentFit="contain" cachePolicy="memory-disk" /> : null}
+      </View>
+    );
   }
   if (face.kind === "back") {
     return (
@@ -257,7 +279,7 @@ function FaceView({ face, photosById, cover, coverDesign, albumName, side, pageS
     return <View style={[styles.face, { backgroundColor: colors.surfaceSecondary }]} />;
   }
   return <PageCanvas page={face.page!} photosById={photosById} size={pageSize} pageNumber={face.number!} numberSide={side} />;
-}
+});
 
 function CoverFace({ cover, albumName }: { cover: any; albumName?: string }) {
   return (
@@ -279,7 +301,7 @@ function CoverFace({ cover, albumName }: { cover: any; albumName?: string }) {
 const styles = StyleSheet.create({
   half: { position: "absolute", top: 0, overflow: "hidden", backgroundColor: colors.surfaceSecondary },
   empty: { backgroundColor: "transparent" },
-  leaf: { zIndex: 10, elevation: 10, shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
+  leaf: { zIndex: 10, ...(Platform.OS === "web" ? { boxShadow: "0 6px 12px rgba(0,0,0,0.25)" } as any : { elevation: 10, shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } }) },
   block: { position: "absolute", backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.borderStrong, borderRadius: 2 },
   face: { flex: 1 },
   spine: { position: "absolute", top: 0, bottom: 0, width: 2, backgroundColor: "rgba(0,0,0,0.35)", zIndex: 5 },

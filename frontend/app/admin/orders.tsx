@@ -7,6 +7,7 @@ import { api, fileUrl } from "@/src/api";
 import { Button, s } from "@/src/ui";
 import { colors, spacing, radius, fonts } from "@/src/theme";
 import Feather from "@react-native-vector-icons/feather";
+import { DataTable, Badge, LinkChip, fmtDate } from "@/src/components/admin-page";
 
 const STATUSES = ["processing", "printing", "packaging", "out_for_delivery", "delivered", "cancelled"];
 
@@ -68,7 +69,7 @@ export default function AdminOrders() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface, paddingTop: insets.top }}>
       <View style={styles.topbar}>
-        <Pressable onPress={() => router.back()} testID="admin-orders-back"><Feather name="arrow-left" size={22} color={colors.onSurface} /></Pressable>
+        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/admin/dashboard"))} testID="admin-orders-back"><Feather name="arrow-left" size={22} color={colors.onSurface} /></Pressable>
         <Text style={s.label}>Orders</Text>
         <View style={{ width: 22 }} />
       </View>
@@ -82,17 +83,23 @@ export default function AdminOrders() {
       </ScrollView>
       <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 100 }}
         refreshControl={<RefreshControl refreshing={q.isFetching} onRefresh={q.refetch} tintColor={colors.brandPrimary} />}>
-        {orders.map((o: any) => (
-          <Pressable key={o.id} testID={`admin-order-${o.id}`} onPress={() => setSelected(o)} style={styles.card}>
-            <View style={{ flex: 1 }}>
-              <Text style={s.h2}>{o.order_no}</Text>
-              <Text style={s.bodyMuted}>{o.customer_snapshot?.name || "—"} · +91 {o.customer_snapshot?.mobile}</Text>
-              <Text style={s.bodyMuted}>{o.sheets} sheets · ₹{o.price?.total} · {new Date(o.created_at).toLocaleDateString()}</Text>
-              <View style={styles.badge}><Text style={{ color: colors.brandPrimary, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6, fontFamily: fonts.text }}>{o.production_status?.replace(/_/g, " ")}</Text></View>
-            </View>
-            <Feather name="chevron-right" size={22} color={colors.muted} />
-          </Pressable>
-        ))}
+        <DataTable
+          testID="admin-orders-table"
+          rows={orders}
+          onRowPress={(o) => setSelected(o)}
+          empty="No orders yet."
+          cols={[
+            { key: "client", label: "Client name", flex: 1.4, render: (o: any) => `${o.client_name || o.customer_snapshot?.name || "—"}\n+91 ${o.customer_snapshot?.mobile || ""}` },
+            { key: "paid_at", label: "Date of payment", render: (o: any) => fmtDate(o.paid_at) },
+            { key: "sheets", label: "Sheets", flex: 0.6, render: (o: any) => String(o.sheets ?? "—") },
+            { key: "order", label: "Order ID", flex: 1.1, render: (o: any) => o.order_no },
+            { key: "pay", label: "Payment status", render: (o: any) => <Badge testID={`order-pay-${o.id}`} label={o.payment_status === "paid" ? "Payment complete" : "Payment incomplete"} tone={o.payment_status === "paid" ? "good" : "warn"} /> },
+            { key: "prod", label: "Production status", render: (o: any) => <Badge label={o.production_status || "processing"} tone="info" /> },
+            { key: "pdf", label: "Album PDF", flex: 0.9, render: (o: any) => <LinkChip icon="file-text" label="PDF" disabled={!o.production_package?.pdf_url} onPress={() => Linking.openURL(fileUrl(o.production_package?.pdf_url)!)} testID={`order-pdf-${o.id}`} /> },
+            { key: "print", label: "Print folder", flex: 0.9, render: (o: any) => <LinkChip icon="layers" label="Print" disabled={!o.production_package?.print_urls?.[0]} onPress={() => Linking.openURL(fileUrl(o.production_package?.print_urls?.[0])!)} testID={`order-print-${o.id}`} /> },
+            { key: "cover", label: "Cover folder", flex: 0.9, render: (o: any) => <LinkChip icon="image" label="Cover" disabled={!o.production_package?.cover_url} onPress={() => Linking.openURL(fileUrl(o.production_package?.cover_url)!)} testID={`order-cover-${o.id}`} /> },
+          ]}
+        />
       </ScrollView>
 
       <Modal visible={!!selected} transparent animationType="slide" onRequestClose={() => setSelected(null)}>
