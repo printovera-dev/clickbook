@@ -63,7 +63,7 @@ export default function AlbumPreview() {
           </View>
         ) : null}
         <View style={styles.stats}>
-          <Stat label="Pages" value={String((album?.pages?.length || 0) + 1)} />
+          <Stat label="Pages" value={String(album?.pages?.length || 0)} />
           <Stat label="Sheets" value={String(album?.sheets || 0)} />
           <Stat label="Size" value="8×8″" />
         </View>

@@ -2,7 +2,7 @@
 // interacts, dots indicator, images cover-cropped (never stretched). Renders nothing when no slides.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, FlatList, Pressable, StyleSheet, useWindowDimensions, NativeScrollEvent, NativeSyntheticEvent } from "react-native";
-import { Image } from "expo-image";
+import { FluidImage } from "@/src/components/fluid-image";
 import { useRouter } from "expo-router";
 import { MAX_CONTENT_W } from "@/src/layout";
 import { colors, fonts, radius, spacing } from "@/src/theme";
@@ -16,7 +16,10 @@ const RESUME_AFTER_MS = 5000;
 export function AutoSlider({ slides, intervalMs = 4500, testID, sidePadding = spacing.lg }: { slides: Slide[]; intervalMs?: number; testID?: string; sidePadding?: number }) {
   const { width: screenW } = useWindowDimensions();
   const width = Math.min(screenW, MAX_CONTENT_W) - sidePadding * 2;
-  const height = Math.round(width / RATIO);
+  // Slider height follows the real aspect ratio of the artwork (measured from the first slide) so images are
+  // shown complete with no stretching, cropping or black letterboxing.
+  const [ratio, setRatio] = useState(RATIO);
+  const height = Math.min(560, Math.round(width / ratio));
   const router = useRouter();
   const list = useRef<FlatList<Slide>>(null);
   const [index, setIndex] = useState(0);
@@ -65,9 +68,9 @@ export function AutoSlider({ slides, intervalMs = 4500, testID, sidePadding = sp
             disabled={!item.cta_route}
             onPress={() => item.cta_route && router.push(item.cta_route as any)}
             onTouchStart={pause}
-            style={{ width, height, backgroundColor: colors.homeBlueSoft }}
+            style={{ width, height, backgroundColor: colors.homeCard }}
           >
-            <Image source={{ uri: fileUrl(item.image_url) }} style={{ width, height }} contentFit="cover" cachePolicy="memory-disk" recyclingKey={item.id} transition={200} />
+            <FluidImage uri={fileUrl(item.image_url)} width={width} ratio={ratio} maxHeight={height} recyclingKey={item.id} onRatio={(r) => { if (Math.abs(r - ratio) > 0.01) setRatio(r); }} style={{ height }} />
             {item.title || item.cta_label ? (
               <View style={styles.caption}>
                 {item.title ? <Text style={styles.title}>{item.title}</Text> : null}

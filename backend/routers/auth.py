@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
 import secrets
 
@@ -23,6 +23,8 @@ class OTPVerify(BaseModel):
 class ProfileUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
+    address: Optional[Dict[str, Any]] = None  # {name, line1, line2, city, state, pincode, phone}
+    gst_no: Optional[str] = None  # optional GSTIN for business invoices
 
 
 @router.post("/auth/otp/send")
@@ -70,6 +72,12 @@ async def verify_otp(payload: OTPVerify):
 
 @router.get("/me")
 async def get_me(customer: dict = Depends(get_current_customer)):
+    # Customers who ordered before saving an address see their most recent delivery address in Profile.
+    if not customer.get("address"):
+        last = await db.orders.find_one({"customer_id": customer["id"], "address": {"$ne": None}},
+                                        {"_id": 0, "address": 1}, sort=[("created_at", -1)])
+        if last and last.get("address"):
+            customer = {**customer, "address": last["address"], "address_from_order": True}
     return {"customer": customer}
 
 

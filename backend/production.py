@@ -43,12 +43,13 @@ async def build_production_package(order_id: str) -> dict:
             "generated_at": now_iso(),
         }
         meta = await run_in_threadpool(save_production_package, package_folder(order), rendered["pdf"],
-                                       rendered["cover"], rendered["pages"], manifest)
+                                       rendered["cover"], rendered["pages"], manifest, rendered.get("back_cover"))
         pkg = {
             "status": "ready",
             "dir": meta["dir"],
             "pdf_url": public_url(meta["pdf_path"]),
             "cover_url": public_url(meta["cover_path"]),
+            "back_cover_url": public_url(meta["cover_path"].replace("cover.jpg", "back_cover.jpg")),
             "print_urls": [public_url(p) for p in meta["print_paths"]],
             "pages": len(meta["print_paths"]),
             "size_bytes": meta["size_bytes"],

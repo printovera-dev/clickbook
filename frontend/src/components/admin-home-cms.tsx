@@ -12,7 +12,7 @@ import { Button, s } from "@/src/ui";
 import { colors, spacing, radius, fonts } from "@/src/theme";
 
 const ROUTES = ["", "/create/cover", "/(tabs)/orders", "/policy/privacy", "/policy/faq"];
-const TAB_LABELS: Record<string, string> = { slider1: "Slider 1", slider2: "Slider 2", slider3: "Slider 3", heroes: "Hero images", videos: "Videos", brand: "Logo & last page" };
+const TAB_LABELS: Record<string, string> = { slider1: "Slider 1", slider2: "Slider 2", slider3: "Slider 3", heroes: "Hero images", videos: "Videos", brand: "Logo & back cover" };
 const SLIDERS = ["slider1", "slider2", "slider3"];
 
 async function pickImage(): Promise<any | null> {
@@ -89,10 +89,10 @@ export function AdminHomeCms({ title, tabs }: { title: string; tabs: string[] })
               <Pressable onPress={async () => { const img = await pickImage(); if (img) setDoc({ ...doc, logo_url: img.url }); }} style={[styles.miniBtn, { marginTop: spacing.sm, alignSelf: "flex-start" }]} testID="admin-brand-logo-replace"><Feather name="image" size={14} color={colors.brandPrimary} /><Text style={styles.miniTxt}>Replace logo</Text></Pressable>
             </View>
             <View style={styles.card} testID="admin-brand-last-page">
-              <Text style={s.h2}>Album last page</Text>
-              <Text style={s.bodyMuted}>Fixed closing page appended to every ClickBook (3D preview + print PDF). Upload a square image, ideally 2400×2400 px.</Text>
+              <Text style={s.h2}>Album back cover</Text>
+              <Text style={s.bodyMuted}>Fixed back cover printed on every ClickBook (3D preview + Album.pdf + Cover/back_cover.jpg). Upload a square image, ideally 2400×2400 px.</Text>
               <Thumb uri={fileUrl(doc.last_page_url)} recyclingKey="last-page" style={{ width: 200, height: 200, borderRadius: radius.sm, marginTop: spacing.sm, borderWidth: 1, borderColor: colors.border }} />
-              <Pressable onPress={async () => { const img = await pickImage(); if (img) setDoc({ ...doc, last_page_url: img.original_url || img.url }); }} style={[styles.miniBtn, { marginTop: spacing.sm, alignSelf: "flex-start" }]} testID="admin-brand-last-page-replace"><Feather name="upload" size={14} color={colors.brandPrimary} /><Text style={styles.miniTxt}>Upload last page</Text></Pressable>
+              <Pressable onPress={async () => { const img = await pickImage(); if (img) setDoc({ ...doc, last_page_url: img.original_url || img.url }); }} style={[styles.miniBtn, { marginTop: spacing.sm, alignSelf: "flex-start" }]} testID="admin-brand-last-page-replace"><Feather name="upload" size={14} color={colors.brandPrimary} /><Text style={styles.miniTxt}>Upload back cover</Text></Pressable>
             </View>
           </>
         ) : null}

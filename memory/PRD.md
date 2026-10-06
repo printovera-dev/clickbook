@@ -76,6 +76,13 @@ ClickBook is a premium photo-album service that lets customers create beautifull
 - **Editor**: Rotate 90° tool (`ImageTransform.rotate`, mirrored in PIL), on-canvas Delete Text button, cover style change resets the crop so the photo drops cleanly into the new frame, live 3D preview follows the active page (`focusPage`), page-order rows use light thumbnails, `PageCanvas`/faces memoised.
 - Lint: fixed unescaped JSX entities; RN-web `shadow*` → `boxShadow` on web in the editor/book.
 
+## Feature updates (2026-10-06, iteration 14)
+- Proportional artwork everywhere: `FluidImage` (contain, measured aspect ratio, white backdrop, loading placeholder) for cover selection, home heroes and sliders. Transparent PNG uploads are flattened on white server-side (was black); existing admin uploads reprocessed.
+- ClickBook branding artwork is the fixed **back cover** (3D preview back face, Album.pdf last page, `Cover/back_cover.jpg`); admin-replaceable in Home CMS → Logo & back cover.
+- PWA: iOS-specific install guidance (Safari → Share → Add to Home Screen; "open in Safari" for iOS Chrome; macOS Safari "Add to Dock"), standalone detection, 180px flattened apple-touch-icon. Android flow unchanged.
+- Profile: delivery address (pre-filled from last order) + optional GSTIN; checkout pre-fills saved address.
+- Razorpay: gateway errors surfaced as 400 with a clear message (checkout `checkout-error`). Live Key ID updated to `rzp_live_TkfGdtNF04gpK5`; Razorpay still rejects the supplied secret → awaiting correct Key Secret from the user.
+
 ## Deferred (roadmap)
 - Real WhatsApp/SMS provider (playbook-driven), real Razorpay integration, ML-driven auto-layout selection (currently rhythm-based), image cropping/zoom inside placeholders, 3+ photo layouts, Lottie process-bot animations.
 

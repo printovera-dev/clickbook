@@ -82,6 +82,8 @@ async def create_order(payload: OrderCreate, customer: dict = Depends(get_curren
         "updated_at": now_iso(),
     }
     await db.orders.insert_one(dict(order))
+    # Remember the delivery address on the customer so it pre-fills Profile and future checkouts.
+    await db.customers.update_one({"id": customer["id"]}, {"$set": {"address": payload.address}})
     order.pop("_id", None)
     # Final Approved Version: the design the customer approved for this order (frozen in album_snapshot).
     await db.design_versions.insert_one({

@@ -1,8 +1,9 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import Response
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
-from core import db, now_iso, get_current_customer
+from core import db, now_iso, get_current_customer, logger
 from routers.orders import mark_order_paid
 import razorpay_provider as rzp
 
@@ -33,8 +34,15 @@ async def create_razorpay_order(payload: RazorpayOrderCreate, customer: dict = D
     if order.get("payment_status") == "paid":
         raise HTTPException(400, "Order already paid")
     amount_paise = int(round(float(order["price"]["total"]) * 100))
-    rp = rzp.create_order(amount_paise, receipt=order["order_no"],
-                          notes={"clickbook_order_id": order["id"], "customer_id": customer["id"]})
+    try:
+        rp = await run_in_threadpool(rzp.create_order, amount_paise, order["order_no"],
+                                     {"clickbook_order_id": order["id"], "customer_id": customer["id"]})
+    except Exception as e:  # noqa: BLE001 — surface gateway errors instead of a blank checkout
+        logger.error("Razorpay order creation failed for %s: %s", order["order_no"], e)
+        msg = str(e)
+        if "Authentication failed" in msg:
+            msg = "Payment gateway authentication failed. The Razorpay API keys configured on the server are invalid — please update RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET."
+        raise HTTPException(400, f"Could not start payment: {msg}")
     await db.orders.update_one(
         {"id": order["id"]},
         {"$set": {"razorpay_order_id": rp["id"], "payment_provider": rp["provider"], "amount_paise": amount_paise,

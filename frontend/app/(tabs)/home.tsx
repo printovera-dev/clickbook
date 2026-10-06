@@ -13,6 +13,7 @@ import { HomeLogin } from "@/src/components/home-login";
 import { SideMenu } from "@/src/components/side-menu";
 import { VideoCard } from "@/src/components/video-card";
 import { Thumb } from "@/src/components/thumb";
+import { FluidImage } from "@/src/components/fluid-image";
 import { colors, spacing, radius, fonts } from "@/src/theme";
 import { MAX_CONTENT_W, useLayout } from "@/src/layout";
 
@@ -50,7 +51,6 @@ export default function Home() {
   const drafts = (albums.data?.albums || []).filter((a: any) => a.state === "draft" && a.is_complete);
   const activeOrder = (orders.data?.orders || []).find((o: any) => ["processing", "printing", "packaging", "out_for_delivery"].includes(o.production_status));
   const unread = notifs.data?.unread_count || 0;
-  const heroH = Math.min(520, Math.round((contentW - spacing.lg * 2) / (16 / 9)));
   const videoW = isTablet ? Math.floor((contentW - spacing.lg * 2 - spacing.md * (columns - 1)) / columns) : Math.min(300, width - spacing.lg * 2 - 24);
 
   // Guests arriving from a protected tab (Chat / Orders / Profile) or /login are scrolled to the inline sign-in block.
@@ -112,7 +112,7 @@ export default function Home() {
     list.push(
       { key: "pricing", render: () => (
         <View style={styles.section} testID="home-pricing">
-          {hero("pricing") ? <Image source={{ uri: fileUrl(hero("pricing")) }} style={[styles.hero, { height: heroH }]} contentFit="cover" cachePolicy="memory-disk" transition={200} /> : null}
+          {hero("pricing") ? <FluidImage uri={fileUrl(hero("pricing"))} width={contentW - spacing.lg * 2} maxHeight={560} recyclingKey="hero-pricing" style={[styles.hero]} testID="home-hero-pricing" /> : null}
           {pricing ? (
             <View style={styles.priceRow}>
               <View style={[styles.priceCell, { backgroundColor: colors.homeBlueSoft }]}>
@@ -132,7 +132,7 @@ export default function Home() {
       { key: "steps", render: () => (
         <View style={styles.section} testID="home-steps">
           <Text style={styles.h}>{t.steps_title} <Feather name="heart" size={18} color={colors.homePink} /></Text>
-          {hero("steps") ? <Image source={{ uri: fileUrl(hero("steps")) }} style={[styles.hero, { height: heroH, marginTop: spacing.md }]} contentFit="cover" cachePolicy="memory-disk" transition={200} /> : null}
+          {hero("steps") ? <FluidImage uri={fileUrl(hero("steps"))} width={contentW - spacing.lg * 2} maxHeight={560} recyclingKey="hero-steps" style={[styles.hero, { marginTop: spacing.md }]} testID="home-hero-steps" /> : null}
           <View style={[{ marginTop: spacing.md, gap: spacing.sm }, isTablet && { flexDirection: "row", flexWrap: "wrap" }]}>
             {(c.steps || []).map((st: any, i: number) => (
               <View key={st.n} style={[styles.stepRow, isTablet && { flexBasis: "48%", flexGrow: 1 }]} testID={`home-step-${i + 1}`}>
@@ -161,7 +161,7 @@ export default function Home() {
       { key: "privacy", render: () => (
         <View style={styles.section} testID="home-privacy">
           <Text style={styles.h}>{t.privacy_title}</Text>
-          {hero("privacy") ? <Image source={{ uri: fileUrl(hero("privacy")) }} style={[styles.hero, { height: heroH, marginTop: spacing.md }]} contentFit="cover" cachePolicy="memory-disk" transition={200} /> : null}
+          {hero("privacy") ? <FluidImage uri={fileUrl(hero("privacy"))} width={contentW - spacing.lg * 2} maxHeight={560} recyclingKey="hero-privacy" style={[styles.hero, { marginTop: spacing.md }]} testID="home-hero-privacy" /> : null}
           <Text style={[styles.muted, { textAlign: "center", marginTop: spacing.md }]}>{t.privacy_sub}</Text>
           <Pressable testID="home-privacy-link" onPress={() => router.push({ pathname: "/policy/[key]", params: { key: "privacy" } })} style={styles.linkBtn}>
             <Feather name="shield" size={16} color={colors.homeBlue} /><Text style={styles.linkBtnText}>Read our Privacy Policy</Text>
@@ -174,7 +174,7 @@ export default function Home() {
         <View style={styles.section} testID="home-final-hero">
           <Text style={[styles.h, { fontStyle: "italic" }]}>&ldquo;{t.final_quote}&rdquo;</Text>
           <Text style={[styles.muted, { textAlign: "center" }]}>{t.final_sub}</Text>
-          {hero("final") ? <Image source={{ uri: fileUrl(hero("final")) }} style={[styles.hero, { height: heroH, marginTop: spacing.md }]} contentFit="cover" cachePolicy="memory-disk" transition={200} /> : null}
+          {hero("final") ? <FluidImage uri={fileUrl(hero("final"))} width={contentW - spacing.lg * 2} maxHeight={560} recyclingKey="hero-final" style={[styles.hero, { marginTop: spacing.md }]} testID="home-hero-final" /> : null}
         </View>
       ) },
       { key: "login3", render: () => <HomeLogin testID="home-login3" title={t.cta_title} loggedIn={isIn} compact /> },
@@ -193,7 +193,7 @@ export default function Home() {
     );
     return list;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [c, pricing, loggedIn, drafts, activeOrder, width, heroH, isTablet, videoW, wantsLogin, params.next]);
+  }, [c, pricing, loggedIn, drafts, activeOrder, width, contentW, isTablet, videoW, wantsLogin, params.next]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.homeBg }}>
@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
   muted: { fontFamily: fonts.text, fontSize: 13, color: colors.muted, lineHeight: 19 },
   cardTitle: { fontFamily: fonts.text, fontSize: 15, fontWeight: "700", color: colors.homeCharcoal },
   rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  hero: { width: "100%", borderRadius: radius.lg, backgroundColor: colors.homeBlueSoft },
+  hero: { alignSelf: "center", borderRadius: radius.lg, overflow: "hidden", backgroundColor: colors.homeCard },
   priceRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.md },
   priceCell: { flex: 1, borderRadius: radius.lg, padding: spacing.lg, borderWidth: 1, borderColor: colors.border },
   priceLabel: { fontFamily: fonts.text, fontSize: 12, textTransform: "uppercase", letterSpacing: 0.5, color: colors.homeCharcoal },

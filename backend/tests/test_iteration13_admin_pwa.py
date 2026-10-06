@@ -202,10 +202,11 @@ class TestProduction:
         r2 = api.post(f"{BASE_URL}/api/admin/orders/{oid}/pdf", headers=auth_headers)
         assert r2.status_code == 200, r2.text
         pkg = r2.json()
-        # response.package.pages should equal len(album_snapshot.pages)+1
+        # Iteration 14 change: back cover is now a SEPARATE file (back_cover.jpg),
+        # so package.pages equals len(album_snapshot.pages) (no extra inner page).
         inner = pkg.get("package", {})
         pages_in_pkg = inner.get("pages")
-        assert pages_in_pkg == snapshot_pages + 1, f"expected {snapshot_pages+1} got {pages_in_pkg}"
+        assert pages_in_pkg == snapshot_pages, f"expected {snapshot_pages} got {pages_in_pkg}"
         pdf_url = pkg.get("pdf_url") or inner.get("pdf_url")
         assert pdf_url
         # Download

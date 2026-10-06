@@ -15,7 +15,7 @@ import { colors, spacing, radius, fonts } from "@/src/theme";
 import { PageCanvas } from "@/src/components/page-canvas";
 import { Page, Photo, CoverDesign, coverToPage } from "@/src/design";
 
-type Face = { kind: "cover" | "back" | "blank" | "page" | "last"; page?: Page; number?: number };
+type Face = { kind: "cover" | "back" | "blank" | "page"; page?: Page; number?: number };
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const FLIP_MS = 520;
@@ -30,9 +30,9 @@ export function BookPreview({
   const home = useQuery({ queryKey: ["home"], queryFn: () => api.homeContent(), staleTime: 5 * 60 * 1000 });
   const lastPageUrl = fileUrl(home.data?.content?.last_page_url || "/api/files/home/last-page.webp");
 
-  // Faces in reading order: cover, p1..pn, last page, (blank filler), back cover. Leaf i = faces[2i] (front) + faces[2i+1] (back).
+  // Faces in reading order: cover, p1..pn, (blank filler), back cover (fixed ClickBook artwork). Leaf i = faces[2i] (front) + faces[2i+1] (back).
   const faces = useMemo<Face[]>(() => {
-    const f: Face[] = [{ kind: "cover" }, ...pages.map((p, i) => ({ kind: "page" as const, page: p, number: i + 1 })), { kind: "last" }];
+    const f: Face[] = [{ kind: "cover" }, ...pages.map((p, i) => ({ kind: "page" as const, page: p, number: i + 1 }))];
     if (f.length % 2 === 0) f.push({ kind: "blank" }); // keep back cover as the back face of the last leaf
     f.push({ kind: "back" });
     return f;
@@ -189,7 +189,6 @@ export function BookPreview({
     : (() => {
         const l = faces[2 * turned - 1]; const r = faces[2 * turned];
         const nums = [l, r].filter((f) => f?.kind === "page").map((f) => f!.number);
-        if ([l, r].some((f) => f?.kind === "last")) return nums.length ? `Page ${nums[0]} · Last page` : "Last page";
         return nums.length === 2 ? `Pages ${nums[0]}–${nums[1]} of ${pages.length}` : nums.length === 1 ? `Page ${nums[0]} of ${pages.length}` : "Inside cover";
       })();
 
@@ -261,17 +260,12 @@ const FaceView = memo(function FaceView({ face, photosById, cover, coverDesign, 
   if (face.kind === "cover") {
     return coverDesign?.photo_id ? <PageCanvas page={coverToPage(coverDesign)} photosById={photosById} size={pageSize} /> : <CoverFace cover={cover} albumName={albumName} />;
   }
-  if (face.kind === "last") {
-    return (
-      <View style={[styles.face, { backgroundColor: "#FFFFFF" }]} testID="preview-last-page">
-        {lastPageUrl ? <Image source={{ uri: lastPageUrl }} style={StyleSheet.absoluteFill as any} contentFit="contain" cachePolicy="memory-disk" /> : null}
-      </View>
-    );
-  }
+
   if (face.kind === "back") {
+    // Fixed back cover: the ClickBook branding artwork (admin-replaceable via Home CMS → Logo & last page).
     return (
-      <View style={[styles.face, { backgroundColor: colors.onSurface, alignItems: "center", justifyContent: "center" }]}>
-        <Text style={{ color: colors.onSurfaceInverse, fontFamily: fonts.text, fontSize: 11, letterSpacing: 2, textTransform: "uppercase", opacity: 0.7 }}>ClickBook</Text>
+      <View style={[styles.face, { backgroundColor: "#FFFFFF" }]} testID="preview-back-cover">
+        {lastPageUrl ? <Image source={{ uri: lastPageUrl }} style={StyleSheet.absoluteFill as any} contentFit="contain" cachePolicy="memory-disk" /> : null}
       </View>
     );
   }

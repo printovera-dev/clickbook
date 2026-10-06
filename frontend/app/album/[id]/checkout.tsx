@@ -43,9 +43,14 @@ export default function Checkout() {
 
   useEffect(() => {
     if (meQ.data?.customer) {
-      setName(meQ.data.customer.name || "");
-      setEmail(meQ.data.customer.email || "");
+      const c = meQ.data.customer;
+      setName(c.name || "");
+      setEmail(c.email || "");
+      // Pre-fill delivery address saved in Profile (or from the last order)
+      const a = c.address || {};
+      if (a.line1 && !line1) { setLine1([a.line1, a.line2].filter(Boolean).join(", ")); setCity(a.city || ""); setState(a.state || ""); setPin(a.pincode || a.pin || ""); }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meQ.data]);
 
   const applyCoupon = async () => {
@@ -73,7 +78,7 @@ export default function Checkout() {
         coupon_code: appliedCoupon,
         gift_wrap: giftWrap,
         gift_note: giftWrap ? giftNote : "",
-        address: { name, email, line1, city, state, pin },
+        address: { name, email, line1, city, state, pin, pincode: pin },
       });
       await api.updateMe({ name, email });
       // Open Razorpay checkout (or mock fallback)
@@ -92,7 +97,9 @@ export default function Checkout() {
   };
   const onPaymentError = (msg: string) => {
     setPayingOrderId(null);
-    setErr(msg);
+    // Edge proxies replace 5xx bodies with an HTML error page — never show raw HTML to the customer.
+    const clean = /<\s*(!doctype|html|body|div)/i.test(msg || "") ? "" : (msg || "").replace(/<[^>]+>/g, "").trim();
+    setErr(clean || "Payment gateway is temporarily unavailable. Please try again in a few minutes.");
   };
 
   return (
@@ -171,7 +178,7 @@ export default function Checkout() {
           </View>
           <TextInput testID="checkout-pin-input" value={pin} onChangeText={setPin} placeholder="PIN code" placeholderTextColor={colors.muted} keyboardType="number-pad" maxLength={6} style={styles.input} />
 
-          {err ? <Text style={{ color: colors.error, marginTop: spacing.md }}>{err}</Text> : null}
+          {err ? <Text testID="checkout-error" style={{ color: colors.error, marginTop: spacing.md }}>{err}</Text> : null}
 
           <View style={styles.legalBar}>
             <Text style={s.bodyMuted}>By continuing you agree to our</Text>

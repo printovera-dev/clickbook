@@ -148,14 +148,15 @@ def render_cover(album: dict, photos_by_id: dict, size_px: int = PAGE_PX) -> Ima
     return canvas
 
 
-def render_frames(album: dict, layouts_by_id: dict, last_page_bytes: Optional[bytes] = None):
-    """Returns (cover_image, [page_images]) at 8x8 in @ 300 dpi. The fixed ClickBook last page is always appended."""
+def render_frames(album: dict, layouts_by_id: dict, back_cover_bytes: Optional[bytes] = None):
+    """Returns (cover_image, [page_images], back_cover_image) at 8x8 in @ 300 dpi.
+    The back cover is the fixed ClickBook branding artwork (admin-replaceable)."""
     photos_by_id = {p["id"]: p for p in album.get("photos", [])}
     pages_sorted = sorted(album.get("pages", []), key=lambda p: p.get("order", 0))
     cover = render_cover(album, photos_by_id)
     pages = [render_page(p, photos_by_id, layouts_by_id) for p in pages_sorted]
-    pages.append(_load_last_page(PAGE_PX, last_page_bytes))
-    return cover, pages
+    back = _load_last_page(PAGE_PX, back_cover_bytes)
+    return cover, pages, back
 
 
 def frames_to_pdf(cover: Image.Image, pages: list) -> bytes:
@@ -170,16 +171,18 @@ def frame_to_jpeg(img: Image.Image) -> bytes:
     return buf.getvalue()
 
 
-def render_album_pdf(album: dict, layouts_by_id: dict, last_page_bytes: Optional[bytes] = None) -> bytes:
-    cover, pages = render_frames(album, layouts_by_id, last_page_bytes)
-    return frames_to_pdf(cover, pages)
+def render_album_pdf(album: dict, layouts_by_id: dict, back_cover_bytes: Optional[bytes] = None) -> bytes:
+    cover, pages, back = render_frames(album, layouts_by_id, back_cover_bytes)
+    return frames_to_pdf(cover, pages + [back])
 
 
-def render_production_package(album: dict, layouts_by_id: dict, last_page_bytes: Optional[bytes] = None) -> dict:
-    """Everything the print facility needs: Album.pdf + full-res cover JPEG + sequential page JPEGs."""
-    cover, pages = render_frames(album, layouts_by_id, last_page_bytes)
+def render_production_package(album: dict, layouts_by_id: dict, back_cover_bytes: Optional[bytes] = None) -> dict:
+    """Everything the print facility needs: Album.pdf (front cover, pages, back cover) + full-res cover JPEGs
+    (Cover/cover.jpg + Cover/back_cover.jpg) + sequential inner page JPEGs."""
+    cover, pages, back = render_frames(album, layouts_by_id, back_cover_bytes)
     return {
-        "pdf": frames_to_pdf(cover, pages),
+        "pdf": frames_to_pdf(cover, pages + [back]),
         "cover": frame_to_jpeg(cover),
+        "back_cover": frame_to_jpeg(back),
         "pages": [frame_to_jpeg(p) for p in pages],
     }
