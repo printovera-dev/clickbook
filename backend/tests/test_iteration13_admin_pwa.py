@@ -3,6 +3,8 @@ home CMS last_page_url, production package with last-page sheet, and PWA static 
 import os
 import pytest
 import requests
+import sys, os as _os; sys.path.insert(0, _os.path.dirname(__file__))
+from _pdf_helper import build_package
 
 BASE_URL = os.environ.get("EXPO_PUBLIC_BACKEND_URL", "https://memories-album.preview.emergentagent.com").rstrip("/")
 ADMIN_USERNAME = "admin"
@@ -199,9 +201,7 @@ class TestProduction:
         order = paid[0]
         oid = order["id"]
         snapshot_pages = len(order["album_snapshot"].get("pages") or [])
-        r2 = api.post(f"{BASE_URL}/api/admin/orders/{oid}/pdf", headers=auth_headers)
-        assert r2.status_code == 200, r2.text
-        pkg = r2.json()
+        pkg = build_package(api, f"{BASE_URL}/api", oid, auth_headers)
         # Iteration 14 change: back cover is now a SEPARATE file (back_cover.jpg),
         # so package.pages equals len(album_snapshot.pages) (no extra inner page).
         inner = pkg.get("package", {})

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Modal, RefreshControl, Linking, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -45,15 +45,18 @@ export default function AdminOrders() {
     if (!selected) return;
     setBuilding(true); setBuildError(null);
     try {
+      // Returns 202 immediately; `downloads` polls every 3 s while package.status === "building".
       await api.adminGeneratePdf(selected.id);
       await downloads.refetch();
-      q.refetch();
     } catch (e: any) {
-      setBuildError(e.message || "Build failed");
+      const m = String(e?.message || "");
+      setBuildError(!m || /failed to fetch|network|<html|load failed/i.test(m) ? "Production file generation failed. Please try again." : m);
     } finally {
       setBuilding(false);
     }
   };
+  const pkgReady = pkg?.status === "ready";
+  useEffect(() => { if (pkgReady) q.refetch(); }, [pkgReady, q]);
   const openZip = async () => {
     if (!selected) return;
     Linking.openURL(await api.adminDownloadsZipUrl(selected.id));
@@ -135,12 +138,12 @@ export default function AdminOrders() {
             <View style={styles.pkgCard} testID="admin-production-package">
               {downloads.isLoading ? <ActivityIndicator color={colors.brandPrimary} /> : null}
               {pkg?.status === "building" ? (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }} testID="admin-package-building">
                   <ActivityIndicator color={colors.brandPrimary} />
-                  <Text style={s.body}>Rendering print files…</Text>
+                  <Text style={s.body}>Rendering print files… this can take a few minutes for large albums.</Text>
                 </View>
               ) : null}
-              {pkg?.status === "failed" ? <Text style={{ color: colors.error, fontFamily: fonts.text }}>Render failed: {pkg.error}</Text> : null}
+              {pkg?.status === "failed" ? <Text style={{ color: colors.error, fontFamily: fonts.text }} testID="admin-package-failed">{pkg.error || "Production file generation failed. Please try again."}</Text> : null}
               {!pkg || pkg.status === "none" ? (
                 <Text style={s.bodyMuted}>{selected?.payment_status === "paid" ? "Not built yet." : "Files are generated automatically once payment is received."}</Text>
               ) : null}
@@ -156,7 +159,7 @@ export default function AdminOrders() {
                 </View>
               ) : null}
               {buildError ? <Text style={{ color: colors.error, fontFamily: fonts.text, marginTop: spacing.sm }}>{buildError}</Text> : null}
-              <Button testID="admin-generate-pdf" label={pkg?.status === "ready" ? "Rebuild production files" : "Build production files"} variant="outline" size="sm" onPress={buildPackage} loading={building} style={{ marginTop: spacing.md }} />
+              <Button testID="admin-generate-pdf" label={pkg?.status === "ready" ? "Rebuild production files" : "Build production files"} variant="outline" size="sm" onPress={buildPackage} loading={building || pkg?.status === "building"} style={{ marginTop: spacing.md }} />
             </View>
             </ScrollView>
           </View>

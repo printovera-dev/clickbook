@@ -8,7 +8,7 @@ from typing import Optional, List, Dict, Any
 from core import (db, now_iso, new_id, get_current_admin, get_settings_doc, verify_password, hash_password,
                   make_admin_token, admin_from_token)
 from storage_manager import save_original, public_url, list_dir_files, zip_dir
-from production import build_production_package
+from production import schedule_production_package, production_build_is_stale, STALE_BUILD_MESSAGE
 from routers.notifications import notify_order_status
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -189,17 +189,23 @@ async def update_order_status(order_id: str, payload: StatusUpdate, admin: dict 
     return {"success": True}
 
 
-@router.post("/orders/{order_id}/pdf")
+@router.post("/orders/{order_id}/pdf", status_code=202)
 async def generate_pdf(order_id: str, admin: dict = Depends(get_current_admin)):
-    """(Re)builds the full print package from the frozen album_snapshot:
-    Downloads/<order>/Album.pdf + Cover/cover.jpg + Print/page_NNN.jpg + manifest.json."""
-    order = await db.orders.find_one({"id": order_id}, {"_id": 0, "id": 1, "album_snapshot": 1})
+    """(Re)builds the full print package from the frozen album_snapshot in the BACKGROUND and returns at once:
+    Downloads/<order>/Album.pdf + Cover/cover.jpg + Cover/back_cover.jpg + Print/page_NNN.jpg + manifest.json.
+    Rendering a 20-sheet album takes well over the 60 s reverse-proxy timeout on the production host, so the admin
+    console polls GET /orders/{id}/downloads until package.status is "ready" or "failed"."""
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0, "id": 1, "album_snapshot": 1, "production_package": 1})
     if not order:
         raise HTTPException(404, "Order not found")
-    pkg = await build_production_package(order_id)
-    if pkg.get("status") != "ready":
-        raise HTTPException(500, f"Render failed: {pkg.get('error', 'unknown error')}")
-    return {"pdf_url": pkg["pdf_url"], "size_bytes": pkg["size_bytes"], "pages": pkg["pages"] + 1, "package": pkg}
+    if not order.get("album_snapshot"):
+        raise HTTPException(400, "This order has no frozen album snapshot to render")
+    pkg = order.get("production_package") or {}
+    if pkg.get("status") == "building" and not production_build_is_stale(pkg):
+        return {"status": "building", "package": pkg, "message": "Production files are already being rendered"}
+    schedule_production_package(order_id)
+    started = {"status": "building", "started_at": now_iso()}
+    return {"status": "building", "package": started, "message": "Rendering started"}
 
 
 @router.get("/orders/{order_id}/downloads")
@@ -208,6 +214,10 @@ async def order_downloads(order_id: str, admin: dict = Depends(get_current_admin
     if not order:
         raise HTTPException(404, "Order not found")
     pkg = order.get("production_package") or {"status": "none"}
+    if pkg.get("status") == "building" and production_build_is_stale(pkg):
+        # The render never finished (worker restarted / out of memory on the host) — report it instead of spinning forever.
+        pkg = {**pkg, "status": "failed", "error": STALE_BUILD_MESSAGE}
+        await db.orders.update_one({"id": order_id}, {"$set": {"production_package": pkg}})
     files = list_dir_files(pkg["dir"]) if pkg.get("dir") else []
     return {"package": pkg, "files": [{**f, "url": public_url(f["path"])} for f in files]}
 

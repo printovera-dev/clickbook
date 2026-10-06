@@ -6,6 +6,8 @@ import os
 import io
 import pytest
 import requests
+import sys, os as _os; sys.path.insert(0, _os.path.dirname(__file__))
+from _pdf_helper import build_package
 
 BASE = "https://memories-album.preview.emergentagent.com".rstrip("/")
 ASSETS = "/app/backend/tests/assets"
@@ -175,9 +177,7 @@ class TestDesignLock:
                         json={"pages": got["pages"]})
         assert r409.status_code == 409, f"expected 409 lock, got {r409.status_code}"
         # Admin PDF works with frozen album_snapshot
-        r_pdf = sess.post(f"{BASE}/api/admin/orders/{order['id']}/pdf", headers=admin_h)
-        assert r_pdf.status_code == 200, r_pdf.text
-        body = r_pdf.json()
+        body = build_package(sess, f"{BASE}/api", order['id'], admin_h)
         assert "pdf_url" in body
         # pages should be len(pages)+1 (cover)
         assert body["pages"] == len(got["pages"]) + 1

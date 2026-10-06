@@ -5,6 +5,8 @@ import re
 import time
 import pytest
 import requests
+import sys, os as _os; sys.path.insert(0, _os.path.dirname(__file__))
+from _pdf_helper import build_package
 
 BASE = os.environ.get("EXPO_PUBLIC_BACKEND_URL", "https://memories-album.preview.emergentagent.com").rstrip("/")
 ASSETS = "/app/backend/tests/assets"
@@ -118,9 +120,7 @@ class TestProductionPackage:
         assert o["pdf_url"].endswith("/Album.pdf")
 
     def test_admin_rebuild_and_zip(self, sess, admin_h, admin_token, paid_order):
-        r = sess.post(f"{BASE}/api/admin/orders/{paid_order['id']}/pdf", headers=admin_h)
-        assert r.status_code == 200, r.text
-        assert r.json()["package"]["status"] == "ready"
+        assert build_package(sess, f"{BASE}/api", paid_order['id'], admin_h)["package"]["status"] == "ready"
         z = sess.get(f"{BASE}/api/admin/orders/{paid_order['id']}/downloads.zip", params={"token": admin_token})
         assert z.status_code == 200 and z.content[:2] == b"PK"
         import zipfile, io

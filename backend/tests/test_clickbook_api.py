@@ -9,6 +9,8 @@ import time
 import pytest
 import requests
 from PIL import Image
+import sys, os as _os; sys.path.insert(0, _os.path.dirname(__file__))
+from _pdf_helper import build_package
 
 BASE_URL = os.environ.get("EXPO_PUBLIC_BACKEND_URL")
 if not BASE_URL:
@@ -386,9 +388,7 @@ def test_admin_status_invalid(s):
 
 
 def test_admin_generate_pdf(s):
-    r = s.post(f"{API}/admin/orders/{state['order_id']}/pdf", headers=state["admin_auth"])
-    assert r.status_code == 200, r.text
-    body = r.json()
+    body = build_package(s, API, state['order_id'], state["admin_auth"])
     assert body.get("pdf_url")
     assert body.get("size_bytes", 0) > 100
     # PDF should be accessible
