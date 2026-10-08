@@ -15,8 +15,29 @@ HOME_ASSET = "/api/files/home"  # seeded ClickBook assets (Google Drive CLICKBOO
 
 
 def _slide(img: str, order: int, title: str = "", subtitle: str = "", cta_label: str = "", cta_route: str = "") -> dict:
-    return {"id": new_id(), "image_url": f"{HOME_ASSET}/{img}", "title": title, "subtitle": subtitle,
-            "cta_label": cta_label, "cta_route": cta_route, "active": True, "order": order}
+    return {"id": new_id(), "type": "image", "image_url": f"{HOME_ASSET}/{img}", "video_url": "", "title": title,
+            "subtitle": subtitle, "cta_label": cta_label, "cta_route": cta_route, "active": True, "order": order}
+
+
+def default_accordions() -> list:
+    """Expandable rows under 'Why ClickBook'. Only facts already defined in the product are used here."""
+    return [
+        {"id": new_id(), "title": "Product Information", "type": "pairs", "active": True, "order": 1, "items": [
+            {"label": "Format", "value": "Square photobook"},
+            {"label": "Size", "value": "8 × 8 inch (20 × 20 cm)"},
+            {"label": "Pages", "value": "Minimum 20 pages (10 sheets), up to 100 pages"},
+            {"label": "Paper finish", "value": "Silky matte"},
+            {"label": "Printing", "value": "True-colour HD printing"},
+            {"label": "Cover", "value": "Editable photo cover with your title"},
+        ]},
+        {"id": new_id(), "title": "Features & Specifications", "type": "bullets", "active": True, "order": 2, "items": [
+            {"value": "Square Format: Compact 8 × 8 inch size, suitable for keepsakes and display."},
+            {"value": "20-Page Minimum: Made with a minimum of 20 pages to showcase photos and memories."},
+            {"value": "Durable, Tear-Resistant & Water-Resistant: Designed to handle everyday viewing."},
+            {"value": "Silky Matte Finish: A smooth, elegant finish with reduced glare."},
+            {"value": "True-Colour HD Printing: Sharp, vibrant prints that bring out detail."},
+        ]},
+    ]
 
 
 def default_home_content() -> dict:
@@ -48,6 +69,8 @@ def default_home_content() -> dict:
         ],
         "logo_url": f"{HOME_ASSET}/logo.png",
         "last_page_url": f"{HOME_ASSET}/last-page.webp",
+        "accordions": default_accordions(),
+        "promo_popup": {"enabled": False, "offer_code": "", "title": "Special offer", "text": "", "button_label": "Copy code"},
         "texts": {
             "login_title": "Your Most Beautiful Memories,",
             "login_accent": "Beautifully Preserved.",
@@ -71,6 +94,10 @@ async def get_home_doc() -> dict:
         await db.home_content.insert_one(dict(doc))
         doc.pop("_id", None)
     doc.setdefault("last_page_url", f"{HOME_ASSET}/last-page.webp")
+    if "accordions" not in doc:
+        doc["accordions"] = default_accordions()
+        await db.home_content.update_one({"id": "default"}, {"$set": {"accordions": doc["accordions"]}})
+    doc.setdefault("promo_popup", {"enabled": False, "offer_code": "", "title": "Special offer", "text": "", "button_label": "Copy code"})
     return doc
 
 
@@ -81,7 +108,27 @@ def _public_view(doc: dict) -> dict:
                       for k, v in (doc.get("sliders") or {}).items()}
     out["heroes"] = sorted([h for h in doc.get("heroes", []) if h.get("active", True)], key=lambda h: h.get("order", 0))
     out["videos"] = sorted([v for v in doc.get("videos", []) if v.get("active", True)], key=lambda v: v.get("order", 0))
+    out["accordions"] = sorted([a for a in doc.get("accordions", []) if a.get("active", True)], key=lambda a: a.get("order", 0))
     return out
+
+
+async def _promo_view(doc: dict) -> Optional[dict]:
+    """Popup payload: enabled flag + live offer details resolved from the offers collection (never stale copy)."""
+    pp = doc.get("promo_popup") or {}
+    if not pp.get("enabled") or not pp.get("offer_code"):
+        return None
+    offer = await db.offers.find_one({"code": pp["offer_code"].upper(), "active": True}, {"_id": 0})
+    if not offer:
+        return None
+    now = now_iso()
+    if (offer.get("start_at") and offer["start_at"] > now) or (offer.get("end_at") and offer["end_at"] < now):
+        return None
+    discount = f"{offer['value']:g}% off" if offer.get("discount_type") == "percentage" else f"₹{offer['value']:g} off"
+    if offer.get("max_discount") and offer.get("discount_type") == "percentage":
+        discount += f" (up to ₹{offer['max_discount']:g})"
+    return {"title": pp.get("title") or offer.get("name") or "Special offer", "text": pp.get("text") or "",
+            "button_label": pp.get("button_label") or "Copy code", "code": offer["code"], "discount": discount,
+            "min_order": offer.get("min_order") or 0, "end_at": offer.get("end_at")}
 
 
 @router.get("/home")
@@ -93,6 +140,7 @@ async def home_content():
     gst = float(settings.get("gst_percent", 18))
     base = round(min_sheets * per_sheet * (1 + gst / 100))
     return {"content": _public_view(doc),
+            "promo": await _promo_view(doc),
             "pricing": {"min_sheets": min_sheets, "price_per_sheet": per_sheet, "gst_percent": gst,
                         "base_price": base, "size": settings.get("size", "8x8"), "free_delivery": True}}
 
@@ -119,6 +167,8 @@ class HomeUpdate(BaseModel):
     texts: Optional[Dict[str, str]] = None
     logo_url: Optional[str] = None
     last_page_url: Optional[str] = None
+    accordions: Optional[List[Dict[str, Any]]] = None
+    promo_popup: Optional[Dict[str, Any]] = None
 
 
 @router.get("/admin/home")

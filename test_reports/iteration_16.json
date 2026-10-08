@@ -1,0 +1,35 @@
+{
+  "summary": "Iteration 16 full regression: backend 9/9 pytest passing (home accordions + promo null defaults, promo popup enable/disable round-trip, accordion CRUD + inactive filter, admin video upload with HTTP Range 206 + wrong-type 400, Excel export 32-column header for all 4 ranges + 401 on missing token, Razorpay live key config + live order_ creation). Frontend verified at 390x844 and 1280x860: home-slider1 portrait container present with 4 image slides (slide-{id} ×4 all with <img>), home-slider1-dots, home-slider1-thumbs, dot-2 and thumb-0 both tappable; sliders 2 & 3 landscape (390x229); logo height = 140px exactly; 'Staff sign in' NOT in home-menu; accordion renders with 2 default rows, home-accordion-header-0 role='button', expand reveals pairs, header-1 shows 5 bullet items; promo-popup appears ~1.5s after load (342x257, centered), promo-code='PROMO10', promo-copy toggles to 'Copied!', promo-close dismisses; admin login one-shot at both viewports (no error boundary, 0 console errors); admin Orders page has all 4 export chips and clicking admin-export-weekly triggers download clickbook-orders-weekly-*.xlsx; admin Home CMS has admin-home-tab-accordions, admin-home-tab-promo tabs, admin-accordion-add works, admin-home-save present, admin-promo-enabled + admin-promo-offer-PROMO10 chip present; album preview book container = 406x227 on 390 (inner size 382 ✓) and 584x316 on 1280 (inner size 560 ✓). State restored: promo_popup.enabled=false, 2 default accordions preserved.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "home accordion", "issues": ["home-accordion-header-0 has role='button' but aria-expanded attribute is not set (returned null). Review request asked for both. Minor a11y gap — screen readers won't announce expanded state."]}
+    ],
+    "react_native_issues": [
+      {"component": "pointerEvents prop", "issue": "React Native web warns: 'props.pointerEvents is deprecated. Use style.pointerEvents'. Repeated across the home screen. Reference: likely in upload tiles / overlay components (see iteration 12 pending-tile pointerEvents='none')."},
+      {"component": "Animated.useNativeDriver", "issue": "Console warning: 'Animated: useNativeDriver is not supported because the native animated module is missing. Falling back to JS-based animation.' — RN web expected but worth noting; wherever possible pass useNativeDriver=false explicitly on web."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration16_sliders_promo_export.py",
+    "/app/test_reports/pytest/pytest_results_iter16.xml"
+  ],
+  "action_items": [
+    "Minor: add accessibilityState={{expanded}} or aria-expanded to home-accordion-header-* for screen reader support (review requested).",
+    "Minor: replace deprecated `pointerEvents` prop with style.pointerEvents to silence RN web warnings.",
+    "Housekeeping: multiple 'TESTDEAL' offer rows found in admin Home CMS → Promo popup offer strip (left over from prior iteration tests); not a blocker but can be purged."
+  ],
+  "critical_code_review_comments": [
+    "routers/admin.py export_orders_xlsx: in-memory build is fine for ≤5000 orders; if volume grows, consider streaming via openpyxl write_only mode.",
+    "routers/home.py _promo_view: no price-based gating other than min_order metadata — expected per spec."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Offer PROMO10 (10% percentage, min_order 0, active) was ensured in offers collection by TestPromoPopup; left in place (safe reusable fixture). promo_popup.enabled reset to false and accordions restored to default 2.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "AsyncStorage on web stores values as RAW strings (not JSON-stringified) under key 'clickbook.customerToken'. To inject a customer session from Playwright: localStorage.setItem('clickbook.customerToken', '<token>') without extra JSON quotes. BookPreview inner width = (outer bounding box width - 24). On the preview page, outer container is 406x227 on 390 viewport and 584x316 on 1280. Home sections are rendered inside a FlatList, so window.scrollTo() does not move content on web — use page.mouse.wheel() to scroll into Why ClickBook / sliders 2+3. Default admin OTP flow: POST /api/auth/otp/send returns dev_hint with the generated OTP.",
+  "rca_of_issue": "N/A — all iteration-16 features verified working on the preview environment."
+}

@@ -1,5 +1,8 @@
 """Admin console: login, dashboard, orders, covers, offers, settings, process bots, customers, PDF."""
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
+import io
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Header
 from fastapi.responses import Response
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
@@ -7,7 +10,7 @@ from typing import Optional, List, Dict, Any
 
 from core import (db, now_iso, new_id, get_current_admin, get_settings_doc, verify_password, hash_password,
                   make_admin_token, admin_from_token)
-from storage_manager import save_original, public_url, list_dir_files, zip_dir
+from storage_manager import save_original, public_url, list_dir_files, zip_dir, _put
 from production import schedule_production_package, production_build_is_stale, STALE_BUILD_MESSAGE
 from routers.notifications import notify_order_status
 
@@ -257,6 +260,99 @@ async def admin_upload_image(file: UploadFile = File(...), admin: dict = Depends
     await db.admin_images.insert_one(dict(doc))
     doc.pop("_id", None)
     return {"image": doc}
+
+
+VIDEO_TYPES = {"video/mp4": ".mp4", "video/webm": ".webm", "video/quicktime": ".mov"}
+
+
+@router.post("/videos")
+async def admin_upload_video(file: UploadFile = File(...), admin: dict = Depends(get_current_admin)):
+    """Upload a short product video for the home sliders (MP4/WebM/MOV, max 60MB). Served from /api/files with
+    Range support so it streams on iPhone."""
+    ext = VIDEO_TYPES.get((file.content_type or "").lower()) or Path(file.filename or "").suffix.lower()
+    if ext not in VIDEO_TYPES.values():
+        raise HTTPException(400, "Unsupported video type — upload MP4, WebM or MOV")
+    data = await file.read()
+    if len(data) > 60 * 1024 * 1024:
+        raise HTTPException(400, "Video too large (max 60MB)")
+    vid = new_id()
+    rel = f"home/videos/{vid}{ext}"
+    await run_in_threadpool(_put, rel, data, file.content_type or "video/mp4")
+    doc = {"id": vid, "filename": file.filename, "size_bytes": len(data), "uploaded_by": admin["username"],
+           "created_at": now_iso(), "path": rel, "url": public_url(rel)}
+    await db.admin_videos.insert_one(dict(doc))
+    doc.pop("_id", None)
+    return {"video": doc}
+
+
+# ---- Orders export (Excel) ----
+
+EXPORT_RANGES = {"daily": 1, "weekly": 7, "monthly": 31}
+
+
+@router.get("/orders/export.xlsx")
+async def export_orders_xlsx(range: str = "monthly", token: Optional[str] = None, authorization: Optional[str] = Header(None)):
+    """Complete order list as an Excel workbook (daily / weekly / monthly / all). Opened via a direct link, so the
+    admin JWT may be passed as ?token= like the ZIP download."""
+    tok = token or (authorization.split(" ", 1)[1] if authorization and authorization.lower().startswith("bearer ") else None)
+    if not tok:
+        raise HTTPException(401, "Missing admin token")
+    await admin_from_token(tok)
+    days = EXPORT_RANGES.get(range)
+    q: dict = {}
+    if days:
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        q = {"created_at": {"$gte": since}}
+    orders = await db.orders.find(q, {"_id": 0}).sort("created_at", -1).to_list(5000)
+    cust_ids = list({o.get("customer_id") for o in orders if o.get("customer_id")})
+    customers = {c["id"]: c for c in await db.customers.find({"id": {"$in": cust_ids}}, {"_id": 0}).to_list(5000)}
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"Orders ({range})"
+    headers = ["Order ID", "Order date", "Payment date", "Client name", "Mobile", "Email", "GST no.",
+               "Album", "Sheets", "Pages", "Photos", "Price per sheet", "Subtotal", "Discount", "Coupon", "Gift wrap",
+               "GST", "Total (₹)", "Payment status", "Payment method", "Payment ref", "Production status",
+               "Address name", "Address line", "City", "State", "Pincode", "Address phone",
+               "Album PDF", "Cover", "Back cover", "Print folder"]
+    ws.append(headers)
+    for c in ws[1]:
+        c.font = Font(bold=True, color="FFFFFF")
+        c.fill = PatternFill("solid", fgColor="2B2B2E")
+        c.alignment = Alignment(vertical="center")
+    for o in orders:
+        a = o.get("address") or {}
+        cs = o.get("customer_snapshot") or {}
+        cust = customers.get(o.get("customer_id"), {})
+        snap = o.get("album_snapshot") or {}
+        price = o.get("price") or {}
+        pkg = o.get("production_package") or {}
+        ws.append([
+            o.get("order_no"), (o.get("created_at") or "")[:19].replace("T", " "), (o.get("paid_at") or "")[:19].replace("T", " "),
+            o.get("client_name") or cs.get("name") or cust.get("name"), cs.get("mobile") or cust.get("mobile"),
+            cs.get("email") or cust.get("email"), cust.get("gst_no"),
+            snap.get("name") or o.get("album_name"), o.get("sheets"), len(snap.get("pages") or []), len(snap.get("photos") or []),
+            price.get("price_per_sheet"), price.get("subtotal"), price.get("discount"), o.get("coupon_code"),
+            "Yes" if o.get("gift_wrap") else "No", price.get("gst"), price.get("total"),
+            "Payment complete" if o.get("payment_status") == "paid" else "Payment incomplete",
+            o.get("payment_method"), o.get("payment_id"), (o.get("production_status") or "").replace("_", " "),
+            a.get("name"), ", ".join(filter(None, [a.get("line1"), a.get("line2")])), a.get("city"), a.get("state"),
+            a.get("pincode") or a.get("pin"), a.get("phone"),
+            pkg.get("pdf_url"), pkg.get("cover_url"), pkg.get("back_cover_url"), (pkg.get("print_urls") or [None])[0],
+        ])
+    for i, h in enumerate(headers, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = max(12, min(40, len(h) + 6))
+    ws.freeze_panes = "A2"
+    buf = io.BytesIO()
+    wb.save(buf)
+    fname = f"clickbook-orders-{range}-{datetime.now(timezone.utc).date().isoformat()}.xlsx"
+    return Response(content=buf.getvalue(),
+                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
 
 # ---- Covers ----

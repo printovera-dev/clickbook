@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
+import { View, Text, StyleSheet, Pressable, ScrollView, useWindowDimensions } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
@@ -12,6 +12,9 @@ import Feather from "@react-native-vector-icons/feather";
 export default function AlbumPreview() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  // Larger book: phones use (almost) the full width (+~20% vs the old 32px-inset 400 cap); desktop +40% (560).
+  const bookSize = width >= 1024 ? Math.min(560, width - 64) : Math.min(width - 8, 480);
   const router = useRouter();
   const q = useQuery({ queryKey: ["album", id], queryFn: () => api.getAlbum(String(id)), enabled: !!id });
   const album = q.data?.album;
@@ -37,6 +40,7 @@ export default function AlbumPreview() {
         <View style={{ marginTop: spacing.xl, alignItems: "center" }}>
           {album ? (
             <BookPreview
+              size={bookSize}
               cover={album.cover_snapshot} coverDesign={album.cover_design}
               pages={album.pages || []}
               photos={album.photos || []}

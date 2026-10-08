@@ -170,8 +170,7 @@ class TestDownloads:
         assert resp.headers.get("content-type") == "application/zip"
         z = zipfile.ZipFile(io.BytesIO(resp.content))
         names = z.namelist()
-        # Zip root is the folder name — strip it
-        rels = ["/".join(n.split("/")[1:]) if "/" in n else n for n in names]
+        rels = names  # archive paths are relative to the package folder (Album.pdf, Cover/..., Print/...)
         assert any(r == "Album.pdf" for r in rels), rels
         assert any(r == "Cover/back_cover.jpg" for r in rels), rels
         assert any(r.startswith("Print/page_") and r.endswith(".jpg") for r in rels), rels

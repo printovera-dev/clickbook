@@ -11,6 +11,7 @@ import Feather from "@react-native-vector-icons/feather";
 import { colors, fonts, radius, spacing } from "@/src/theme";
 
 const DISMISS_KEY = "clickbook.installDismissed";
+const INSTALLED_KEY = "clickbook.installedOnce";
 type Mode = "hidden" | "prompt" | "ios-safari" | "ios-other" | "mac-safari";
 
 export function detectInstallTarget(): Exclude<Mode, "hidden" | "prompt"> | "other" {
@@ -33,7 +34,9 @@ export function InstallBanner() {
   useEffect(() => {
     if (Platform.OS !== "web" || typeof window === "undefined") return;
     const w = window as any;
-    if (isStandalone()) return;
+    if (isStandalone()) { localStorage.setItem(INSTALLED_KEY, "1"); return; }
+    // Launched in a browser after the app had been installed → the user removed it; offer to add it again.
+    if (localStorage.getItem(INSTALLED_KEY)) { localStorage.removeItem(INSTALLED_KEY); localStorage.removeItem(DISMISS_KEY); }
     // When launched from the Home Screen we never nag; if the user dismissed us, stay quiet for 7 days.
     const dismissedAt = Number(localStorage.getItem(DISMISS_KEY) || 0);
     if (dismissedAt && Date.now() - dismissedAt < 7 * 24 * 3600 * 1000) return;

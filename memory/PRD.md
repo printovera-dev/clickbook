@@ -83,6 +83,12 @@ ClickBook is a premium photo-album service that lets customers create beautifull
 - Profile: delivery address (pre-filled from last order) + optional GSTIN; checkout pre-fills saved address.
 - Razorpay: gateway errors surfaced as 400 with a clear message (checkout `checkout-error`). Live Key ID updated to `rzp_live_TkfGdtNF04gpK5`; Razorpay still rejects the supplied secret → awaiting correct Key Secret from the user.
 
+## Feature updates (2026-10-08, iterations 15–16)
+- Production files: async build (202 + polling), streaming renderer (peak RAM 1 GB → 170 MB), stale-build recovery, safe error messages. Root cause of the live-only "Failed to fetch" was the 60 s proxy timeout + OOM on the production host.
+- Sliders: Slider 1 vertical/portrait (2:3, thumbnails), all sliders support image + MP4 video slides (muted, tap controls, pause on swipe), dots, iPhone swipe fix (all slides mounted, scroll-snap). Admin can upload videos (`POST /admin/videos`, Range-enabled file serving).
+- Home: CMS accordions under "Why ClickBook" (pairs/bullets/text, add/remove rows), promo offer popup (enable/disable + offer code in CMS, copy button), logo +60%, "Staff sign in" removed, bigger album preview.
+- Admin: Excel order export (daily/weekly/monthly/all, 32 columns). Razorpay live keys verified and configured.
+
 ## Deferred (roadmap)
 - Real WhatsApp/SMS provider (playbook-driven), real Razorpay integration, ML-driven auto-layout selection (currently rhythm-based), image cropping/zoom inside placeholders, 3+ photo layouts, Lottie process-bot animations.
 

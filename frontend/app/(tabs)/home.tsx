@@ -9,6 +9,8 @@ import Feather from "@react-native-vector-icons/feather";
 import { useQuery } from "@tanstack/react-query";
 import { api, fileUrl, getToken } from "@/src/api";
 import { AutoSlider } from "@/src/components/auto-slider";
+import { Accordion } from "@/src/components/accordion";
+import { PromoPopup } from "@/src/components/promo-popup";
 import { HomeLogin } from "@/src/components/home-login";
 import { SideMenu } from "@/src/components/side-menu";
 import { VideoCard } from "@/src/components/video-card";
@@ -65,7 +67,7 @@ export default function Home() {
     if (!c) return [];
     const isIn = loggedIn === true;
     const list: { key: string; render: () => React.ReactNode }[] = [
-      { key: "slider1", render: () => <AutoSlider testID="home-slider1" slides={c.sliders?.slider1?.slides || []} intervalMs={c.sliders?.slider1?.interval_ms} /> },
+      { key: "slider1", render: () => <AutoSlider testID="home-slider1" orientation="portrait" slides={c.sliders?.slider1?.slides || []} intervalMs={c.sliders?.slider1?.interval_ms} /> },
       { key: "login1", render: () => (
         <View>
           {wantsLogin ? (
@@ -155,6 +157,11 @@ export default function Home() {
               {(c.videos || []).map((v: any) => <VideoCard key={v.id} video={v} width={videoW} />)}
             </ScrollView>
           )}
+          {(c.accordions || []).length ? (
+            <View style={{ marginTop: spacing.xl }}>
+              <Accordion rows={c.accordions} testID="home-accordion" />
+            </View>
+          ) : null}
         </View>
       ) },
       { key: "slider2", render: () => <AutoSlider testID="home-slider2" slides={c.sliders?.slider2?.slides || []} intervalMs={c.sliders?.slider2?.interval_ms} /> },
@@ -201,7 +208,7 @@ export default function Home() {
         <View style={styles.headerInner}>
         <Pressable onPress={() => setMenu(true)} testID="home-menu" style={styles.iconBtn} hitSlop={8}><Feather name="menu" size={22} color={colors.homeCharcoal} /></Pressable>
         <View style={{ alignItems: "center" }}>
-          {c?.logo_url ? <Image source={{ uri: fileUrl(c.logo_url) }} style={{ width: Math.min(264, width - 140), height: isDesktop ? 72 : 88 }} contentFit="contain" cachePolicy="memory-disk" /> : <Text style={styles.brand}>Click<Text style={{ color: colors.homePink }}>Book</Text></Text>}
+          {c?.logo_url ? <Image source={{ uri: fileUrl(c.logo_url) }} style={{ width: Math.min(422, width - 120), height: isDesktop ? 115 : 140 }} contentFit="contain" cachePolicy="memory-disk" /> : <Text style={styles.brand}>Click<Text style={{ color: colors.homePink }}>Book</Text></Text>}
         </View>
         <Pressable onPress={() => router.push(loggedIn ? "/notifications" : { pathname: "/(tabs)/home", params: { login: "1" } } as any)} testID="home-notifications-bell" style={styles.iconBtn} hitSlop={8}>
           <Feather name="bell" size={22} color={colors.homeCharcoal} />
@@ -229,6 +236,8 @@ export default function Home() {
           </View>
         ) : null}
       />
+
+      <PromoPopup promo={home.data?.promo} />
 
       <SideMenu visible={menu} onClose={() => setMenu(false)} />
 

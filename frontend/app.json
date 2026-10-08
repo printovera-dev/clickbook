@@ -55,7 +55,8 @@
           "cameraPermission": "Take photos for your ClickBook album"
         }
       ],
-      "@react-native-vector-icons/feather"
+      "@react-native-vector-icons/feather",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true

@@ -142,6 +142,10 @@ export const api = {
     uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false),
   adminUploadImage: (uri: string, filename: string, webFile?: any) =>
     uploadFile(`/admin/images`, uri, filename, webFile, true),
+  adminUploadVideo: (uri: string, filename: string, webFile?: any) =>
+    uploadFile(`/admin/videos`, uri, filename, webFile, true),
+  adminOrdersExportUrl: (range: "daily" | "weekly" | "monthly" | "all", token: string) =>
+    `${BASE}/api/admin/orders/export.xlsx?range=${range}&token=${encodeURIComponent(token)}`,
 
   // Pricing / Orders
   calculatePrice: (sheets: number, coupon_code?: string, gift_wrap = false) =>
@@ -157,7 +161,7 @@ export const api = {
   getOrder: (id: string) => request<{ order: any; process_bots: any[] }>(`/orders/${id}`),
 
   // Home page CMS
-  homeContent: () => request<{ content: any; pricing: any }>("/home", { auth: false }),
+  homeContent: () => request<{ content: any; pricing: any; promo: any | null }>("/home", { auth: false }),
   adminHome: () => request<{ content: any }>("/admin/home", { admin: true }),
   adminUpdateHome: (data: any) => request<{ content: any }>("/admin/home", { method: "PUT", body: data, admin: true }),
 

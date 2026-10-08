@@ -3,7 +3,7 @@ import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Modal, Refres
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
-import { api, fileUrl } from "@/src/api";
+import { api, fileUrl, getAdminToken } from "@/src/api";
 import { Button, s } from "@/src/ui";
 import { colors, spacing, radius, fonts } from "@/src/theme";
 import Feather from "@react-native-vector-icons/feather";
@@ -57,6 +57,10 @@ export default function AdminOrders() {
   };
   const pkgReady = pkg?.status === "ready";
   useEffect(() => { if (pkgReady) q.refetch(); }, [pkgReady, q]);
+  const exportXlsx = async (range: "daily" | "weekly" | "monthly" | "all") => {
+    const token = await getAdminToken();
+    if (token) Linking.openURL(api.adminOrdersExportUrl(range, token));
+  };
   const openZip = async () => {
     if (!selected) return;
     Linking.openURL(await api.adminDownloadsZipUrl(selected.id));
@@ -86,6 +90,15 @@ export default function AdminOrders() {
       </ScrollView>
       <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 100 }}
         refreshControl={<RefreshControl refreshing={q.isFetching} onRefresh={q.refetch} tintColor={colors.brandPrimary} />}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: spacing.sm }} testID="admin-orders-export">
+          <Feather name="download" size={14} color={colors.muted} />
+          <Text style={[s.bodyMuted, { marginRight: 4 }]}>Export Excel:</Text>
+          {(["daily", "weekly", "monthly", "all"] as const).map((r) => (
+            <Pressable key={r} onPress={() => exportXlsx(r)} style={styles.exportChip} testID={`admin-export-${r}`}>
+              <Text style={styles.exportTxt}>{r === "all" ? "All orders" : r.charAt(0).toUpperCase() + r.slice(1)}</Text>
+            </Pressable>
+          ))}
+        </View>
         <DataTable
           testID="admin-orders-table"
           rows={orders}
@@ -179,6 +192,8 @@ function FileChip({ icon, label, onPress, testID }: { icon: string; label: strin
 }
 
 const styles = StyleSheet.create({
+  exportChip: { paddingHorizontal: 12, minHeight: 36, justifyContent: "center", borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary },
+  exportTxt: { fontFamily: fonts.text, fontSize: 12, color: colors.brandPrimary, fontWeight: "600" },
   topbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: spacing.xl },
   chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.pill, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   chipActive: { backgroundColor: colors.brandPrimary },
