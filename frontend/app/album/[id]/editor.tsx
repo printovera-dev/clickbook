@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView, FlatList } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -27,13 +27,14 @@ export default function Editor() {
   const bgsQ = useQuery({ queryKey: ["backgrounds"], queryFn: () => api.listBackgrounds() });
   const layoutsQ = useQuery({ queryKey: ["layouts"], queryFn: () => api.listLayouts() });
 
+  // Live preview follows the selected row; the book is never reset to the cover while editing.
   const album = q.data?.album;
-  const pages: any[] = album?.pages || [];
+  const pages: any[] = useMemo(() => album?.pages || [], [album?.pages]);
   // Paid albums are view-only: the server rejects edits (409), so never show the editor for them.
   useEffect(() => { if (album?.locked) router.replace({ pathname: "/album/[id]/preview", params: { id: String(id) } }); }, [album?.locked, id, router]);
   const backgrounds = bgsQ.data?.backgrounds || [];
   const layouts = layoutsQ.data?.layouts || [];
-  const photosById: Record<string, any> = Object.fromEntries((album?.photos || []).map((p: any) => [p.id, p]));
+  const photosById: Record<string, any> = useMemo(() => Object.fromEntries((album?.photos || []).map((p: any) => [p.id, p])), [album?.photos]);
 
   const currentPage = pages[pageIdx];
 
@@ -125,6 +126,9 @@ export default function Editor() {
           photos={album.photos || []}
           albumName={album.name}
           size={300}
+          focusPage={pageIdx}
+          selectedPage={pageIdx}
+          onSelectPage={(sel) => { if (sel !== "cover") setPageIdx(sel); }}
           onEditPage={(i) => router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: String(i) } })} onEditCover={() => router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: "cover" } })}
         />
       ) : null}

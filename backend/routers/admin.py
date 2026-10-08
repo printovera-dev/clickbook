@@ -1,14 +1,14 @@
 """Admin console: login, dashboard, orders, covers, offers, settings, process bots, customers, PDF."""
-import secrets
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from fastapi.responses import Response
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
-from core import db, now_iso, new_id, get_current_admin, get_settings_doc
+from core import (db, now_iso, new_id, get_current_admin, get_settings_doc, verify_password, hash_password,
+                  make_admin_token, admin_from_token)
 from storage_manager import save_original, public_url, list_dir_files, zip_dir
-from production import build_production_package
+from production import schedule_production_package, production_build_is_stale, STALE_BUILD_MESSAGE
 from routers.notifications import notify_order_status
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -69,30 +69,95 @@ class BotUpdate(BaseModel):
 
 @router.post("/login")
 async def admin_login(payload: AdminLogin):
-    admin = await db.admins.find_one({"username": payload.username}, {"_id": 0})
-    if not admin or admin.get("password") != payload.password:
-        raise HTTPException(401, "Invalid admin credentials")
-    token = secrets.token_urlsafe(32)
-    await db.admins.update_one({"username": payload.username}, {"$set": {"token": token}})
-    return {"token": token, "admin": {"username": admin["username"], "role": admin.get("role", "super")}}
+    admin = await db.admins.find_one({"username": payload.username, "active": {"$ne": False}}, {"_id": 0})
+    if not admin or not verify_password(payload.password, admin.get("password_hash")):
+        raise HTTPException(401, "Incorrect username or password")
+    token, expires_in = make_admin_token(admin["username"])
+    await db.admins.update_one({"username": admin["username"]}, {"$set": {"last_login_at": now_iso()}})
+    return {"token": token, "expires_in": expires_in, "admin": {"username": admin["username"], "role": admin.get("role", "super")}}
+
+
+@router.get("/me")
+async def admin_me(admin: dict = Depends(get_current_admin)):
+    return {"admin": {"username": admin["username"], "role": admin.get("role", "super")}}
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@router.put("/password")
+async def admin_change_password(payload: PasswordChange, admin: dict = Depends(get_current_admin)):
+    doc = await db.admins.find_one({"username": admin["username"]}, {"_id": 0, "password_hash": 1})
+    if not verify_password(payload.current_password, (doc or {}).get("password_hash")):
+        raise HTTPException(400, "Current password is incorrect")
+    if len(payload.new_password) < 8:
+        raise HTTPException(400, "New password must be at least 8 characters")
+    await db.admins.update_one({"username": admin["username"]}, {"$set": {"password_hash": hash_password(payload.new_password)}})
+    return {"success": True}
 
 
 @router.get("/dashboard")
 async def admin_dashboard(admin: dict = Depends(get_current_admin)):
     orders = await db.orders.find({}, {"_id": 0}).to_list(1000)
-    revenue = sum(o["price"]["total"] for o in orders if o.get("payment_status") == "paid")
+    paid = [o for o in orders if o.get("payment_status") == "paid"]
+    revenue = sum(o["price"]["total"] for o in paid)
     by_status: dict = {}
     for o in orders:
         st = o.get("production_status", "processing")
         by_status[st] = by_status.get(st, 0) + 1
+    # Revenue / volume by day for the last 14 days (dashboard chart)
+    from datetime import datetime, timedelta, timezone
+    today = datetime.now(timezone.utc).date()
+    days = [(today - timedelta(days=i)).isoformat() for i in range(13, -1, -1)]
+    daily = {d: {"date": d, "revenue": 0.0, "orders": 0} for d in days}
+    for o in paid:
+        d = (o.get("paid_at") or o.get("created_at") or "")[:10]
+        if d in daily:
+            daily[d]["revenue"] += o["price"]["total"]
+            daily[d]["orders"] += 1
     return {
         "total_orders": len(orders),
+        "paid_orders": len(paid),
+        "pending_payments": len([o for o in orders if o.get("payment_status") != "paid"]),
         "revenue": round(revenue, 2),
+        "sheets_sold": sum(o.get("sheets", 0) for o in paid),
         "by_status": by_status,
         "customers": await db.customers.count_documents({}),
+        "albums": await db.albums.count_documents({}),
         "drafts": await db.albums.count_documents({"status": "draft"}),
-        "recent_orders": orders[-5:][::-1],
+        "daily": [daily[d] for d in days],
+        "recent_orders": sorted(orders, key=lambda o: o.get("created_at", ""), reverse=True)[:5],
     }
+
+
+@router.get("/payments")
+async def admin_payments(admin: dict = Depends(get_current_admin)):
+    orders = await db.orders.find({}, {"_id": 0, "id": 1, "order_no": 1, "client_name": 1, "customer_snapshot": 1, "sheets": 1,
+                                       "price": 1, "payment_status": 1, "payment_method": 1, "payment_id": 1, "paid_at": 1,
+                                       "created_at": 1, "coupon_code": 1, "gift_wrap": 1}).sort("created_at", -1).to_list(500)
+    paid = [o for o in orders if o.get("payment_status") == "paid"]
+    return {"payments": orders,
+            "summary": {"collected": round(sum(o["price"]["total"] for o in paid), 2), "paid": len(paid),
+                        "pending": len(orders) - len(paid),
+                        "pending_amount": round(sum(o["price"]["total"] for o in orders if o.get("payment_status") != "paid"), 2)}}
+
+
+@router.get("/albums")
+async def admin_albums(admin: dict = Depends(get_current_admin), status: Optional[str] = None):
+    q = {"status": status} if status else {}
+    albums = await db.albums.find(q, {"_id": 0, "pages": 0, "design_versions": 0, "album_snapshot": 0}).sort("updated_at", -1).to_list(500)
+    cust_ids = list({a.get("customer_id") for a in albums if a.get("customer_id")})
+    customers = {c["id"]: c for c in await db.customers.find({"id": {"$in": cust_ids}}, {"_id": 0, "id": 1, "name": 1, "mobile": 1}).to_list(500)}
+    out = []
+    for a in albums:
+        photos = a.pop("photos", []) or []
+        cover_photo = next((p for p in photos if p.get("id") == (a.get("cover_design") or {}).get("photo_id")), photos[0] if photos else None)
+        c = customers.get(a.get("customer_id"), {})
+        out.append({**a, "photo_count": len(photos), "customer_name": c.get("name"), "customer_mobile": c.get("mobile"),
+                    "cover_thumbnail_url": (cover_photo or {}).get("thumbnail_url")})
+    return {"albums": out}
 
 
 # ---- Orders ----
@@ -124,17 +189,23 @@ async def update_order_status(order_id: str, payload: StatusUpdate, admin: dict 
     return {"success": True}
 
 
-@router.post("/orders/{order_id}/pdf")
+@router.post("/orders/{order_id}/pdf", status_code=202)
 async def generate_pdf(order_id: str, admin: dict = Depends(get_current_admin)):
-    """(Re)builds the full print package from the frozen album_snapshot:
-    Downloads/<order>/Album.pdf + Cover/cover.jpg + Print/page_NNN.jpg + manifest.json."""
-    order = await db.orders.find_one({"id": order_id}, {"_id": 0, "id": 1, "album_snapshot": 1})
+    """(Re)builds the full print package from the frozen album_snapshot in the BACKGROUND and returns at once:
+    Downloads/<order>/Album.pdf + Cover/cover.jpg + Cover/back_cover.jpg + Print/page_NNN.jpg + manifest.json.
+    Rendering a 20-sheet album takes well over the 60 s reverse-proxy timeout on the production host, so the admin
+    console polls GET /orders/{id}/downloads until package.status is "ready" or "failed"."""
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0, "id": 1, "album_snapshot": 1, "production_package": 1})
     if not order:
         raise HTTPException(404, "Order not found")
-    pkg = await build_production_package(order_id)
-    if pkg.get("status") != "ready":
-        raise HTTPException(500, f"Render failed: {pkg.get('error', 'unknown error')}")
-    return {"pdf_url": pkg["pdf_url"], "size_bytes": pkg["size_bytes"], "pages": pkg["pages"] + 1, "package": pkg}
+    if not order.get("album_snapshot"):
+        raise HTTPException(400, "This order has no frozen album snapshot to render")
+    pkg = order.get("production_package") or {}
+    if pkg.get("status") == "building" and not production_build_is_stale(pkg):
+        return {"status": "building", "package": pkg, "message": "Production files are already being rendered"}
+    schedule_production_package(order_id)
+    started = {"status": "building", "started_at": now_iso()}
+    return {"status": "building", "package": started, "message": "Rendering started"}
 
 
 @router.get("/orders/{order_id}/downloads")
@@ -143,6 +214,10 @@ async def order_downloads(order_id: str, admin: dict = Depends(get_current_admin
     if not order:
         raise HTTPException(404, "Order not found")
     pkg = order.get("production_package") or {"status": "none"}
+    if pkg.get("status") == "building" and production_build_is_stale(pkg):
+        # The render never finished (worker restarted / out of memory on the host) — report it instead of spinning forever.
+        pkg = {**pkg, "status": "failed", "error": STALE_BUILD_MESSAGE}
+        await db.orders.update_one({"id": order_id}, {"$set": {"production_package": pkg}})
     files = list_dir_files(pkg["dir"]) if pkg.get("dir") else []
     return {"package": pkg, "files": [{**f, "url": public_url(f["path"])} for f in files]}
 
@@ -150,8 +225,9 @@ async def order_downloads(order_id: str, admin: dict = Depends(get_current_admin
 @router.get("/orders/{order_id}/downloads.zip", include_in_schema=False)
 async def order_downloads_zip(order_id: str, token: str = ""):
     """Zip of the whole Downloads/<order>/ folder. Token passed as query so it can open in a browser tab."""
-    if not token or not await db.admins.find_one({"token": token}, {"_id": 1}):
+    if not token:
         raise HTTPException(401, "Invalid admin token")
+    await admin_from_token(token)
     order = await db.orders.find_one({"id": order_id}, {"_id": 0, "order_no": 1, "production_package": 1})
     if not order or not (order.get("production_package") or {}).get("dir"):
         raise HTTPException(404, "Production package not built yet")
@@ -251,4 +327,80 @@ async def update_bot(bot_id: str, payload: BotUpdate, admin: dict = Depends(get_
 
 @router.get("/customers")
 async def admin_customers(admin: dict = Depends(get_current_admin)):
-    return {"customers": await db.customers.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)}
+    customers = await db.customers.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    pipeline = [{"$group": {"_id": "$customer_id", "orders": {"$sum": 1},
+                            "spent": {"$sum": {"$cond": [{"$eq": ["$payment_status", "paid"]}, "$price.total", 0]}}}}]
+    stats = {r["_id"]: r async for r in db.orders.aggregate(pipeline)}
+    albums = {r["_id"]: r["n"] async for r in db.albums.aggregate([{"$group": {"_id": "$customer_id", "n": {"$sum": 1}}}])}
+    for c in customers:
+        st = stats.get(c["id"], {})
+        c["order_count"] = st.get("orders", 0)
+        c["total_spent"] = round(st.get("spent", 0), 2)
+        c["album_count"] = albums.get(c["id"], 0)
+    return {"customers": customers}
+
+
+# ---- Layouts & backgrounds (catalog CRUD; GET lists live in routers/catalog.py) ----
+
+class LayoutIn(BaseModel):
+    name: str
+    photo_count: int
+    positions: List[Dict[str, Any]]
+    active: bool = True
+
+
+class BackgroundIn(BaseModel):
+    name: str
+    color: str
+    image_url: Optional[str] = None
+    active: bool = True
+
+
+@router.get("/layouts")
+async def admin_layouts(admin: dict = Depends(get_current_admin)):
+    return {"layouts": await db.layouts.find({}, {"_id": 0}).sort("photo_count", 1).to_list(100)}
+
+
+@router.post("/layouts")
+async def create_layout(payload: LayoutIn, admin: dict = Depends(get_current_admin)):
+    if payload.photo_count != len(payload.positions):
+        raise HTTPException(400, "positions must have exactly photo_count rectangles")
+    doc = {"id": new_id(), **payload.dict(), "created_at": now_iso()}
+    await db.layouts.insert_one(dict(doc))
+    return {"layout": doc}
+
+
+@router.put("/layouts/{layout_id}")
+async def update_layout(layout_id: str, payload: LayoutIn, admin: dict = Depends(get_current_admin)):
+    await db.layouts.update_one({"id": layout_id}, {"$set": payload.dict()})
+    return {"success": True}
+
+
+@router.delete("/layouts/{layout_id}")
+async def delete_layout(layout_id: str, admin: dict = Depends(get_current_admin)):
+    await db.layouts.delete_one({"id": layout_id})
+    return {"success": True}
+
+
+@router.get("/backgrounds")
+async def admin_backgrounds(admin: dict = Depends(get_current_admin)):
+    return {"backgrounds": await db.backgrounds.find({}, {"_id": 0}).to_list(200)}
+
+
+@router.post("/backgrounds")
+async def create_background(payload: BackgroundIn, admin: dict = Depends(get_current_admin)):
+    doc = {"id": new_id(), **payload.dict(), "created_at": now_iso()}
+    await db.backgrounds.insert_one(dict(doc))
+    return {"background": doc}
+
+
+@router.put("/backgrounds/{bg_id}")
+async def update_background(bg_id: str, payload: BackgroundIn, admin: dict = Depends(get_current_admin)):
+    await db.backgrounds.update_one({"id": bg_id}, {"$set": payload.dict()})
+    return {"success": True}
+
+
+@router.delete("/backgrounds/{bg_id}")
+async def delete_background(bg_id: str, admin: dict = Depends(get_current_admin)):
+    await db.backgrounds.delete_one({"id": bg_id})
+    return {"success": True}

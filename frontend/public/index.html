@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<!-- ClickBook web shell (WEB TARGET ONLY — never used by the iOS/Android apps).
+     Used by Expo's `web.output: "single"` mode for both the dev server and `expo export`.
+     Carries the PWA manifest, iOS standalone meta tags and the service-worker registration. -->
+<html lang="%LANG_ISO_CODE%">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
+    <title>%WEB_TITLE%</title>
+    <meta name="description" content="Create beautifully printed 8×8 inch photobooks in 60 seconds." />
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#2B2B2E" />
+    <meta name="application-name" content="ClickBook" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <!-- iOS standalone (hides Safari chrome when launched from the Home Screen) -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="ClickBook" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <style id="expo-reset">
+      /* These styles make the body full-height */
+      html,
+      body {
+        height: 100%;
+      }
+      /* These styles disable body scrolling if you are using <ScrollView> */
+      body {
+        overflow: hidden;
+      }
+      /* These styles make the root element full-height */
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+      body > div:first-child { position: fixed !important; top: 0; left: 0; right: 0; bottom: 0; }
+      [role="tablist"] [role="tab"] * { overflow: visible !important; }
+      [role="heading"], [role="heading"] * { overflow: visible !important; }
+    </style>
+    <script>
+      if ('serviceWorker' in navigator && location.protocol === 'https:') {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {});
+        });
+      }
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        window.__clickbookInstallPrompt = e;
+        window.dispatchEvent(new Event('clickbook:installable'));
+      });
+    </script>
+  </head>
+
+  <body>
+    <!-- Use static rendering with Expo Router to support running without JavaScript. -->
+    <noscript>
+      You need to enable JavaScript to run this app.
+    </noscript>
+    <!-- The root element for your Expo app. -->
+    <div id="root"></div>
+  </body>
+</html>

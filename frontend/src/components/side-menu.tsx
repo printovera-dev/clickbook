@@ -11,6 +11,7 @@ const ITEMS: { label: string; icon: string; route?: string; policy?: string }[] 
   { label: "Refund & Cancellation", icon: "rotate-ccw", policy: "refund" },
   { label: "Shipping & Delivery", icon: "truck", policy: "shipping" },
   { label: "Terms & Conditions", icon: "file-text", policy: "terms" },
+  { label: "Staff sign in", icon: "lock", route: "/admin/login" },
 ];
 
 export function SideMenu({ visible, onClose, logoUrl }: { visible: boolean; onClose: () => void; logoUrl?: string }) {
@@ -19,6 +20,7 @@ export function SideMenu({ visible, onClose, logoUrl }: { visible: boolean; onCl
   const go = (it: typeof ITEMS[number]) => {
     onClose();
     if (it.policy) router.push({ pathname: "/policy/[key]", params: { key: it.policy } });
+    else if (it.route === "/admin/login") router.push(it.route as any);
     else if (it.route) router.replace(it.route as any);
   };
   return (

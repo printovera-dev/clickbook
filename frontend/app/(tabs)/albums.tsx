@@ -37,7 +37,7 @@ export default function Albums() {
             <Feather name="book-open" size={44} color={colors.muted} />
             <Text style={[s.h2, { marginTop: spacing.md }]}>No albums yet</Text>
             <Text style={[s.bodyMuted, { marginTop: 4, textAlign: "center" }]}>
-              Tap "Create your ClickBook" on Home to start.
+              Tap &ldquo;Create your ClickBook&rdquo; on Home to start.
             </Text>
           </View>
         }

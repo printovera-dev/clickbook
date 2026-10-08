@@ -1,10 +1,9 @@
 # Gunicorn config for ClickBook API (production).
-import multiprocessing
 import os
 
 bind = "0.0.0.0:8001"
 worker_class = "uvicorn.workers.UvicornWorker"
-workers = int(os.environ.get("WEB_CONCURRENCY", max(2, min(multiprocessing.cpu_count(), 4))))
+workers = int(os.environ.get("WEB_CONCURRENCY", 2))  # keep low: each worker may hold a print render in memory
 threads = 1
 timeout = 120                 # image processing + PDF rendering can take a while
 graceful_timeout = 30

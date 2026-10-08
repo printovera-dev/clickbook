@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, TextInput, ScrollView, Pressable } from "react-native";
+import { Text, StyleSheet, TextInput, ScrollView, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, setAdminToken } from "@/src/api";
@@ -9,7 +9,7 @@ import { colors, spacing, radius, fonts } from "@/src/theme";
 export default function AdminLogin() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [username, setUsername] = useState("admin");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
@@ -27,8 +27,8 @@ export default function AdminLogin() {
     }
   };
   return (
-    <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingTop: insets.top + spacing.xxl }} style={{ backgroundColor: colors.surface }}>
-      <Pressable onPress={() => router.back()} testID="admin-login-back"><Text style={{ color: colors.brandPrimary, fontFamily: fonts.text }}>← Back</Text></Pressable>
+    <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingTop: insets.top + spacing.xxl, maxWidth: 480, width: "100%", alignSelf: "center" }} style={{ backgroundColor: colors.surface }}>
+      <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/home"))} testID="admin-login-back"><Text style={{ color: colors.brandPrimary, fontFamily: fonts.text }}>← Back</Text></Pressable>
       <Text style={[s.h1, { marginTop: spacing.xl }]}>Admin sign in</Text>
       <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>Only ClickBook staff can access the admin console.</Text>
       <Text style={[s.label, { marginTop: spacing.xl }]}>Username</Text>
@@ -37,7 +37,7 @@ export default function AdminLogin() {
       <TextInput testID="admin-password-input" value={password} onChangeText={setPassword} secureTextEntry placeholder="••••••••" placeholderTextColor={colors.muted} style={styles.input} />
       {err ? <Text style={{ color: colors.error, marginTop: spacing.sm }}>{err}</Text> : null}
       <Button testID="admin-login-button" label="Sign in" onPress={login} loading={loading} style={{ marginTop: spacing.xl }} />
-      <Text style={[s.bodyMuted, { marginTop: spacing.xxl, textAlign: "center" }]}>Demo: admin / clickbook@2026</Text>
+      <Text style={[s.bodyMuted, { marginTop: spacing.xxl, textAlign: "center" }]}>Restricted area. Credentials are issued by ClickBook and verified on the server.</Text>
     </ScrollView>
   );
 }

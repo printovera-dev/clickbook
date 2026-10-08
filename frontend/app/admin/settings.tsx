@@ -17,7 +17,16 @@ export default function AdminPricing() {
   const [minSheets, setMinSheets] = useState("");
   const [maxSheets, setMaxSheets] = useState("");
   const [giftWrapFee, setGiftWrapFee] = useState("");
+  const [whatsapp, setWhatsapp] = useState("");
   const [saved, setSaved] = useState(false);
+  const [curPw, setCurPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [pwMsg, setPwMsg] = useState("");
+  const changePw = async () => {
+    setPwMsg("");
+    try { await api.adminChangePassword(curPw, newPw); setPwMsg("Password updated ✓"); setCurPw(""); setNewPw(""); }
+    catch (e: any) { setPwMsg(e.message || "Could not change password"); }
+  };
 
   useEffect(() => {
     if (q.data?.settings) {
@@ -26,6 +35,7 @@ export default function AdminPricing() {
       setMinSheets(String(q.data.settings.min_sheets));
       setMaxSheets(String(q.data.settings.max_sheets));
       setGiftWrapFee(String(q.data.settings.gift_wrap_fee ?? 150));
+      setWhatsapp(String(q.data.settings.support_whatsapp ?? ""));
     }
   }, [q.data]);
 
@@ -36,6 +46,7 @@ export default function AdminPricing() {
       min_sheets: Number(minSheets),
       max_sheets: Number(maxSheets),
       gift_wrap_fee: Number(giftWrapFee),
+      support_whatsapp: whatsapp.replace(/\D/g, "") || undefined,
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
@@ -46,7 +57,7 @@ export default function AdminPricing() {
     <ScrollView style={{ flex: 1, backgroundColor: colors.surface }} contentContainerStyle={{ padding: spacing.xl, paddingTop: insets.top + spacing.md }}>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <Pressable onPress={() => router.back()} testID="admin-pricing-back"><Feather name="arrow-left" size={22} color={colors.onSurface} /></Pressable>
-        <Text style={s.label}>Pricing</Text>
+        <Text style={s.label}>Settings</Text>
         <View style={{ width: 22 }} />
       </View>
       <Text style={[s.h1, { marginTop: spacing.xl }]}>Pricing rules</Text>
@@ -62,8 +73,19 @@ export default function AdminPricing() {
       <TextInput testID="pricing-max" value={maxSheets} onChangeText={setMaxSheets} keyboardType="numeric" style={styles.input} />
       <Text style={[s.label, { marginTop: spacing.md }]}>Gift wrap add-on fee (₹)</Text>
       <TextInput testID="pricing-gift-wrap" value={giftWrapFee} onChangeText={setGiftWrapFee} keyboardType="numeric" style={styles.input} />
+      <Text style={[s.label, { marginTop: spacing.md }]}>Support WhatsApp number</Text>
+      <TextInput testID="settings-whatsapp" value={whatsapp} onChangeText={setWhatsapp} keyboardType="phone-pad" placeholder="10-digit number" placeholderTextColor={colors.muted} style={styles.input} />
 
       <Button testID="pricing-save" label={saved ? "Saved ✓" : "Save"} onPress={save} style={{ marginTop: spacing.xl }} />
+
+      <Text style={[s.h1, { marginTop: spacing.xxl }]}>Admin password</Text>
+      <Text style={[s.bodyMuted, { marginTop: 4 }]}>Credentials are stored hashed on the server. Minimum 8 characters.</Text>
+      <Text style={[s.label, { marginTop: spacing.xl }]}>Current password</Text>
+      <TextInput testID="settings-current-password" value={curPw} onChangeText={setCurPw} secureTextEntry style={styles.input} />
+      <Text style={[s.label, { marginTop: spacing.md }]}>New password</Text>
+      <TextInput testID="settings-new-password" value={newPw} onChangeText={setNewPw} secureTextEntry style={styles.input} />
+      {pwMsg ? <Text style={{ marginTop: spacing.sm, fontFamily: fonts.text, color: pwMsg.startsWith("Password") ? colors.onSurface : colors.error }}>{pwMsg}</Text> : null}
+      <Button testID="settings-change-password" label="Change password" variant="outline" onPress={changePw} style={{ marginTop: spacing.md, marginBottom: spacing.xxl }} />
     </ScrollView>
   );
 }

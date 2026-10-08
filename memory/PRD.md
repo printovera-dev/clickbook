@@ -67,6 +67,22 @@ ClickBook is a premium photo-album service that lets customers create beautifull
 - **Right-sized images**: thumbnails (400px) in grids, previews (1200px) in book/editor, originals only in the print pipeline. Backend derivatives are now **WebP** (thumbnail/preview), print stays JPEG. Catalog endpoints (`/covers`, `/layouts`, `/backgrounds`) accept `offset`/`limit` and return `total`/`next_offset`, and expose `thumbnail_url` (admin uploads → stored 400px derivative). Admin can add unlimited assets with no app change.
 - Verified with a 120-photo / 80-page stress album on web (virtualization confirmed by the testing agent); backend 89/89.
 
+## Feature updates (2026-10-04, iteration 13 — PWA, admin dashboard, responsive home, editor fixes)
+- **PWA (web target only)**: `public/manifest.json` (display standalone, 192/512 icons), `public/sw.js` (cache-first static assets, network-first shell, never caches `/api`), iOS meta tags + SW registration in `app/+html.tsx`, `InstallBanner` (beforeinstallprompt on Chrome/Android, Share→Add to Home Screen hint on iOS). Native app code untouched.
+- **Secure admin auth**: bcrypt password hashes + JWT (`JWT_SECRET`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ADMIN_JWT_EXPIRE_MINUTES` in `backend/.env`), legacy plaintext admin migrated automatically, `GET /admin/me`, `PUT /admin/password`. No credentials in the frontend. `/admin` route group guarded by `app/admin/_layout.tsx` (redirects to `/admin/login`).
+- **Admin dashboard (17 views)**: persistent sidebar ≥960px, dashboard menu on phones. New: Payments, Albums, Production (kanban by stage with advance), Layouts & Backgrounds CRUD, Album Designs, Hero Images / Sliders / Videos (CMS sub-views), Settings (pricing + WhatsApp + change password). Orders is now a responsive table: Client, Date of payment, Sheets, Order ID, Payment status, Production status, Album PDF / Print / Cover links. New endpoints: `/admin/payments`, `/admin/albums`, `/admin/layouts*`, `/admin/backgrounds*`; dashboard returns 14-day `daily` series.
+- **Home page**: fluid responsive (`src/layout.ts`, content capped at 1080px, 2-col steps / 3-col videos on tablet+). Guests tapping Chat/Orders/Profile (or `/login`) now land on the CMS home scrolled to the inline sign-in block with a hint — the legacy login screen is retired.
+- **Last page**: every album ends with the fixed ClickBook branding page (`home_content.last_page_url`, default `/api/files/home/last-page.webp`, replaceable in Admin → Home Page CMS → Logo & last page). Rendered in the 3D preview (`last` face) and appended by `pdf_renderer.render_frames` to Album.pdf + Print JPEGs.
+- **Editor**: Rotate 90° tool (`ImageTransform.rotate`, mirrored in PIL), on-canvas Delete Text button, cover style change resets the crop so the photo drops cleanly into the new frame, live 3D preview follows the active page (`focusPage`), page-order rows use light thumbnails, `PageCanvas`/faces memoised.
+- Lint: fixed unescaped JSX entities; RN-web `shadow*` → `boxShadow` on web in the editor/book.
+
+## Feature updates (2026-10-06, iteration 14)
+- Proportional artwork everywhere: `FluidImage` (contain, measured aspect ratio, white backdrop, loading placeholder) for cover selection, home heroes and sliders. Transparent PNG uploads are flattened on white server-side (was black); existing admin uploads reprocessed.
+- ClickBook branding artwork is the fixed **back cover** (3D preview back face, Album.pdf last page, `Cover/back_cover.jpg`); admin-replaceable in Home CMS → Logo & back cover.
+- PWA: iOS-specific install guidance (Safari → Share → Add to Home Screen; "open in Safari" for iOS Chrome; macOS Safari "Add to Dock"), standalone detection, 180px flattened apple-touch-icon. Android flow unchanged.
+- Profile: delivery address (pre-filled from last order) + optional GSTIN; checkout pre-fills saved address.
+- Razorpay: gateway errors surfaced as 400 with a clear message (checkout `checkout-error`). Live Key ID updated to `rzp_live_TkfGdtNF04gpK5`; Razorpay still rejects the supplied secret → awaiting correct Key Secret from the user.
+
 ## Deferred (roadmap)
 - Real WhatsApp/SMS provider (playbook-driven), real Razorpay integration, ML-driven auto-layout selection (currently rhythm-based), image cropping/zoom inside placeholders, 3+ photo layouts, Lottie process-bot animations.
 

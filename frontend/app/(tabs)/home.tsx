@@ -1,9 +1,9 @@
 // ClickBook Home — CMS-driven landing page (GET /home). Sections are rendered through a FlatList so lower
 // sections mount lazily as the user scrolls; sliders/videos/heroes are all editable from Admin → Home Page.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, FlatList, Pressable, StyleSheet, Animated, RefreshControl, useWindowDimensions, ScrollView } from "react-native";
+import { View, Text, FlatList, Pressable, StyleSheet, Animated, RefreshControl, ScrollView } from "react-native";
 import { Image } from "expo-image";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Feather from "@react-native-vector-icons/feather";
 import { useQuery } from "@tanstack/react-query";
@@ -13,14 +13,18 @@ import { HomeLogin } from "@/src/components/home-login";
 import { SideMenu } from "@/src/components/side-menu";
 import { VideoCard } from "@/src/components/video-card";
 import { Thumb } from "@/src/components/thumb";
+import { FluidImage } from "@/src/components/fluid-image";
 import { colors, spacing, radius, fonts } from "@/src/theme";
+import { MAX_CONTENT_W, useLayout } from "@/src/layout";
 
 const STEP_COLORS = [colors.homeBlue, colors.homePink, colors.homeMint, "#8B6FD8", "#E8B43A"];
 
 export default function Home() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { width } = useWindowDimensions();
+  const { width, contentW, isTablet, isDesktop, columns } = useLayout();
+  const params = useLocalSearchParams<{ login?: string; next?: string }>();
+  const listRef = useRef<FlatList>(null);
   const [menu, setMenu] = useState(false);
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
   const [splash, setSplash] = useState(true);
@@ -47,14 +51,32 @@ export default function Home() {
   const drafts = (albums.data?.albums || []).filter((a: any) => a.state === "draft" && a.is_complete);
   const activeOrder = (orders.data?.orders || []).find((o: any) => ["processing", "printing", "packaging", "out_for_delivery"].includes(o.production_status));
   const unread = notifs.data?.unread_count || 0;
-  const heroH = Math.round((width - spacing.lg * 2) / (16 / 9));
+  const videoW = isTablet ? Math.floor((contentW - spacing.lg * 2 - spacing.md * (columns - 1)) / columns) : Math.min(300, width - spacing.lg * 2 - 24);
+
+  // Guests arriving from a protected tab (Chat / Orders / Profile) or /login are scrolled to the inline sign-in block.
+  const wantsLogin = params.login === "1" && loggedIn === false;
+  useEffect(() => {
+    if (!wantsLogin || !c) return;
+    const t = setTimeout(() => listRef.current?.scrollToIndex({ index: 1, animated: true, viewPosition: 0.1 }), splash ? 1300 : 250);
+    return () => clearTimeout(t);
+  }, [wantsLogin, c, splash]);
 
   const sections = useMemo(() => {
     if (!c) return [];
     const isIn = loggedIn === true;
     const list: { key: string; render: () => React.ReactNode }[] = [
       { key: "slider1", render: () => <AutoSlider testID="home-slider1" slides={c.sliders?.slider1?.slides || []} intervalMs={c.sliders?.slider1?.interval_ms} /> },
-      { key: "login1", render: () => <HomeLogin testID="home-login1" title={t.login_title} accent={t.login_accent} subtitle={t.login_sub} loggedIn={isIn} /> },
+      { key: "login1", render: () => (
+        <View>
+          {wantsLogin ? (
+            <View style={styles.signinHint} testID="home-signin-hint">
+              <Feather name="lock" size={14} color={colors.homeBlue} />
+              <Text style={styles.signinHintTxt}>Sign in to open {params.next === "chat" ? "Chat" : params.next === "orders" ? "your Orders" : params.next === "profile" ? "your Profile" : "your account"}.</Text>
+            </View>
+          ) : null}
+          <HomeLogin testID="home-login1" title={t.login_title} accent={t.login_accent} subtitle={t.login_sub} loggedIn={isIn} />
+        </View>
+      ) },
     ];
     if (isIn && (drafts.length || activeOrder)) list.push({ key: "mine", render: () => (
       <View style={styles.section}>
@@ -90,7 +112,7 @@ export default function Home() {
     list.push(
       { key: "pricing", render: () => (
         <View style={styles.section} testID="home-pricing">
-          {hero("pricing") ? <Image source={{ uri: fileUrl(hero("pricing")) }} style={[styles.hero, { height: heroH }]} contentFit="cover" cachePolicy="memory-disk" transition={200} /> : null}
+          {hero("pricing") ? <FluidImage uri={fileUrl(hero("pricing"))} width={contentW - spacing.lg * 2} maxHeight={560} recyclingKey="hero-pricing" style={[styles.hero]} testID="home-hero-pricing" /> : null}
           {pricing ? (
             <View style={styles.priceRow}>
               <View style={[styles.priceCell, { backgroundColor: colors.homeBlueSoft }]}>
@@ -110,10 +132,10 @@ export default function Home() {
       { key: "steps", render: () => (
         <View style={styles.section} testID="home-steps">
           <Text style={styles.h}>{t.steps_title} <Feather name="heart" size={18} color={colors.homePink} /></Text>
-          {hero("steps") ? <Image source={{ uri: fileUrl(hero("steps")) }} style={[styles.hero, { height: heroH, marginTop: spacing.md }]} contentFit="cover" cachePolicy="memory-disk" transition={200} /> : null}
-          <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+          {hero("steps") ? <FluidImage uri={fileUrl(hero("steps"))} width={contentW - spacing.lg * 2} maxHeight={560} recyclingKey="hero-steps" style={[styles.hero, { marginTop: spacing.md }]} testID="home-hero-steps" /> : null}
+          <View style={[{ marginTop: spacing.md, gap: spacing.sm }, isTablet && { flexDirection: "row", flexWrap: "wrap" }]}>
             {(c.steps || []).map((st: any, i: number) => (
-              <View key={st.n} style={styles.stepRow} testID={`home-step-${i + 1}`}>
+              <View key={st.n} style={[styles.stepRow, isTablet && { flexBasis: "48%", flexGrow: 1 }]} testID={`home-step-${i + 1}`}>
                 <View style={[styles.stepNum, { backgroundColor: STEP_COLORS[i % STEP_COLORS.length] }]}><Text style={styles.stepNumText}>{st.n}</Text></View>
                 <Text style={styles.stepText}>{st.title}</Text>
               </View>
@@ -124,16 +146,22 @@ export default function Home() {
       { key: "why", render: () => (
         <View style={styles.section} testID="home-why">
           <Text style={styles.h}>{t.why_title}</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md, paddingTop: spacing.md, paddingRight: spacing.lg }}>
-            {(c.videos || []).map((v: any) => <VideoCard key={v.id} video={v} width={Math.min(300, width - spacing.lg * 2 - 24)} />)}
-          </ScrollView>
+          {isTablet ? (
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.md, paddingTop: spacing.md }}>
+              {(c.videos || []).map((v: any) => <VideoCard key={v.id} video={v} width={videoW} />)}
+            </View>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md, paddingTop: spacing.md, paddingRight: spacing.lg }}>
+              {(c.videos || []).map((v: any) => <VideoCard key={v.id} video={v} width={videoW} />)}
+            </ScrollView>
+          )}
         </View>
       ) },
       { key: "slider2", render: () => <AutoSlider testID="home-slider2" slides={c.sliders?.slider2?.slides || []} intervalMs={c.sliders?.slider2?.interval_ms} /> },
       { key: "privacy", render: () => (
         <View style={styles.section} testID="home-privacy">
           <Text style={styles.h}>{t.privacy_title}</Text>
-          {hero("privacy") ? <Image source={{ uri: fileUrl(hero("privacy")) }} style={[styles.hero, { height: heroH, marginTop: spacing.md }]} contentFit="cover" cachePolicy="memory-disk" transition={200} /> : null}
+          {hero("privacy") ? <FluidImage uri={fileUrl(hero("privacy"))} width={contentW - spacing.lg * 2} maxHeight={560} recyclingKey="hero-privacy" style={[styles.hero, { marginTop: spacing.md }]} testID="home-hero-privacy" /> : null}
           <Text style={[styles.muted, { textAlign: "center", marginTop: spacing.md }]}>{t.privacy_sub}</Text>
           <Pressable testID="home-privacy-link" onPress={() => router.push({ pathname: "/policy/[key]", params: { key: "privacy" } })} style={styles.linkBtn}>
             <Feather name="shield" size={16} color={colors.homeBlue} /><Text style={styles.linkBtnText}>Read our Privacy Policy</Text>
@@ -146,7 +174,7 @@ export default function Home() {
         <View style={styles.section} testID="home-final-hero">
           <Text style={[styles.h, { fontStyle: "italic" }]}>&ldquo;{t.final_quote}&rdquo;</Text>
           <Text style={[styles.muted, { textAlign: "center" }]}>{t.final_sub}</Text>
-          {hero("final") ? <Image source={{ uri: fileUrl(hero("final")) }} style={[styles.hero, { height: heroH, marginTop: spacing.md }]} contentFit="cover" cachePolicy="memory-disk" transition={200} /> : null}
+          {hero("final") ? <FluidImage uri={fileUrl(hero("final"))} width={contentW - spacing.lg * 2} maxHeight={560} recyclingKey="hero-final" style={[styles.hero, { marginTop: spacing.md }]} testID="home-hero-final" /> : null}
         </View>
       ) },
       { key: "login3", render: () => <HomeLogin testID="home-login3" title={t.cta_title} loggedIn={isIn} compact /> },
@@ -165,22 +193,25 @@ export default function Home() {
     );
     return list;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [c, pricing, loggedIn, drafts, activeOrder, width, heroH]);
+  }, [c, pricing, loggedIn, drafts, activeOrder, width, contentW, isTablet, videoW, wantsLogin, params.next]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.homeBg }}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
+        <View style={styles.headerInner}>
         <Pressable onPress={() => setMenu(true)} testID="home-menu" style={styles.iconBtn} hitSlop={8}><Feather name="menu" size={22} color={colors.homeCharcoal} /></Pressable>
         <View style={{ alignItems: "center" }}>
-          {c?.logo_url ? <Image source={{ uri: fileUrl(c.logo_url) }} style={{ width: Math.min(264, width - 140), height: 88 }} contentFit="contain" cachePolicy="memory-disk" /> : <Text style={styles.brand}>Click<Text style={{ color: colors.homePink }}>Book</Text></Text>}
+          {c?.logo_url ? <Image source={{ uri: fileUrl(c.logo_url) }} style={{ width: Math.min(264, width - 140), height: isDesktop ? 72 : 88 }} contentFit="contain" cachePolicy="memory-disk" /> : <Text style={styles.brand}>Click<Text style={{ color: colors.homePink }}>Book</Text></Text>}
         </View>
-        <Pressable onPress={() => router.push(loggedIn ? "/notifications" : "/login")} testID="home-notifications-bell" style={styles.iconBtn} hitSlop={8}>
+        <Pressable onPress={() => router.push(loggedIn ? "/notifications" : { pathname: "/(tabs)/home", params: { login: "1" } } as any)} testID="home-notifications-bell" style={styles.iconBtn} hitSlop={8}>
           <Feather name="bell" size={22} color={colors.homeCharcoal} />
           {unread > 0 ? <View style={styles.badge} testID="home-notifications-badge"><Text style={styles.badgeTxt}>{unread > 9 ? "9+" : unread}</Text></View> : null}
         </Pressable>
+        </View>
       </View>
 
       <FlatList
+        ref={listRef}
         testID="home-sections"
         data={sections}
         keyExtractor={(s) => s.key}
@@ -188,7 +219,8 @@ export default function Home() {
         initialNumToRender={3}
         maxToRenderPerBatch={2}
         windowSize={3}
-        contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xxl }}
+        onScrollToIndexFailed={() => {}}
+        contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xxl, width: "100%", maxWidth: MAX_CONTENT_W, alignSelf: "center" }}
         refreshControl={<RefreshControl refreshing={home.isFetching} onRefresh={() => { home.refetch(); albums.refetch(); orders.refetch(); }} tintColor={colors.homePink} />}
         ListEmptyComponent={home.isError ? (
           <View style={{ padding: spacing.xxl, alignItems: "center" }}>
@@ -213,7 +245,10 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.md, paddingBottom: spacing.sm, backgroundColor: colors.homeBg, borderBottomWidth: 1, borderBottomColor: colors.border },
+  header: { paddingHorizontal: spacing.md, paddingBottom: spacing.sm, backgroundColor: colors.homeBg, borderBottomWidth: 1, borderBottomColor: colors.border },
+  headerInner: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", maxWidth: MAX_CONTENT_W, alignSelf: "center" },
+  signinHint: { flexDirection: "row", alignItems: "center", gap: spacing.sm, alignSelf: "center", marginBottom: spacing.sm, paddingHorizontal: spacing.lg, minHeight: 36, borderRadius: radius.pill, backgroundColor: colors.homeBlueSoft },
+  signinHintTxt: { fontFamily: fonts.text, fontSize: 13, color: colors.homeBlue, fontWeight: "600" },
   iconBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: radius.md, backgroundColor: colors.homeCard, borderWidth: 1, borderColor: colors.border },
   badge: { position: "absolute", top: 4, right: 4, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 4, backgroundColor: colors.homePink, alignItems: "center", justifyContent: "center" },
   badgeTxt: { color: "#FFF", fontSize: 10, fontFamily: fonts.text, fontWeight: "700" },
@@ -225,7 +260,7 @@ const styles = StyleSheet.create({
   muted: { fontFamily: fonts.text, fontSize: 13, color: colors.muted, lineHeight: 19 },
   cardTitle: { fontFamily: fonts.text, fontSize: 15, fontWeight: "700", color: colors.homeCharcoal },
   rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  hero: { width: "100%", borderRadius: radius.lg, backgroundColor: colors.homeBlueSoft },
+  hero: { alignSelf: "center", borderRadius: radius.lg, overflow: "hidden", backgroundColor: colors.homeCard },
   priceRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.md },
   priceCell: { flex: 1, borderRadius: radius.lg, padding: spacing.lg, borderWidth: 1, borderColor: colors.border },
   priceLabel: { fontFamily: fonts.text, fontSize: 12, textTransform: "uppercase", letterSpacing: 0.5, color: colors.homeCharcoal },

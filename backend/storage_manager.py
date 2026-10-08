@@ -154,7 +154,8 @@ def safe_folder_name(name: str) -> str:
     return cleaned[:80] or "album"
 
 
-def save_production_package(folder: str, pdf: bytes, cover_jpg: bytes, page_jpgs: list, manifest: dict) -> dict:
+def save_production_package(folder: str, pdf: bytes, cover_jpg: bytes, page_jpgs: list, manifest: dict,
+                            back_cover_jpg: bytes = None) -> dict:
     rel = f"{DOWNLOADS_DIR}/{safe_folder_name(folder)}"
     if not _use_s3():
         # rebuilds replace the folder so stale pages from an older render never ship to print
@@ -163,6 +164,8 @@ def save_production_package(folder: str, pdf: bytes, cover_jpg: bytes, page_jpgs
     cover_path = f"{rel}/Cover/cover.jpg"
     _put(pdf_path, pdf, "application/pdf")
     _put(cover_path, cover_jpg, "image/jpeg")
+    if back_cover_jpg:
+        _put(f"{rel}/Cover/back_cover.jpg", back_cover_jpg, "image/jpeg")
     print_paths = []
     for i, data in enumerate(page_jpgs, start=1):
         p = f"{rel}/Print/page_{i:03d}.jpg"

@@ -1,0 +1,19 @@
+{
+  "name": "ClickBook — Preserving Memories",
+  "short_name": "ClickBook",
+  "description": "Create beautifully printed 8×8 inch photobooks in 60 seconds.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F7F5FB",
+  "theme_color": "#2B2B2E",
+  "lang": "en",
+  "categories": ["photo", "shopping", "lifestyle"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

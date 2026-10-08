@@ -37,9 +37,13 @@ def make_derivatives(data: bytes) -> dict:
     try:
         img = Image.open(io.BytesIO(data))
         img = ImageOps.exif_transpose(img)
-        if img.mode not in ("RGB", "L"):
-            img = img.convert("RGB")
-        elif img.mode == "L":
+        if img.mode in ("RGBA", "LA", "P") and ("transparency" in img.info or img.mode != "P"):
+            # Flatten transparency onto white — converting straight to RGB turns transparent pixels black,
+            # which showed up as black backgrounds behind admin-uploaded hero/slider PNGs.
+            rgba = img.convert("RGBA")
+            bg = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
+            img = Image.alpha_composite(bg, rgba).convert("RGB")
+        elif img.mode != "RGB":
             img = img.convert("RGB")
     except Exception as e:
         raise ValueError(f"Not a valid image: {e}")

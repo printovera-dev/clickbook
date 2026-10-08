@@ -80,16 +80,11 @@ memory/test_credentials.md
 
 # Mobile development
 android-sdk/
-.env
-.env.*
-*.env
 credentials.json
 *.key
 .credentials
 
 # secrets & runtime data
-.env
-backend/.env
 backend/.env.production
 backend/deploy/.env
 backend/storage/
@@ -103,3 +98,6 @@ backend/storage/
 !backend/storage/
 backend/storage/*
 !backend/storage/home/
+.env
+.env.*
+*.env

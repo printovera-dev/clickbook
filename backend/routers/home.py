@@ -47,6 +47,7 @@ def default_home_content() -> dict:
             {"n": "05", "title": "Order Your ClickBook"},
         ],
         "logo_url": f"{HOME_ASSET}/logo.png",
+        "last_page_url": f"{HOME_ASSET}/last-page.webp",
         "texts": {
             "login_title": "Your Most Beautiful Memories,",
             "login_accent": "Beautifully Preserved.",
@@ -69,6 +70,7 @@ async def get_home_doc() -> dict:
         doc = default_home_content()
         await db.home_content.insert_one(dict(doc))
         doc.pop("_id", None)
+    doc.setdefault("last_page_url", f"{HOME_ASSET}/last-page.webp")
     return doc
 
 
@@ -116,6 +118,7 @@ class HomeUpdate(BaseModel):
     steps: Optional[List[Dict[str, Any]]] = None
     texts: Optional[Dict[str, str]] = None
     logo_url: Optional[str] = None
+    last_page_url: Optional[str] = None
 
 
 @router.get("/admin/home")

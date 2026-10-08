@@ -10,13 +10,16 @@ export default function TabsLayout() {
   const [authed, setAuthed] = useState<boolean | null>(null);
   useEffect(() => { getToken().then((t) => setAuthed(!!t)); }, []);
 
-  // Home is public; the other tabs need a signed-in customer → send guests to the existing login flow.
-  // Token is re-read on every press so signing in (or out) never leaves the guard stale.
+  // Home is public; the other tabs need a signed-in customer → guests stay on the new home page and are taken to its
+  // inline sign-in block (never the legacy login screen). Token is re-read on every press so the guard is never stale.
   const guard = (name: string) => ({
     tabPress: (e: any) => {
       if (authed !== false) return;
       e.preventDefault();
-      getToken().then((t) => { if (t) { setAuthed(true); router.push(`/(tabs)/${name}` as any); } else router.push("/login"); });
+      getToken().then((t) => {
+        if (t) { setAuthed(true); router.push(`/(tabs)/${name}` as any); }
+        else router.push({ pathname: "/(tabs)/home", params: { login: "1", next: name } } as any);
+      });
     },
   });
 

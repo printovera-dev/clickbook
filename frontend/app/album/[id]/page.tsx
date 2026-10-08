@@ -15,7 +15,7 @@ import { PageCanvas } from "@/src/components/page-canvas";
 import { Thumb } from "@/src/components/thumb";
 import {
   Page, Photo, TextObject, CoverDesign, FONTS, TEXT_COLORS, LAYOUT_NAMES, DEFAULT_POSITIONS, COVER_STYLES,
-  slotRects, imageDrawRect, defaultTransform, newTextObject, fontFamilyFor, coverToPage, pageToCover,
+  slotRects, imageDrawRect, defaultTransform, newTextObject, fontFamilyFor, coverToPage, pageToCover, rotatedDims,
 } from "@/src/design";
 
 type Tool = "image" | "replace" | "text" | "layout" | "background" | "coverstyle";
@@ -96,7 +96,12 @@ export default function PageEditor() {
   const slotRect = selSlot != null && rects[selSlot] ? rects[selSlot] : null;
   const slotTr = page && selSlot != null ? (page.images?.[String(selSlot)] || defaultTransform()) : null;
   const slotPhotoId = page && selSlot != null ? page.photo_ids[selSlot] : undefined;
-  const slotDims = slotPhotoId ? dims.current[slotPhotoId] || (photosById[slotPhotoId]?.width ? { w: photosById[slotPhotoId].width!, h: photosById[slotPhotoId].height! } : null) : null;
+  const slotRawDims = slotPhotoId ? dims.current[slotPhotoId] || (photosById[slotPhotoId]?.width ? { w: photosById[slotPhotoId].width!, h: photosById[slotPhotoId].height! } : null) : null;
+  const slotDims = slotRawDims ? rotatedDims(slotRawDims.w, slotRawDims.h, slotTr) : null;
+  const rotateImage = () => {
+    if (selSlot == null || !slotTr) return;
+    updateImage(selSlot, { rotate: ((((slotTr.rotate || 0) + 90) % 360) as 0 | 90 | 180 | 270), ox: 0, oy: 0 });
+  };
 
   const onImgStart = () => { gestureStart.current = { tr: slotTr, page }; snapshot(); };
   const onImgUpdate = (tx: number, ty: number, sc: number) => {
@@ -204,7 +209,8 @@ export default function PageEditor() {
   const setCoverStyle = (key: string) => {
     if (!page) return;
     const st = COVER_STYLES.find((c) => c.key === key); if (!st) return;
-    commit({ ...page, slots: [st.frame], background: st.background });
+    // New frame → reset the crop so the photo drops cleanly into the new template (no stale offsets / layout jump).
+    commit({ ...page, slots: [st.frame], background: st.background, images: { "0": { ...defaultTransform(), photo_id: page.photo_ids[0] } } });
     setCoverKey(key as any);
   };
   const save = async () => {
@@ -285,6 +291,10 @@ export default function PageEditor() {
                   <Feather name="maximize-2" size={12} color={colors.onBrandPrimary} />
                 </View>
               </GestureDetector>
+              {/* Always-available Delete Text action, right on the selected text layer */}
+              <Pressable testID="page-editor-text-delete" onPress={deleteText} hitSlop={6} style={[styles.handle, styles.deleteHandle, { left: Math.max(0, selectedTextObj.x * size - 16), top: Math.max(0, selectedTextObj.y * size - 16) }]}>
+                <Feather name="trash-2" size={13} color="#FFF" />
+              </Pressable>
             </>
           ) : null}
         </View>
@@ -310,6 +320,7 @@ export default function PageEditor() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
               <Chip icon="zoom-in" label="Zoom in" onPress={() => updateImage(selSlot, { scale: Math.min(4, slotTr.scale + 0.2) })} testID="img-zoom-in" />
               <Chip icon="zoom-out" label="Zoom out" onPress={() => updateImage(selSlot, { scale: Math.max(1, slotTr.scale - 0.2), ox: slotTr.scale - 0.2 <= 1 ? 0 : slotTr.ox, oy: slotTr.scale - 0.2 <= 1 ? 0 : slotTr.oy })} testID="img-zoom-out" />
+              <Chip icon="rotate-cw" label="Rotate 90°" onPress={rotateImage} testID="img-rotate" />
               <Chip icon="maximize" label="Fill" active={slotTr.fit !== "fit"} onPress={() => updateImage(selSlot, { fit: "fill", scale: 1, ox: 0, oy: 0 })} testID="img-fill" />
               <Chip icon="minimize" label="Fit" active={slotTr.fit === "fit"} onPress={() => updateImage(selSlot, { fit: "fit", scale: 1, ox: 0, oy: 0 })} testID="img-fit" />
               <Chip icon="rotate-ccw" label="Reset" onPress={() => updateImage(selSlot, defaultTransform())} testID="img-reset" />
@@ -445,8 +456,9 @@ const styles = StyleSheet.create({
   topBtn: { minHeight: 44, justifyContent: "center" },
   topBtnText: { color: colors.brandPrimary, fontFamily: fonts.text, fontSize: 15 },
   iconBtn: { minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" },
-  canvasWrap: { backgroundColor: colors.surfaceSecondary, shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 6 },
+  canvasWrap: { backgroundColor: colors.surfaceSecondary, ...(Platform.OS === "web" ? { boxShadow: "0 8px 16px rgba(0,0,0,0.15)" } as any : { shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 6 }) },
   handle: { position: "absolute", width: 32, height: 32, borderRadius: 16, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: colors.surfaceSecondary },
+  deleteHandle: { backgroundColor: colors.error, zIndex: 60 },
   sheet: { backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.sm },
   toolTab: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, minHeight: 40, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary },
   toolTabActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },

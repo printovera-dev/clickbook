@@ -1,5 +1,6 @@
 """Print-ready PDF renderer (8x8 in @ 300 dpi) built from the saved design model — same crop/offset
 math and text model as the app's PageCanvas. Uses print-resolution derivatives, never the preview."""
+import gc
 import io
 from pathlib import Path
 from typing import Optional
@@ -29,12 +30,30 @@ def _color(c: Optional[str], fallback="#1C1917"):
         return ImageColor.getrgb(fallback)
 
 
-def _open_photo(photo: dict) -> Optional[Image.Image]:
+def _open_photo(photo: dict, tr: Optional[dict] = None) -> Optional[Image.Image]:
     data = get_file_bytes(photo.get("print_path") or "") or get_file_bytes(photo.get("original_path") or "")
     if not data:
         return None
-    img = Image.open(io.BytesIO(data))
-    return img.convert("RGB")
+    img = Image.open(io.BytesIO(data)).convert("RGB")
+    rot = int((tr or {}).get("rotate", 0) or 0) % 360
+    if rot:  # same 90° steps as the app's rotate tool
+        img = img.rotate(-rot, expand=True)
+    return img
+
+
+def _load_last_page(size_px: int, last_page_bytes: Optional[bytes]) -> Image.Image:
+    """Fixed closing page for every ClickBook (branding page, admin-replaceable via Home CMS)."""
+    canvas = Image.new("RGB", (size_px, size_px), (255, 255, 255))
+    if not last_page_bytes:
+        return canvas
+    try:
+        img = Image.open(io.BytesIO(last_page_bytes)).convert("RGB")
+    except Exception:  # noqa: BLE001
+        return canvas
+    r = min(size_px / img.width, size_px / img.height)
+    w, h = max(1, int(img.width * r)), max(1, int(img.height * r))
+    canvas.paste(img.resize((w, h), Image.LANCZOS), ((size_px - w) // 2, (size_px - h) // 2))
+    return canvas
 
 
 def _wrap(draw: ImageDraw.ImageDraw, text: str, font, max_w: int):
@@ -85,13 +104,13 @@ def render_page(page: dict, photos_by_id: dict, layouts_by_id: dict, size_px: in
         photo = photos_by_id.get(pid)
         if not photo:
             continue
-        img = _open_photo(photo)
-        if img is None:
-            continue
         pos = positions[i]
         sx, sy = int(pos["x"] * size_px), int(pos["y"] * size_px)
         sw, sh = max(1, int(pos["w"] * size_px)), max(1, int(pos["h"] * size_px))
         tr = images.get(str(i)) or default_transform()
+        img = _open_photo(photo, tr)
+        if img is None:
+            continue
         dx, dy, dw, dh = image_draw_rect(sw, sh, img.width, img.height, tr)
         scaled = img.resize((max(1, int(dw)), max(1, int(dh))), Image.LANCZOS)
         slot = Image.new("RGB", (sw, sh), _color(page.get("background"), "#FFFFFF"))
@@ -111,7 +130,7 @@ def render_cover(album: dict, photos_by_id: dict, size_px: int = PAGE_PX) -> Ima
     canvas = Image.new("RGB", (size_px, size_px), _color(cd.get("background"), "#C56A47"))
     photo = photos_by_id.get(cd.get("photo_id"))
     if photo:
-        img = _open_photo(photo)
+        img = _open_photo(photo, cd.get("image"))
         if img is not None:
             frame = cd.get("frame") or {"x": 0, "y": 0, "w": 1, "h": 1}
             sx, sy = int(frame["x"] * size_px), int(frame["y"] * size_px)
@@ -130,13 +149,15 @@ def render_cover(album: dict, photos_by_id: dict, size_px: int = PAGE_PX) -> Ima
     return canvas
 
 
-def render_frames(album: dict, layouts_by_id: dict):
-    """Returns (cover_image, [page_images]) at 8x8 in @ 300 dpi."""
+def render_frames(album: dict, layouts_by_id: dict, back_cover_bytes: Optional[bytes] = None):
+    """Returns (cover_image, [page_images], back_cover_image) at 8x8 in @ 300 dpi.
+    The back cover is the fixed ClickBook branding artwork (admin-replaceable)."""
     photos_by_id = {p["id"]: p for p in album.get("photos", [])}
     pages_sorted = sorted(album.get("pages", []), key=lambda p: p.get("order", 0))
     cover = render_cover(album, photos_by_id)
     pages = [render_page(p, photos_by_id, layouts_by_id) for p in pages_sorted]
-    return cover, pages
+    back = _load_last_page(PAGE_PX, back_cover_bytes)
+    return cover, pages, back
 
 
 def frames_to_pdf(cover: Image.Image, pages: list) -> bytes:
@@ -151,16 +172,75 @@ def frame_to_jpeg(img: Image.Image) -> bytes:
     return buf.getvalue()
 
 
-def render_album_pdf(album: dict, layouts_by_id: dict) -> bytes:
-    cover, pages = render_frames(album, layouts_by_id)
-    return frames_to_pdf(cover, pages)
+def _jpeg_size(data: bytes) -> tuple[int, int]:
+    with Image.open(io.BytesIO(data)) as im:
+        return im.size
 
 
-def render_production_package(album: dict, layouts_by_id: dict) -> dict:
-    """Everything the print facility needs: Album.pdf + full-res cover JPEG + sequential page JPEGs."""
-    cover, pages = render_frames(album, layouts_by_id)
+def jpegs_to_pdf(jpegs: list, page_in: float = 8.0) -> bytes:
+    """Low-memory PDF writer: embeds the already-encoded JPEG pages as DCTDecode image XObjects, one 8×8 in page
+    each, without decoding them again. Pillow's PDF writer needs every decoded frame in RAM at once (≈17 MB/page →
+    ~1 GB for a 40-page album), which exceeded the production container's memory and killed the worker."""
+    pt = page_in * 72
+    objs: list = []  # list of bytes bodies; object number = index + 1
+
+    def add(body: bytes) -> int:
+        objs.append(body)
+        return len(objs)
+
+    page_refs: list = []
+    pages_obj_no = 2  # reserved: 1 = catalog, 2 = pages
+    add(b"")  # placeholder catalog
+    add(b"")  # placeholder pages
+    for data in jpegs:
+        w, h = _jpeg_size(data)
+        img_no = add(b"<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceRGB /BitsPerComponent 8 "
+                     b"/Filter /DCTDecode /Length %d >>\nstream\n" % (w, h, len(data)) + data + b"\nendstream")
+        content = b"q %.2f 0 0 %.2f 0 0 cm /Im0 Do Q" % (pt, pt)
+        content_no = add(b"<< /Length %d >>\nstream\n" % len(content) + content + b"\nendstream")
+        page_no = add(b"<< /Type /Page /Parent %d 0 R /MediaBox [0 0 %.2f %.2f] /Resources << /XObject << /Im0 %d 0 R >> >> "
+                      b"/Contents %d 0 R >>" % (pages_obj_no, pt, pt, img_no, content_no))
+        page_refs.append(page_no)
+    objs[0] = b"<< /Type /Catalog /Pages 2 0 R >>"
+    objs[1] = b"<< /Type /Pages /Kids [" + b" ".join(b"%d 0 R" % n for n in page_refs) + b"] /Count %d >>" % len(page_refs)
+
+    out = io.BytesIO()
+    out.write(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
+    offsets = []
+    for i, body in enumerate(objs, start=1):
+        offsets.append(out.tell())
+        out.write(b"%d 0 obj\n" % i + body + b"\nendobj\n")
+    xref = out.tell()
+    out.write(b"xref\n0 %d\n0000000000 65535 f \n" % (len(objs) + 1))
+    for off in offsets:
+        out.write(b"%010d 00000 n \n" % off)
+    out.write(b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objs) + 1, xref))
+    return out.getvalue()
+
+
+def render_album_pdf(album: dict, layouts_by_id: dict, back_cover_bytes: Optional[bytes] = None) -> bytes:
+    return render_production_package(album, layouts_by_id, back_cover_bytes)["pdf"]
+
+
+def render_production_package(album: dict, layouts_by_id: dict, back_cover_bytes: Optional[bytes] = None) -> dict:
+    """Everything the print facility needs: Album.pdf (front cover, pages, back cover) + full-res cover JPEGs
+    (Cover/cover.jpg + Cover/back_cover.jpg) + sequential inner page JPEGs.
+    Streams page by page: each frame is encoded to JPEG and released before the next one is rendered."""
+    photos_by_id = {p["id"]: p for p in album.get("photos", [])}
+    pages_sorted = sorted(album.get("pages", []), key=lambda p: p.get("order", 0))
+
+    cover_jpg = frame_to_jpeg(render_cover(album, photos_by_id))
+    page_jpgs = []
+    for p in pages_sorted:
+        frame = render_page(p, photos_by_id, layouts_by_id)
+        page_jpgs.append(frame_to_jpeg(frame))
+        frame.close()
+        del frame
+        gc.collect()
+    back_jpg = frame_to_jpeg(_load_last_page(PAGE_PX, back_cover_bytes))
     return {
-        "pdf": frames_to_pdf(cover, pages),
-        "cover": frame_to_jpeg(cover),
-        "pages": [frame_to_jpeg(p) for p in pages],
+        "pdf": jpegs_to_pdf([cover_jpg, *page_jpgs, back_jpg]),
+        "cover": cover_jpg,
+        "back_cover": back_jpg,
+        "pages": page_jpgs,
     }

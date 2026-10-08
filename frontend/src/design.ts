@@ -1,6 +1,12 @@
 // Shared design model (mirrors backend/design.py). Fractions are relative to the page.
 export type Rect = { x: number; y: number; w: number; h: number };
-export type ImageTransform = { photo_id?: string; scale: number; ox: number; oy: number; fit?: "fill" | "fit" };
+export type ImageTransform = { photo_id?: string; scale: number; ox: number; oy: number; fit?: "fill" | "fit"; rotate?: 0 | 90 | 180 | 270 };
+
+/** Image dimensions after the 90° rotation steps in the transform (same as the print renderer's PIL rotate). */
+export function rotatedDims(w: number, h: number, tr?: ImageTransform | null) {
+  const r = ((tr?.rotate || 0) % 360 + 360) % 360;
+  return r === 90 || r === 270 ? { w: h, h: w } : { w, h };
+}
 export type TextObject = {
   id: string; text: string; x: number; y: number; w: number; h: number;
   font: FontKey; size: number; weight: "regular" | "bold"; italic?: boolean;

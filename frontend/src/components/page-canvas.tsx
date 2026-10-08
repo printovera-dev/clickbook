@@ -1,10 +1,10 @@
 // Renders a page from the design model at any size. Used by the 3D preview, editor and page editor,
 // so what the customer sees is exactly what the print PDF renders.
-import { useState } from "react";
+import { memo, useState } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Image } from "expo-image";
 import {
-  Page, Photo, TextObject, slotRects, imageDrawRect, defaultTransform, fontFamilyFor,
+  Page, Photo, TextObject, slotRects, imageDrawRect, defaultTransform, fontFamilyFor, rotatedDims,
 } from "@/src/design";
 import { colors } from "@/src/theme";
 import { fileUrl } from "@/src/api";
@@ -23,7 +23,9 @@ type Props = {
   onImageDims?: (photoId: string, w: number, h: number) => void;
 };
 
-export function PageCanvas({ page, photosById, size, pageNumber, numberSide = "right", selectedSlot, selectedText, onSlotPress, onTextPress, hideText, onImageDims }: Props) {
+export const PageCanvas = memo(PageCanvasImpl);
+
+function PageCanvasImpl({ page, photosById, size, pageNumber, numberSide = "right", selectedSlot, selectedText, onSlotPress, onTextPress, hideText, onImageDims }: Props) {
   const rects = slotRects(page);
   const [dims, setDims] = useState<Record<string, { w: number; h: number }>>({});
   return (
@@ -33,8 +35,15 @@ export function PageCanvas({ page, photosById, size, pageNumber, numberSide = "r
         const r = rects[i];
         const sw = r.w * size, sh = r.h * size;
         const tr = page.images?.[String(i)] || defaultTransform();
-        const d = dims[pid] || (photo?.width && photo?.height ? { w: photo.width, h: photo.height } : null);
+        const raw = dims[pid] || (photo?.width && photo?.height ? { w: photo.width, h: photo.height } : null);
+        const d = raw ? rotatedDims(raw.w, raw.h, tr) : null;
         const draw = d ? imageDrawRect(sw, sh, d.w, d.h, tr) : { dx: 0, dy: 0, dw: sw, dh: sh };
+        const rot = ((tr.rotate || 0) % 360 + 360) % 360;
+        const swap = rot === 90 || rot === 270;
+        // For 90°/270° the element box is the un-rotated image (dh×dw) centred in the rotated draw rect, then rotated.
+        const box = swap
+          ? { left: draw.dx + (draw.dw - draw.dh) / 2, top: draw.dy + (draw.dh - draw.dw) / 2, width: draw.dh, height: draw.dw }
+          : { left: draw.dx, top: draw.dy, width: draw.dw, height: draw.dh };
         const selected = selectedSlot === i;
         // small renders (page-order rows, strips) use the 400px derivative; the book/editor use the 1200px preview.
         // Full-resolution originals are never loaded in the app — only the print pipeline reads them.
@@ -48,7 +57,7 @@ export function PageCanvas({ page, photosById, size, pageNumber, numberSide = "r
                 recyclingKey={pid}
                 cachePolicy="memory-disk"
                 allowDownscaling
-                style={{ position: "absolute", left: draw.dx, top: draw.dy, width: draw.dw, height: draw.dh }}
+                style={{ position: "absolute", ...box, transform: rot ? [{ rotate: `${rot}deg` }] : undefined }}
                 contentFit={d ? "fill" : "cover"}
                 transition={120}
                 onLoad={(e) => {

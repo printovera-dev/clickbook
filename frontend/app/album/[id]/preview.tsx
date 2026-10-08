@@ -42,13 +42,13 @@ export default function AlbumPreview() {
               photos={album.photos || []}
               albumName={album.name}
               onEditPage={(i) => router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: String(i) } })} onEditCover={() => router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: "cover" } })}
-              onSelectPage={(sel) => { setSelected(sel); if (!album.locked) router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: sel === "cover" ? "cover" : String(sel) } }); }} selectedPage={selected}
+              onSelectPage={(sel) => { setSelected(sel); if (!album.locked) router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: sel === "cover" ? "cover" : String(sel) } }); }} selectedPage={selected} focusPage={selected}
             />
           ) : null}
         </View>
         {selected != null ? (
           <View testID="page-quick-controls" style={styles.quick}>
-            <Text style={s.label}>{selected === "cover" ? "Cover selected" : `Page ${selected + 1} selected`} · double-tap to zoom in</Text>
+            <Text style={s.label}>{selected === "cover" ? "Cover selected" : `Page ${selected + 1} selected`} · tap to edit</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, marginTop: spacing.sm }}>
               {(selected === "cover"
                 ? [["image", "move", "Adjust Image"], ["replace", "image", "Change Image"], ["text", "type", "Text"], ["coverstyle", "book", "Cover Style"], ["background", "droplet", "Background"]]

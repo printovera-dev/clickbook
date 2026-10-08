@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
-import { LogBox, View, Image, Platform } from "react-native";
+import { LogBox, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -9,6 +9,7 @@ import { useFonts } from "expo-font";
 import { FONT_ASSETS } from "@/src/design";
 
 import { ErrorBoundary } from "@/src/components/error-boundary";
+import { InstallBanner } from "@/src/components/install-banner";
 import { queryClient } from "@/src/query-client";
 
 LogBox.ignoreAllLogs(true);
@@ -37,6 +38,7 @@ export default function RootLayout() {
           <QueryClientProvider client={queryClient}>
             <StatusBar style="dark" />
             <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#FAFAF8" } }} />
+            <InstallBanner />
           </QueryClientProvider>
         </ErrorBoundary>
       </SafeAreaProvider>
