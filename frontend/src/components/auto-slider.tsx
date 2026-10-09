@@ -1,6 +1,6 @@
 // CMS-fed media slider (images + MP4 videos in any order). Horizontal paging ScrollView with CSS scroll-snap on
 // web — every slide is mounted (no virtualization), which fixes the iPhone bug where only the first image loaded
-// and manual swiping did nothing. Supports "landscape" (sliders 2/3) and "portrait" (slider 1: 2:3, centred,
+// and manual swiping did nothing. Supports "landscape" (sliders 2/3) and "portrait" (slider 1: 4:5, centred,
 // ~500×750 on desktop, 90vw on phones, thumbnails below). Images use `contain` (never stretched/cropped); videos
 // play inside the same media box, start muted, pause when swiped away, and expose tap controls (play/pause, mute).
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -24,7 +24,7 @@ type Props = {
   orientation?: "landscape" | "portrait";
 };
 
-const PORTRAIT_RATIO = 2 / 3;
+const PORTRAIT_RATIO = 4 / 5;
 const LANDSCAPE_RATIO = 16 / 9;
 
 export function AutoSlider({ slides, intervalMs = 4500, testID, sidePadding = spacing.lg, orientation = "landscape" }: Props) {
@@ -32,7 +32,7 @@ export function AutoSlider({ slides, intervalMs = 4500, testID, sidePadding = sp
   const { width: screenW } = useWindowDimensions();
   const contentW = Math.min(screenW, MAX_CONTENT_W) - sidePadding * 2;
   const portrait = orientation === "portrait";
-  // Portrait: ~500×750 centred on desktop, 90vw on phones. Landscape: full content width at the artwork's ratio.
+  // Portrait: ~500×625 centred on desktop, 90vw on phones. Landscape: full content width at the artwork's ratio.
   const [ratio, setRatio] = useState(portrait ? PORTRAIT_RATIO : LANDSCAPE_RATIO);
   const mediaW = portrait ? Math.min(500, Math.round(screenW * 0.9), contentW) : contentW;
   const mediaH = portrait ? Math.round(mediaW / PORTRAIT_RATIO) : Math.min(560, Math.round(mediaW / ratio));
@@ -134,7 +134,7 @@ export function AutoSlider({ slides, intervalMs = 4500, testID, sidePadding = sp
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbs} style={{ maxWidth: contentW }} testID={`${testID}-thumbs`}>
           {items.map((it, i) => (
             <Pressable key={it.id} testID={`${testID}-thumb-${i}`} onPress={() => go(i)} style={[styles.thumb, i === index && styles.thumbActive]}>
-              <Thumb uri={fileUrl(it.image_url)} recyclingKey={`t-${it.id}`} style={{ width: 44, height: 66, borderRadius: 6 }} />
+              <Thumb uri={fileUrl(it.image_url)} recyclingKey={`t-${it.id}`} style={{ width: 44, height: 55, borderRadius: 6 }} />
               {it.type === "video" ? <View style={styles.thumbPlay}><Feather name="play" size={10} color="#FFF" /></View> : null}
             </Pressable>
           ))}
