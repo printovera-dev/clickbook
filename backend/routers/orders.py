@@ -7,6 +7,7 @@ from core import db, now_utc, now_iso, new_id, get_current_customer
 from routers.catalog import compute_price
 from routers.notifications import notify
 from production import schedule_production_package
+import razorpay_provider as rzp
 
 router = APIRouter(tags=["orders"])
 
@@ -98,7 +99,9 @@ async def create_order(payload: OrderCreate, customer: dict = Depends(get_curren
 
 @router.post("/orders/pay")
 async def pay_order(payload: PaymentConfirm, customer: dict = Depends(get_current_customer)):
-    """Mock instant-pay fallback used when Razorpay isn't configured."""
+    """Mock instant-pay fallback is available only outside production."""
+    if rzp.is_production():
+        raise HTTPException(503, "Mock payments are disabled in production. Configure live Razorpay credentials.")
     order = await db.orders.find_one({"id": payload.order_id, "customer_id": customer["id"]}, {"_id": 0})
     if not order:
         raise HTTPException(404, "Order not found")
