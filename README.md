@@ -25,6 +25,19 @@ Web client: `cd frontend && npx expo export -p web` → copy `dist/` into the ng
 ## Secrets
 `.env`, `backend/.env.production`, `backend/deploy/.env` are git-ignored. Templates: `backend/.env.example`, `frontend/.env.example`, `backend/.env.production.example`, `backend/deploy/.env.example`.
 
+## Razorpay live payments on a third-party host
+
+Configure these values in the hosting provider's **production backend/server environment** (not the frontend build variables):
+
+- `APP_ENV=production`
+- `RAZORPAY_KEY_ID=rzp_live_...` (live Key ID from Razorpay)
+- `RAZORPAY_KEY_SECRET=...` (matching live Key Secret)
+- `RAZORPAY_WEBHOOK_SECRET=...` (the webhook secret configured in Razorpay)
+
+Redeploy/restart the backend after saving the variables. Never put the Key Secret or webhook secret in frontend variables, source control, or client code. Configure the Razorpay webhook URL to use the actual canonical production domain, for example `https://clickbook.com/api/payments/razorpay/webhook`, with `payment.captured`, `payment.failed`, and `order.paid` events.
+
+In production, the API now rejects test-mode/missing Razorpay credentials and disables mock payments rather than marking unpaid orders as paid. If `/api/payments/config` reports `unconfigured`, the hosting environment variables have not been applied correctly. Confirm live mode using a real low-value payment only after the Razorpay account and webhook are ready; do not use test keys on the live site.
+
 ## Data model (summary)
 - `albums.pages[]`: `photo_ids`, `images{slot → {photo_id, scale, ox, oy, fit}}` (non-destructive crop), `texts[]`, `background`, `layout_id`
 - `albums.cover_design {style, photo_id, image, frame, background, texts}`, `albums.design_style`, `albums.locked` (after payment)
