@@ -22,7 +22,8 @@ def is_production() -> bool:
 def is_live_configured() -> bool:
     return (
         RAZORPAY_KEY_ID.startswith("rzp_live_")
-        and bool(RAZORPAY_KEY_SECRET)
+        and len(RAZORPAY_KEY_SECRET) >= 16
+        and len(set(RAZORPAY_KEY_SECRET.lower())) > 1
         and not RAZORPAY_KEY_SECRET.startswith("YOUR_")
     )
 
