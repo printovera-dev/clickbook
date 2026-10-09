@@ -53,7 +53,7 @@ export default function Home() {
     if (!c) return [];
     const isIn = loggedIn === true;
     const list: { key: string; render: () => React.ReactNode }[] = [
-      { key: "slider1", render: () => <AutoSlider testID="home-slider1" slides={c.sliders?.slider1?.slides || []} intervalMs={c.sliders?.slider1?.interval_ms} /> },
+      { key: "slider1", render: () => <AutoSlider testID="home-slider1" slides={c.sliders?.slider1?.slides || []} intervalMs={c.sliders?.slider1?.interval_ms} aspectRatio={4 / 5} /> },
       { key: "login1", render: () => <HomeLogin testID="home-login1" title={t.login_title} accent={t.login_accent} subtitle={t.login_sub} loggedIn={isIn} /> },
     ];
     if (isIn && (drafts.length || activeOrder)) list.push({ key: "mine", render: () => (
