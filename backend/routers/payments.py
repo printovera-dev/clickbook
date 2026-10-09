@@ -22,12 +22,19 @@ class RazorpayVerify(BaseModel):
 
 @router.get("/config")
 async def payments_config():
-    live = rzp.is_configured()
-    return {"provider": "razorpay" if live else "mock", "razorpay_key_id": rzp.public_key_id() if live else ""}
+    if rzp.is_live_configured():
+        return {"provider": "razorpay", "razorpay_key_id": rzp.public_key_id()}
+    if rzp.is_production():
+        return {"provider": "unconfigured", "razorpay_key_id": ""}
+    configured = rzp.is_configured()
+    return {"provider": "razorpay" if configured else "mock",
+            "razorpay_key_id": rzp.public_key_id() if configured else ""}
 
 
 @router.post("/razorpay/order")
 async def create_razorpay_order(payload: RazorpayOrderCreate, customer: dict = Depends(get_current_customer)):
+    if rzp.is_production() and not rzp.is_live_configured():
+        raise HTTPException(503, "Live Razorpay is not configured. Set RAZORPAY_KEY_ID to an rzp_live_ key and add the matching secret.")
     order = await db.orders.find_one({"id": payload.order_id, "customer_id": customer["id"]}, {"_id": 0})
     if not order:
         raise HTTPException(404, "Order not found")
@@ -60,6 +67,8 @@ async def create_razorpay_order(payload: RazorpayOrderCreate, customer: dict = D
 
 @router.post("/razorpay/verify")
 async def verify_razorpay_payment(payload: RazorpayVerify, customer: dict = Depends(get_current_customer)):
+    if rzp.is_production() and not rzp.is_live_configured():
+        raise HTTPException(503, "Live Razorpay is not configured. Payment verification is unavailable.")
     order = await db.orders.find_one({"razorpay_order_id": payload.razorpay_order_id,
                                        "customer_id": customer["id"]}, {"_id": 0})
     if not order:
@@ -75,11 +84,15 @@ async def verify_razorpay_payment(payload: RazorpayVerify, customer: dict = Depe
 @router.get("/razorpay/checkout/{rzp_order_id}", include_in_schema=False)
 async def razorpay_checkout_shell(rzp_order_id: str):
     """HTML shell loaded by the WebView. Exposes only key_id + amount + order_id."""
+    if rzp.is_production() and not rzp.is_live_configured():
+        raise HTTPException(503, "Live Razorpay is not configured for production.")
     order = await db.orders.find_one({"razorpay_order_id": rzp_order_id}, {"_id": 0})
     if not order:
         raise HTTPException(404, "Order unavailable")
     amount = int(order.get("amount_paise") or round(float(order["price"]["total"]) * 100))
-    key_id = rzp.public_key_id() or "rzp_test_placeholder"
+    key_id = rzp.public_key_id()
+    if not key_id:
+        raise HTTPException(503, "Razorpay is not configured.")
     snap = order.get("customer_snapshot") or {}
     prefill_name = snap.get("name") or ""
     prefill_email = snap.get("email") or ""
