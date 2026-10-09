@@ -1,4 +1,4 @@
-// Auto-advancing 16:9 image slider fed by backend CMS slides. Swipe to change, pauses while the user
+// Auto-advancing responsive image slider fed by backend CMS slides. Swipe to change, pauses while the user
 // interacts, dots indicator, images cover-cropped (never stretched). Renders nothing when no slides.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, FlatList, Pressable, StyleSheet, useWindowDimensions, NativeScrollEvent, NativeSyntheticEvent } from "react-native";
@@ -9,13 +9,14 @@ import { fileUrl } from "@/src/api";
 
 export type Slide = { id: string; image_url: string; title?: string; subtitle?: string; cta_label?: string; cta_route?: string };
 
-const RATIO = 16 / 9;
+const DEFAULT_RATIO = 16 / 9;
 const RESUME_AFTER_MS = 5000;
 
-export function AutoSlider({ slides, intervalMs = 4500, testID, sidePadding = spacing.lg }: { slides: Slide[]; intervalMs?: number; testID?: string; sidePadding?: number }) {
+export function AutoSlider({ slides, intervalMs = 4500, testID, sidePadding = spacing.lg, aspectRatio = DEFAULT_RATIO }: { slides: Slide[]; intervalMs?: number; testID?: string; sidePadding?: number; aspectRatio?: number }) {
   const { width: screenW } = useWindowDimensions();
-  const width = screenW - sidePadding * 2;
-  const height = Math.round(width / RATIO);
+  const availableWidth = screenW - sidePadding * 2;
+  const width = aspectRatio < 1 ? Math.min(availableWidth, 500) : availableWidth;
+  const height = Math.round(width / aspectRatio);
   const router = useRouter();
   const list = useRef<FlatList<Slide>>(null);
   const [index, setIndex] = useState(0);
@@ -42,7 +43,7 @@ export function AutoSlider({ slides, intervalMs = 4500, testID, sidePadding = sp
   if (!slides.length) return null;
 
   return (
-    <View style={{ paddingHorizontal: sidePadding }} testID={testID}>
+    <View style={{ paddingHorizontal: sidePadding, alignItems: "center" }} testID={testID}>
       <FlatList
         ref={list}
         data={slides}
