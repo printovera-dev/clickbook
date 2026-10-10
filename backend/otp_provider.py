@@ -54,13 +54,15 @@ async def send_otp(mobile: str, otp: str, channel: str = "whatsapp") -> dict:
         return {"success": False, "provider": PROVIDER, "message": "WhatsApp provider configuration is incomplete"}
 
     to = _format_to(mobile)
+    # Match the AOC portal's documented template request shape.
     payload = {
         "from": FROM,
         "campaignName": CAMPAIGN,
         "to": to,
         "templateName": TEMPLATE,
-        "components": {"body": {"params": [otp]}},
+        "otp": otp,
         "type": "template",
+        "language": {"code": "en"},
     }
     headers = {"apikey": API_KEY, "Content-Type": "application/json"}
     try:
