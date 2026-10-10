@@ -31,8 +31,14 @@ class ProfileUpdate(BaseModel):
 async def send_otp(payload: OTPRequest):
     if not payload.mobile or len(payload.mobile) < 8:
         raise HTTPException(400, "Invalid mobile")
+
     otp = generate_otp()
     result = await provider_send_otp(payload.mobile, otp, payload.channel)
+
+    # Never persist an OTP or reveal it to the client when the live provider fails.
+    if not result.get("success"):
+        raise HTTPException(502, "Unable to send OTP right now. Please try again later.")
+
     await db.otps.update_one(
         {"mobile": payload.mobile},
         {"$set": {"mobile": payload.mobile, "otp": otp, "channel": payload.channel,
@@ -41,12 +47,12 @@ async def send_otp(payload: OTPRequest):
         upsert=True,
     )
     resp = {
-        "success": bool(result.get("success")),
+        "success": True,
         "provider": result.get("provider"),
         "message": result.get("message", "OTP sent"),
     }
-    # Expose OTP for demo/dev: mock provider, or provider failure (so testers aren't stuck).
-    if result.get("provider") == "mock" or not result.get("success"):
+    # Demo hint is intentionally available only when explicitly running mock mode.
+    if result.get("provider") == "mock":
         resp["dev_hint"] = otp
     return resp
 
