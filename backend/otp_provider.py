@@ -70,6 +70,7 @@ async def send_otp(mobile: str, otp: str, channel: str = "whatsapp") -> dict:
             response = await client.post(API_URL, headers=headers, json=payload)
         ok = 200 <= response.status_code < 300
         logger.info("WhatsApp OTP provider response status=%s", response.status_code)
+        logger.info("WhatsApp OTP provider response body=%s", response.text[:2000])
         if not ok:
             # Do not log provider response bodies: they may contain sensitive account data.
             logger.warning("WhatsApp OTP provider rejected request (HTTP %s)", response.status_code)
