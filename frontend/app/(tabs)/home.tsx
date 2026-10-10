@@ -194,7 +194,7 @@ export default function Home() {
               <Pressable key={k} onPress={() => router.push({ pathname: "/policy/[key]", params: { key: k } })} testID={`footer-${k}`} hitSlop={8}><Text style={styles.footerLink}>{l}</Text></Pressable>
             ))}
           </View>
-          <Text style={[styles.muted, { marginTop: spacing.md }]}>© {new Date().getFullYear()} ClickBook · clickbook.world</Text>
+          <Text style={[styles.muted, { marginTop: spacing.md }]}>© {new Date().getFullYear()} Printovera LLP | Clickbook is a product of Printovera LLP</Text>
         </View>
       ) },
     );
