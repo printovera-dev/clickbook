@@ -93,6 +93,8 @@ def _put(rel_path: str, data: bytes, content_type: str = "application/octet-stre
 
 
 def _get_bytes(rel_path: str) -> Optional[bytes]:
+    if ".." in rel_path.split("/"):
+        return None
     if _use_s3():
         from botocore.exceptions import ClientError
         try:
@@ -162,6 +164,8 @@ def get_file_bytes(rel_path: str) -> Optional[bytes]:
 
 def get_s3_file_range(rel_path: str, start: int, end: int):
     """Return (bytes, total_size) for an inclusive byte range, or None if absent."""
+    if ".." in rel_path.split("/"):
+        return None
     if not _use_s3():
         return None
     from botocore.exceptions import ClientError
