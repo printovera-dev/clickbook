@@ -48,7 +48,28 @@ def _get_s3():
 
 
 def _use_s3() -> bool:
-    return STORAGE_DRIVER == "s3" and bool(S3_ACCESS_KEY and S3_SECRET_KEY and S3_BUCKET)
+    """Return whether S3 is active; never silently fall back to ephemeral disk.
+
+    When STORAGE_DRIVER=s3 is explicitly selected, missing credentials or bucket
+    configuration must fail the storage operation rather than write files locally.
+    """
+    if STORAGE_DRIVER != "s3":
+        return False
+
+    missing = [
+        name for name, value in (
+            ("S3_ACCESS_KEY", S3_ACCESS_KEY),
+            ("S3_SECRET_KEY", S3_SECRET_KEY),
+            ("S3_BUCKET", S3_BUCKET),
+        )
+        if not value.strip()
+    ]
+    if missing:
+        raise RuntimeError(
+            "STORAGE_DRIVER=s3 but required storage settings are missing: "
+            + ", ".join(missing)
+        )
+    return True
 
 
 def _customer_root(customer_id: str, album_id: str) -> Path:
