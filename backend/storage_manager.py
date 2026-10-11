@@ -160,6 +160,34 @@ def get_file_bytes(rel_path: str) -> Optional[bytes]:
     return _get_bytes(rel_path)
 
 
+def get_s3_file_range(rel_path: str, start: int, end: int):
+    """Return (bytes, total_size) for an inclusive byte range, or None if absent."""
+    if not _use_s3():
+        return None
+    from botocore.exceptions import ClientError
+    client = _get_s3()
+    try:
+        head = client.head_object(Bucket=S3_BUCKET, Key=rel_path)
+        total = int(head["ContentLength"])
+        if start < 0 or end < start or start >= total:
+            return (b"", total)
+        end = min(end, total - 1)
+        obj = client.get_object(
+            Bucket=S3_BUCKET, Key=rel_path,
+            Range=f"bytes={start}-{end}",
+        )
+        try:
+            return (obj["Body"].read(), total)
+        finally:
+            obj["Body"].close()
+    except ClientError as exc:
+        code = str(exc.response.get("Error", {}).get("Code", ""))
+        status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+        if code in {"NoSuchKey", "NotFound", "404"} or status == 404:
+            return None
+        raise
+
+
 def public_url(rel_path: str) -> str:
     return f"{PUBLIC_BASE_URL}/{rel_path}"
 
