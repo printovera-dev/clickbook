@@ -53,7 +53,14 @@ async def serve_file(full_path: str, request: Request):
                 raise ValueError("invalid range")
             if start_text:
                 start = int(start_text)
-                end = int(end_text) if end_text else start + CHUNK - 1
+                if end_text:
+                    end = int(end_text)
+                else:
+                    probe = get_s3_file_range(full_path, 0, 0)
+                    if probe is None:
+                        raise HTTPException(404, "File not found")
+                    _, total = probe
+                    end = total - 1
             else:
                 suffix_length = int(end_text)
                 if suffix_length <= 0:
