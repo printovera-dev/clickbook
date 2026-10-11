@@ -3,7 +3,7 @@
 Two drivers:
 - local (default): VPS-style on-disk layout at STORAGE_BASE — for self-hosted servers.
 - s3: S3-compatible object storage (Emergent Object Storage / AWS / any S3 bucket).
-  Enabled when S3_ACCESS_KEY + S3_SECRET_KEY + S3_BUCKET are set, or STORAGE_DRIVER=s3.
+  Enabled only when STORAGE_DRIVER=s3; required settings are validated and never silently fall back.
 
 Driver selection: env `STORAGE_DRIVER` ("local" | "s3"). Default "local".
 """
@@ -94,11 +94,18 @@ def _put(rel_path: str, data: bytes, content_type: str = "application/octet-stre
 
 def _get_bytes(rel_path: str) -> Optional[bytes]:
     if _use_s3():
+        from botocore.exceptions import ClientError
         try:
             obj = _get_s3().get_object(Bucket=S3_BUCKET, Key=rel_path)
             return obj["Body"].read()
-        except Exception:
-            return None
+        except ClientError as exc:
+            code = str(exc.response.get("Error", {}).get("Code", ""))
+            status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+            if code in {"NoSuchKey", "NotFound", "404"} or status == 404:
+                return None
+            # Surface permission, credentials, and service failures instead of
+            # disguising an S3 outage as a missing file.
+            raise
     p = resolve_path(rel_path)
     if not p:
         return None
