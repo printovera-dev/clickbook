@@ -60,6 +60,26 @@ Admin seed account: `admin / clickbook@2026` — **change it** after first login
 - Optional web: `cd frontend && npx expo export -p web` and copy `dist/*` into the `web_root` volume:
   `docker run --rm -v clickbook_web_root:/w -v $PWD/dist:/src alpine sh -c "cp -r /src/* /w/"`.
 
-## 7. Scaling notes
+## 7. Permanent object storage (S3-compatible)
+
+**Do not switch production to S3 until the bucket exists and the current storage has been backed up and migrated.** Keep local storage enabled while preparing the bucket.
+
+1. In Kuberns, create a private S3-compatible bucket and credentials with permission to list/read/write objects in that bucket. Add these backend environment variables through the Kuberns secret/environment UI (never commit real values): `STORAGE_DRIVER=s3`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`, `S3_REGION` (if required by the provider), and `S3_ENDPOINT` (for S3-compatible providers; leave empty for AWS S3).
+2. Before changing `STORAGE_DRIVER`, take the existing database backup and a complete storage-volume backup. Confirm the actual mounted directory in Kuberns and set `STORAGE_BASE` to that directory for the migration command. The migration script defaults to `/data/storage`; this must match the live source directory.
+3. Run a dry run from the backend environment where the old storage directory is mounted and the S3 credentials are available:
+   ```bash
+   python scripts/migrate_storage_to_s3.py
+   ```
+   Review the listed files and counts. It does not upload anything by default.
+4. Run the verified copy:
+   ```bash
+   python scripts/migrate_storage_to_s3.py --apply
+   ```
+   The script never deletes local files, verifies uploaded contents, skips identical objects, and stops if an existing bucket key has different content. Resolve any conflict before proceeding.
+5. Verify the migration report and test several existing customer albums, originals, previews, print files, PDFs, production downloads, and home/admin assets. Only after successful verification, set `STORAGE_DRIVER=s3` in Kuberns and deploy/restart during a controlled window. Keep the old storage volume and backup untouched until production is verified.
+6. Confirm new uploads still open after a backend restart/redeploy. Then arrange regular database backups and object-storage retention/versioning with the provider.
+
+The backend now fails rather than silently writing to local disk when `STORAGE_DRIVER=s3` is selected without its required access key, secret, and bucket. S3 permission/service failures are surfaced instead of being misreported as missing files.
+
+## 8. Scaling notes
 - More API capacity: set `WEB_CONCURRENCY` in `.env.production` (≈ CPU cores) and restart.
-- Object storage instead of VPS disk: set `STORAGE_DRIVER=s3` + `S3_ACCESS_KEY/S3_SECRET_KEY/S3_BUCKET/S3_ENDPOINT` — code path already supported.
