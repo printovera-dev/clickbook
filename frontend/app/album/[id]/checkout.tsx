@@ -114,8 +114,9 @@ export default function Checkout() {
           <Text style={s.h1}>Your order</Text>
 
           <View style={styles.card}>
-            <View style={styles.row}><Text style={s.body}>ClickBook 8 × 8″</Text><Text style={s.body}>₹{price?.subtotal ?? "…"}</Text></View>
+            <View style={styles.row}><Text style={s.body}>{album?.album_config ? `Wedding Album ${String(album.size || album.album_config.size || "12x18").replace("x", " × ")}″` : "ClickBook 8 × 8″"}</Text><Text style={s.body}>₹{price?.subtotal ?? "…"}</Text></View>
             <View style={styles.row}><Text style={s.bodyMuted}>{album?.sheets} sheets × ₹{price?.price_per_sheet}</Text><View /></View>
+            {album?.album_config ? <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>{(album.pages || []).length} pages · {album.paper_finish === "matte" ? "Matte" : "Gloss"} paper · {album.cover_material === "acrylic" ? "Acrylic" : "Digital"} cover</Text> : null}
             {price?.discount ? (
               <View style={styles.row}><Text style={{ color: colors.success, fontFamily: fonts.text }}>Discount ({appliedCoupon})</Text><Text style={{ color: colors.success, fontFamily: fonts.text }}>−₹{price.discount}</Text></View>
             ) : null}
