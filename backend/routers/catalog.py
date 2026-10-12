@@ -52,6 +52,13 @@ async def list_covers(admin: bool = False, offset: int = 0, limit: int = 20):
     return _page(await with_thumbnails(covers), total, offset, limit, "covers")
 
 
+@router.get("/page-designs")
+async def list_page_designs():
+    """Active page templates available to album editors."""
+    designs = await db.page_designs.find({"active": True}, {"_id": 0}).sort("display_order", 1).to_list(50)
+    return {"designs": designs}
+
+
 @router.get("/layouts")
 async def list_layouts(offset: int = 0, limit: int = 50):
     limit = _clamp(limit)
