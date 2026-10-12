@@ -44,8 +44,10 @@ def _color(c: Optional[str], fallback="#1C1917"):
         return ImageColor.getrgb(fallback)
 
 
-def _open_photo(photo: dict, tr: Optional[dict] = None) -> Optional[Image.Image]:
-    data = get_file_bytes(photo.get("print_path") or "") or get_file_bytes(photo.get("original_path") or "")
+def _open_photo(photo: dict, tr: Optional[dict] = None, prefer_original: bool = False) -> Optional[Image.Image]:
+    # Large wedding print sizes should use the uploaded original, not the legacy 3000px derivative.
+    paths = (photo.get("original_path"), photo.get("print_path")) if prefer_original else (photo.get("print_path"), photo.get("original_path"))
+    data = next((get_file_bytes(path or "") for path in paths if path and get_file_bytes(path or "")), None)
     if not data:
         return None
     img = Image.open(io.BytesIO(data)).convert("RGB")
@@ -125,7 +127,7 @@ def render_page(page: dict, photos_by_id: dict, layouts_by_id: dict, size_px: in
         sx, sy = int(pos["x"] * size_px), int(pos["y"] * height_px)
         sw, sh = max(1, int(pos["w"] * size_px)), max(1, int(pos["h"] * height_px))
         tr = images.get(str(i)) or default_transform()
-        img = _open_photo(photo, tr)
+        img = _open_photo(photo, tr, prefer_original=(size_px > PAGE_PX))
         if img is None:
             continue
         dx, dy, dw, dh = image_draw_rect(sw, sh, img.width, img.height, tr)
@@ -148,7 +150,7 @@ def render_cover(album: dict, photos_by_id: dict, size_px: int = PAGE_PX, height
     canvas = Image.new("RGB", (size_px, height_px), _color(cd.get("background"), "#C56A47"))
     photo = photos_by_id.get(cd.get("photo_id"))
     if photo:
-        img = _open_photo(photo, cd.get("image"))
+        img = _open_photo(photo, cd.get("image"), prefer_original=(size_px > PAGE_PX))
         if img is not None:
             frame = cd.get("frame") or {"x": 0, "y": 0, "w": 1, "h": 1}
             sx, sy = int(frame["x"] * size_px), int(frame["y"] * height_px)
