@@ -37,9 +37,10 @@ export default function Checkout() {
 
   useEffect(() => {
     if (album?.sheets) {
-      api.calculatePrice(album.sheets, appliedCoupon || undefined, giftWrap).then(setPrice).catch(() => {});
+      const config = album.album_config || {};
+      api.calculatePrice(album.sheets, appliedCoupon || undefined, giftWrap, config.paper_finish || album.paper_finish, config.cover_material || album.cover_material).then(setPrice).catch(() => {});
     }
-  }, [album?.sheets, appliedCoupon, giftWrap]);
+  }, [album?.sheets, album?.paper_finish, album?.cover_material, album?.album_config, appliedCoupon, giftWrap]);
 
   useEffect(() => {
     if (meQ.data?.customer) {
@@ -56,7 +57,8 @@ export default function Checkout() {
   const applyCoupon = async () => {
     setCouponErr("");
     if (!coupon.trim() || !album?.sheets) return;
-    const res = await api.calculatePrice(album.sheets, coupon.trim(), giftWrap);
+    const config = album.album_config || {};
+    const res = await api.calculatePrice(album.sheets, coupon.trim(), giftWrap, config.paper_finish || album.paper_finish, config.cover_material || album.cover_material);
     if (res.coupon_error) {
       setCouponErr(res.coupon_error);
     } else {
@@ -115,7 +117,8 @@ export default function Checkout() {
 
           <View style={styles.card}>
             <View style={styles.row}><Text style={s.body}>{album?.album_config ? `Wedding Album ${String(album.size || album.album_config.size || "12x18").replace("x", " × ")}″` : "ClickBook 8 × 8″"}</Text><Text style={s.body}>₹{price?.subtotal ?? "…"}</Text></View>
-            <View style={styles.row}><Text style={s.bodyMuted}>{album?.sheets} sheets × ₹{price?.price_per_sheet}</Text><View /></View>
+            <View style={styles.row}><Text style={s.bodyMuted}>{album?.sheets} sheets × ₹{price?.price_per_sheet}</Text><Text style={s.bodyMuted}>₹{price?.sheets_subtotal ?? (price?.subtotal ?? "…")}</Text></View>
+            {album?.album_config ? <View style={styles.row}><Text style={s.bodyMuted}>{(album.album_config.cover_material || album.cover_material) === "acrylic" ? "Acrylic cover" : "Digital cover"}</Text><Text style={s.bodyMuted}>₹{price?.cover_price ?? "…"}</Text></View> : null}
             {album?.album_config ? <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>{(album.pages || []).length} pages · {album.paper_finish === "matte" ? "Matte" : "Gloss"} paper · {album.cover_material === "acrylic" ? "Acrylic" : "Digital"} cover</Text> : null}
             {price?.discount ? (
               <View style={styles.row}><Text style={{ color: colors.success, fontFamily: fonts.text }}>Discount ({appliedCoupon})</Text><Text style={{ color: colors.success, fontFamily: fonts.text }}>−₹{price.discount}</Text></View>
