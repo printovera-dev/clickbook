@@ -24,7 +24,7 @@ export default function AdminDesigns() {
   const savePageDesign = async (d: any) => {
     setSavingId(d.id);
     try {
-      await api.adminUpdatePageDesign(d.id, { name: d.name, description: d.description || "", preset_key: d.preset_key, background: d.background, positions_by_count: d.positions_by_count, active: !!d.active, display_order: Number(d.display_order || 1) });
+      await api.adminUpdatePageDesign(d.id, { name: d.name, description: d.description || "", preset_key: d.preset_key, background: d.background, positions_by_count: d.positions_by_count, segment: d.segment || "All", active: !!d.active, display_order: Number(d.display_order || 1) });
       await loadPageDesigns();
     } catch (e: any) { Alert.alert("Could not save design", e?.message || "Please try again"); }
     finally { setSavingId(null); }
@@ -32,7 +32,7 @@ export default function AdminDesigns() {
   return (
     <AdminPage title="Album Designs" testID="admin-designs">
       <Text style={s.label}>Page design presets</Text>
-      <Text style={[s.bodyMuted, { marginTop: 4 }]}>Manage the four ready-made looks shown inside the page editor. Changes apply when a design is chosen; pages already saved keep their existing layout.</Text>
+      <Text style={[s.bodyMuted, { marginTop: 4 }]}>Manage general presets and the category-specific designs used during automatic album creation. Each design supports pages with 1–4 photos.</Text>
       {loadingDesigns ? <Text style={[s.bodyMuted, { marginTop: spacing.md }]}>Loading page designs…</Text> : null}
       <View style={styles.grid}>
         {pageDesigns.map((d) => (
@@ -40,6 +40,7 @@ export default function AdminDesigns() {
             <View style={{ width: 112, height: 90, alignSelf: "center", backgroundColor: d.background || "#FFFFFF", borderWidth: 1, borderColor: colors.border }}>
               {(d.positions_by_count?.["4"] || []).map((r: any, i: number) => <View key={i} style={{ position: "absolute", left: r.x * 112, top: r.y * 90, width: r.w * 112, height: r.h * 90, backgroundColor: d.preset_key === "cinematic" ? "#D6D3D1" : colors.borderStrong }} />)}
             </View>
+            <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>{d.segment && d.segment !== "All" ? "Photo section: " + d.segment : "General page design"}</Text>
             <Text style={[s.label, { marginTop: spacing.sm }]}>Design name</Text>
             <TextInput value={d.name} onChangeText={(v) => setPageDesigns((all) => all.map((x) => x.id === d.id ? { ...x, name: v } : x))} style={styles.editInput} />
             <Text style={[s.label, { marginTop: spacing.sm }]}>Description</Text>
