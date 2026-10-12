@@ -126,8 +126,8 @@ export const api = {
   getSettings: () => request<{ settings: any }>("/settings"),
 
   // Albums
-  createAlbum: (cover_id: string, name?: string) =>
-    request<{ album: any }>("/albums", { method: "POST", body: { cover_id, name } }),
+  createAlbum: (cover_id: string, name?: string, album_config?: { size: "12x18" | "24x24"; paper_finish: "gloss" | "matte"; cover_material: "digital" | "acrylic" }) =>
+    request<{ album: any }>("/albums", { method: "POST", body: { cover_id, name, ...(album_config ? { album_config } : {}) } }),
   listMyAlbums: () => request<{ albums: any[] }>("/albums"),
   getAlbum: (id: string) => request<{ album: any }>(`/albums/${id}`),
   autoGenerate: (id: string, style?: string, cover_photo_id?: string) =>
