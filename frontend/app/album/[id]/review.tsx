@@ -17,6 +17,8 @@ export default function Review() {
   const q = useQuery({ queryKey: ["album", id], queryFn: () => api.getAlbum(String(id)), enabled: !!id });
   const album = q.data?.album;
   const isWedding = !!album?.album_config;
+  const pageCount = (album?.pages || []).length;
+  const weddingPageCountValid = !isWedding || (pageCount >= 30 && pageCount <= 50);
   const photos: any[] = album?.photos || [];
   const photoIds = new Set(photos.map((p: any) => p.id));
   const missingSlots = (album?.pages || []).reduce((total: number, page: any) => total + (page.photo_ids || []).filter((pid: string) => !photoIds.has(pid)).length, 0);
@@ -40,6 +42,18 @@ export default function Review() {
             <Text style={s.label}>PRINT SETTINGS</Text>
             <Text style={[s.body, { marginTop: spacing.sm }]}>{String(album.size || "12x18").replace("x", " × ")} inch · {album.paper_finish === "matte" ? "Matte" : "Gloss"} paper · {album.cover_material === "acrylic" ? "Acrylic" : "Digital"} cover</Text>
             <Text style={[s.bodyMuted, { marginTop: 4 }]}>{photos.length} uploaded photos · {(album.pages || []).length} designed pages</Text>
+          </View>
+        ) : null}
+        {isWedding && !weddingPageCountValid ? (
+          <View style={styles.warningCard} testID="wedding-page-count-warning">
+            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+              <Feather name="alert-triangle" size={18} color={colors.error} />
+              <Text style={[s.h2, { color: colors.error }]}>Page count needs attention</Text>
+            </View>
+            <Text style={[s.body, { marginTop: spacing.sm }]}>
+              This wedding album has {pageCount} page(s). It must contain 30–50 pages before you can continue to ordering.
+            </Text>
+            <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>Return to Edit to add or remove pages.</Text>
           </View>
         ) : null}
         {isWedding && (missingSlots > 0 || lowResolution > 0) ? (
@@ -71,7 +85,7 @@ export default function Review() {
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
         <View style={{ flexDirection: "row", gap: spacing.md }}>
           <Button testID="review-edit-button" label="Edit" variant="outline" onPress={() => router.push({ pathname: "/album/[id]/editor", params: { id: String(id) } })} style={{ flex: 1 }} />
-          <Button testID="review-continue-button" label="Continue to Order" onPress={() => router.push({ pathname: "/album/[id]/checkout", params: { id: String(id) } })} disabled={!confirmed} style={{ flex: 1 }} />
+          <Button testID="review-continue-button" label="Continue to Order" onPress={() => router.push({ pathname: "/album/[id]/checkout", params: { id: String(id) } })} disabled={!confirmed || !weddingPageCountValid} style={{ flex: 1 }} />
         </View>
       </View>
     </View>
