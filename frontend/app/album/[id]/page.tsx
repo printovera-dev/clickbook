@@ -182,7 +182,7 @@ export default function PageEditor() {
     while (ids.length < count && photos.length) ids.push(photos[ids.length % photos.length].id);
     const images: Record<string, any> = {};
     ids.forEach((pid, i) => { const prev = page.images?.[String(i)]; images[String(i)] = prev && prev.photo_id === pid ? prev : { ...defaultTransform(), photo_id: pid }; });
-    commit({ ...page, photo_ids: ids, layout_photo_count: count, images });
+    commit({ ...page, photo_ids: ids, layout_photo_count: count, images, slots: undefined, design_preset_id: undefined });
     setSelSlot(0);
   };
   const replaceImage = (pid: string) => {
