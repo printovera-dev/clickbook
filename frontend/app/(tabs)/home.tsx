@@ -80,6 +80,15 @@ export default function Home() {
         </View>
       ) },
     ];
+    if (isIn) list.push({ key: "wedding-album-entry", render: () => (
+      <View style={[styles.section, { marginTop: spacing.sm }]} testID="home-wedding-album-entry">
+        <Pressable onPress={() => router.push("/wedding-album" as any)} testID="home-create-wedding-album" style={{ backgroundColor: colors.homeCharcoal, borderRadius: radius.lg, padding: spacing.xl, flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+          <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.homePink, alignItems: "center", justifyContent: "center" }}><Feather name="book-open" size={23} color="#FFFFFF" /></View>
+          <View style={{ flex: 1 }}><Text style={{ color: "#FFFFFF", fontFamily: fonts.display, fontSize: 20 }}>Wedding Album Studio</Text><Text style={{ color: "#E7E5E4", fontFamily: fonts.text, fontSize: 13, marginTop: 4 }}>Create a large-format wedding album with a 3D preview</Text></View>
+          <Feather name="chevron-right" size={22} color="#FFFFFF" />
+        </Pressable>
+      </View>
+    ) });
     if (isIn && (drafts.length || activeOrder)) list.push({ key: "mine", render: () => (
       <View style={styles.section}>
         <View style={styles.rowBetween}>
@@ -200,7 +209,7 @@ export default function Home() {
     );
     return list;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [c, pricing, loggedIn, drafts, activeOrder, width, contentW, isTablet, videoW, wantsLogin, params.next]);
+  }, [c, pricing, loggedIn, drafts, activeOrder, width, contentW, isTablet, videoW, wantsLogin, params.next, router]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.homeBg }}>
