@@ -8,6 +8,34 @@ async def seed():
     # Add the four starter page designs once; preserve all admin edits on later startups.
     for preset in PAGE_DESIGN_PRESETS:
         await db.page_designs.update_one({"id": preset["id"]}, {"$setOnInsert": dict(preset)}, upsert=True)
+    # Category-specific automatic page designs; preserve any existing admin edits.
+    preset_by_id = {p["id"]: p for p in PAGE_DESIGN_PRESETS}
+    category_styles = {
+        "Couple": "page-design-romantic-blush",
+        "Ritual": "page-design-classic-ivory",
+        "Dance": "page-design-cinematic",
+        "Ceremony": "page-design-editorial-white",
+        "Guest": "page-design-editorial-white",
+        "Family": "page-design-romantic-blush",
+    }
+    for order, (segment, preset_id) in enumerate(category_styles.items(), start=10):
+        base = preset_by_id[preset_id]
+        category_design = {
+            "id": f"page-design-category-{segment.lower()}",
+            "name": f"{segment} — {base['name']}",
+            "description": f"Automatic page composition for {segment} photos, adapting to 1–4 photos per page.",
+            "segment": segment,
+            "preset_key": base["preset_key"],
+            "background": base["background"],
+            "positions_by_count": base["positions_by_count"],
+            "active": True,
+            "display_order": order,
+        }
+        await db.page_designs.update_one(
+            {"id": category_design["id"]},
+            {"$setOnInsert": category_design},
+            upsert=True,
+        )
     if not await db.settings.find_one({"id": "default"}):
         await db.settings.insert_one({
             "id": "default", "price_per_sheet": 90, "gst_percent": 18,
