@@ -485,6 +485,7 @@ class PageDesignIn(BaseModel):
     preset_key: str
     background: str
     positions_by_count: Dict[str, List[Dict[str, Any]]]
+    segment: Optional[str] = "All"
     active: bool = True
     display_order: int = 1
 
@@ -492,6 +493,8 @@ class PageDesignIn(BaseModel):
 def _validate_page_design(payload: PageDesignIn):
     if not payload.name.strip():
         raise HTTPException(400, "Design name is required")
+    if payload.segment not in {"All", "Couple", "Ritual", "Dance", "Ceremony", "Guest", "Family"}:
+        raise HTTPException(400, "Choose a valid photo category")
     if not payload.background.startswith("#") or len(payload.background) not in (4, 7):
         raise HTTPException(400, "Background must be a hex colour")
     for count in range(1, 5):
