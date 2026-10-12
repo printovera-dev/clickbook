@@ -48,7 +48,19 @@ async def create_order(payload: OrderCreate, customer: dict = Depends(get_curren
         raise HTTPException(404, "Album not found")
     if not album.get("pages"):
         raise HTTPException(400, "Album not designed yet")
-    sheets = album.get("sheets") or ((len(album["pages"]) + 1) // 2)
+    page_count = len(album["pages"])
+    if album.get("album_config") and not 30 <= page_count <= 50:
+        raise HTTPException(
+            422,
+            detail={
+                "code": "wedding_page_count_out_of_range",
+                "message": "Wedding albums must contain 30–50 pages before ordering. Please return to the editor and adjust the page count.",
+                "pages": page_count,
+                "min_pages": 30,
+                "max_pages": 50,
+            },
+        )
+    sheets = album.get("sheets") or ((page_count + 1) // 2)
     price = await compute_price(sheets, payload.coupon_code, payload.gift_wrap)
     if price.get("coupon_error"):
         raise HTTPException(400, price["coupon_error"])
