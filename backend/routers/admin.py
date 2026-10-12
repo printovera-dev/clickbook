@@ -50,6 +50,10 @@ class OfferIn(BaseModel):
 
 class SettingsUpdate(BaseModel):
     price_per_sheet: Optional[float] = None
+    glossy_sheet_price: Optional[float] = None
+    matte_sheet_price: Optional[float] = None
+    acrylic_cover_price: Optional[float] = None
+    digital_cover_price: Optional[float] = None
     gst_percent: Optional[float] = None
     min_sheets: Optional[int] = None
     max_sheets: Optional[int] = None
