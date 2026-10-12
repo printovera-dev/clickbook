@@ -31,8 +31,11 @@ export default function WeddingAlbumSetup() {
     const all = coversQuery.data?.covers || [];
     // Honour catalog compatibility metadata when present; older catalog entries remain selectable.
     const compatible = all.filter((c: any) => {
+      const style = String(c.style || "").toLowerCase();
       const allowed = c.compatible_materials || c.cover_materials;
-      return !Array.isArray(allowed) || allowed.length === 0 || allowed.includes(material);
+      const hasWeddingStyle = ["signature", "classic", "editorial"].includes(style);
+      const supportsMaterial = !Array.isArray(allowed) || allowed.length === 0 || allowed.includes(material);
+      return hasWeddingStyle && supportsMaterial;
     });
 
     // Prefer one catalog design for each established style instead of accidentally
@@ -45,15 +48,6 @@ export default function WeddingAlbumSetup() {
       if (match) {
         selected.push(match);
         used.add(match.id);
-      }
-    }
-    // Older catalog records may not have a style field. Fill missing slots with
-    // distinct compatible covers so older catalogs remain usable.
-    for (const cover of compatible) {
-      if (selected.length >= 3) break;
-      if (!used.has(cover.id)) {
-        selected.push(cover);
-        used.add(cover.id);
       }
     }
     return selected;
