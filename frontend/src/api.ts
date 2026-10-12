@@ -121,6 +121,7 @@ export const api = {
   // Catalog (paginated: {items, total, next_offset}; admin can add unlimited assets)
   listCovers: (offset = 0, limit = 20) => request<{ covers: any[]; total: number; next_offset: number | null }>(`/covers?offset=${offset}&limit=${limit}`),
   listLayouts: () => request<{ layouts: any[]; total: number }>("/layouts?limit=100"),
+  listPageDesigns: () => request<{ designs: any[] }>("/page-designs"),
   listBackgrounds: (offset = 0, limit = 100) => request<{ backgrounds: any[]; total: number; next_offset: number | null }>(`/backgrounds?offset=${offset}&limit=${limit}`),
   listOffers: () => request<{ offers: any[] }>("/offers"),
   getSettings: () => request<{ settings: any }>("/settings"),
@@ -185,6 +186,10 @@ export const api = {
   adminPayments: () => request<{ payments: any[]; summary: any }>("/admin/payments", { admin: true }),
   adminAlbums: (status?: string) => request<{ albums: any[] }>(`/admin/albums${status ? `?status=${status}` : ""}`, { admin: true }),
   adminLayouts: () => request<{ layouts: any[] }>("/admin/layouts", { admin: true }),
+  adminPageDesigns: () => request<{ designs: any[] }>("/admin/page-designs", { admin: true }),
+  adminCreatePageDesign: (data: any) => request("/admin/page-designs", { method: "POST", body: data, admin: true }),
+  adminUpdatePageDesign: (id: string, data: any) => request(`/admin/page-designs/${id}`, { method: "PUT", body: data, admin: true }),
+  adminDisablePageDesign: (id: string) => request(`/admin/page-designs/${id}`, { method: "DELETE", admin: true }),
   adminCreateLayout: (data: any) => request("/admin/layouts", { method: "POST", body: data, admin: true }),
   adminUpdateLayout: (id: string, data: any) => request(`/admin/layouts/${id}`, { method: "PUT", body: data, admin: true }),
   adminDeleteLayout: (id: string) => request(`/admin/layouts/${id}`, { method: "DELETE", admin: true }),
