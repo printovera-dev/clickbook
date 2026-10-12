@@ -22,6 +22,7 @@ export default function Review() {
   const photos: any[] = album?.photos || [];
   const photoIds = new Set(photos.map((p: any) => p.id));
   const missingSlots = (album?.pages || []).reduce((total: number, page: any) => total + (page.photo_ids || []).filter((pid: string) => !photoIds.has(pid)).length, 0);
+  const weddingReviewValid = !isWedding || (weddingPageCountValid && missingSlots === 0 && !!album?.cover_design);
   const lowResolution = photos.filter((p: any) => {
     const w = Number(p.width || p.width_px || 0);
     const h = Number(p.height || p.height_px || 0);
@@ -56,6 +57,15 @@ export default function Review() {
             <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>Return to Edit to add or remove pages.</Text>
           </View>
         ) : null}
+        {isWedding && !album?.cover_design ? (
+          <View style={styles.warningCard} testID="wedding-cover-warning">
+            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+              <Feather name="alert-triangle" size={18} color={colors.error} />
+              <Text style={[s.h2, { color: colors.error }]}>Cover design is incomplete</Text>
+            </View>
+            <Text style={[s.body, { marginTop: spacing.sm }]}>Please open the editor and finish the cover before ordering.</Text>
+          </View>
+        ) : null}
         {isWedding && (missingSlots > 0 || lowResolution > 0) ? (
           <View style={styles.warningCard} testID="wedding-review-warnings">
             <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
@@ -85,7 +95,7 @@ export default function Review() {
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
         <View style={{ flexDirection: "row", gap: spacing.md }}>
           <Button testID="review-edit-button" label="Edit" variant="outline" onPress={() => router.push({ pathname: "/album/[id]/editor", params: { id: String(id) } })} style={{ flex: 1 }} />
-          <Button testID="review-continue-button" label="Continue to Order" onPress={() => router.push({ pathname: "/album/[id]/checkout", params: { id: String(id) } })} disabled={!confirmed || !weddingPageCountValid} style={{ flex: 1 }} />
+          <Button testID="review-continue-button" label="Continue to Order" onPress={() => router.push({ pathname: "/album/[id]/checkout", params: { id: String(id) } })} disabled={!confirmed || !weddingReviewValid} style={{ flex: 1 }} />
         </View>
       </View>
     </View>
