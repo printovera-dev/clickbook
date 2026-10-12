@@ -11,7 +11,7 @@ import { Thumb } from "@/src/components/thumb";
 import { api } from "@/src/api";
 
 export default function ChooseStyle() {
-  const { albumId, project } = useLocalSearchParams<{ albumId: string; project?: string }>();
+  const { albumId, project, segmentOrder } = useLocalSearchParams<{ albumId: string; project?: string; segmentOrder?: string }>();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [style, setStyle] = useState<StyleKey | null>(null);
@@ -73,7 +73,7 @@ export default function ChooseStyle() {
           testID="style-continue-button"
           label="Design my album"
           disabled={!style}
-          onPress={() => router.replace({ pathname: "/create/generating", params: { albumId: String(albumId), style: String(style), coverPhotoId: selectedCover || "", ...(project === "wedding" ? { project: "wedding" } : {}) } })}
+          onPress={() => router.replace({ pathname: "/create/generating", params: { albumId: String(albumId), style: String(style), coverPhotoId: selectedCover || "", ...(segmentOrder ? { segmentOrder: String(segmentOrder) } : {}), ...(project === "wedding" ? { project: "wedding" } : {}) } })}
         />
       </View>
     </View>
