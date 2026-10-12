@@ -27,6 +27,7 @@ class PagesUpdate(BaseModel):
 class GenerateRequest(BaseModel):
     style: Optional[str] = None  # elegant | balanced | gallery
     cover_photo_id: Optional[str] = None
+    segment_order: Optional[List[str]] = None
     allow_short: bool = False  # admin/test escape hatch only
 
 
@@ -208,9 +209,17 @@ async def auto_generate(album_id: str, payload: Optional[GenerateRequest] = None
     style = (payload.style if payload and payload.style else None) or album.get("design_style") or DEFAULT_STYLE
     if style not in STYLE_RHYTHMS:
         raise HTTPException(400, "Invalid style")
-    photos = album.get("photos", [])
+    photos = list(album.get("photos", []))
     if not photos:
         raise HTTPException(400, "No photos uploaded")
+    # Wedding Album category order controls the order in which photos enter the generated book.
+    # Legacy ClickBook generation keeps its original upload order.
+    if album.get("album_config") and payload and payload.segment_order:
+        allowed_segments = {"Couple", "Ritual", "Dance", "Ceremony", "Guest", "Family"}
+        if len(payload.segment_order) != len(set(payload.segment_order)) or any(s not in allowed_segments for s in payload.segment_order):
+            raise HTTPException(400, "Invalid wedding photo category order")
+        rank = {segment: index for index, segment in enumerate(payload.segment_order)}
+        photos.sort(key=lambda photo: (rank.get(photo.get("segment"), len(rank)), album.get("photos", []).index(photo)))
     layouts = await db.layouts.find({"active": True}, {"_id": 0}).to_list(50)
     layouts_by_count = {l["photo_count"]: l for l in layouts}
     bgs = await db.backgrounds.find({"active": True}, {"_id": 0}).to_list(100)
