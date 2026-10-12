@@ -17,7 +17,7 @@ def page_dimensions(album: dict) -> tuple[float, float]:
     """Return width and height in inches; legacy albums stay 8x8."""
     config = album.get("album_config") or {}
     size = config.get("size") or album.get("size") or "8x8"
-    return {"8x8": (8.0, 8.0), "12x18": (12.0, 18.0), "24x24": (24.0, 24.0)}.get(size, LEGACY_PAGE_IN)
+    return {"8x8": (8.0, 8.0), "12x18": (12.0, 18.0), "12x12": (12.0, 12.0)}.get(size, LEGACY_PAGE_IN)
 
 
 def pixel_dimensions(album: dict) -> tuple[int, int]:
