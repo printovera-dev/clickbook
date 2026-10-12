@@ -475,6 +475,64 @@ class LayoutIn(BaseModel):
     active: bool = True
 
 
+class PageDesignIn(BaseModel):
+    name: str
+    description: str = ""
+    preset_key: str
+    background: str
+    positions_by_count: Dict[str, List[Dict[str, Any]]]
+    active: bool = True
+    display_order: int = 1
+
+
+def _validate_page_design(payload: PageDesignIn):
+    if not payload.name.strip():
+        raise HTTPException(400, "Design name is required")
+    if not payload.background.startswith("#") or len(payload.background) not in (4, 7):
+        raise HTTPException(400, "Background must be a hex colour")
+    for count in range(1, 5):
+        rects = payload.positions_by_count.get(str(count))
+        if not isinstance(rects, list) or len(rects) != count:
+            raise HTTPException(400, f"Design must include {count} position(s) for {count}-photo pages")
+        for rect in rects:
+            try:
+                x, y, w, h = (float(rect[k]) for k in ("x", "y", "w", "h"))
+            except (KeyError, TypeError, ValueError):
+                raise HTTPException(400, "Each position needs numeric x, y, w and h")
+            if x < 0 or y < 0 or w <= 0 or h <= 0 or x + w > 1.001 or y + h > 1.001:
+                raise HTTPException(400, "Position rectangles must fit within the page")
+
+
+@router.get("/page-designs")
+async def admin_page_designs(admin: dict = Depends(get_current_admin)):
+    return {"designs": await db.page_designs.find({}, {"_id": 0}).sort("display_order", 1).to_list(100)}
+
+
+@router.post("/page-designs")
+async def create_page_design(payload: PageDesignIn, admin: dict = Depends(get_current_admin)):
+    _validate_page_design(payload)
+    doc = {"id": new_id(), **payload.dict(), "created_at": now_iso()}
+    await db.page_designs.insert_one(dict(doc))
+    return {"design": doc}
+
+
+@router.put("/page-designs/{design_id}")
+async def update_page_design(design_id: str, payload: PageDesignIn, admin: dict = Depends(get_current_admin)):
+    _validate_page_design(payload)
+    result = await db.page_designs.update_one({"id": design_id}, {"$set": payload.dict()})
+    if not result.matched_count:
+        raise HTTPException(404, "Page design not found")
+    return {"success": True}
+
+
+@router.delete("/page-designs/{design_id}")
+async def disable_page_design(design_id: str, admin: dict = Depends(get_current_admin)):
+    result = await db.page_designs.update_one({"id": design_id}, {"$set": {"active": False}})
+    if not result.matched_count:
+        raise HTTPException(404, "Page design not found")
+    return {"success": True}
+
+
 class BackgroundIn(BaseModel):
     name: str
     color: str
