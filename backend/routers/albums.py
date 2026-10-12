@@ -61,8 +61,13 @@ async def _save_design(album: dict, pages: list, kind: str, extra: Optional[dict
             "message": f"Wedding albums can contain at most {WEDDING_MAX_PAGES} pages.",
             "pages": len(pages), "max_pages": WEDDING_MAX_PAGES,
         })
-    settings = await get_settings_doc()
-    sheets = max(settings.get("min_sheets", 10), (len(pages) + 1) // 2)
+    if album.get("album_config"):
+        # Wedding albums use actual two-page sheets for pricing; do not apply
+        # the legacy ClickBook minimum-sheet setting to this product.
+        sheets = (len(pages) + 1) // 2
+    else:
+        settings = await get_settings_doc()
+        sheets = max(settings.get("min_sheets", 10), (len(pages) + 1) // 2)
     version = album.get("version", 1) + 1
     await db.albums.update_one(
         {"id": album["id"]},
