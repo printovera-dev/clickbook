@@ -86,14 +86,25 @@ class PriceRequest(BaseModel):
     sheets: int
     coupon_code: Optional[str] = None
     gift_wrap: bool = False
+    paper_finish: Optional[str] = None
+    cover_material: Optional[str] = None
 
 
-async def compute_price(sheets: int, coupon_code: Optional[str], gift_wrap: bool = False) -> dict:
+async def compute_price(sheets: int, coupon_code: Optional[str], gift_wrap: bool = False,
+                        paper_finish: Optional[str] = None, cover_material: Optional[str] = None) -> dict:
     settings = await get_settings_doc()
-    price_per_sheet = settings["price_per_sheet"]
+    finish = (paper_finish or "gloss").lower()
+    material = (cover_material or "digital").lower()
+    if finish not in {"gloss", "matte"}:
+        raise HTTPException(400, "Choose Gloss or Matte paper")
+    if material not in {"digital", "acrylic"}:
+        raise HTTPException(400, "Choose Digital or Acrylic cover")
+    price_per_sheet = float(settings.get("matte_sheet_price" if finish == "matte" else "glossy_sheet_price", settings["price_per_sheet"]))
+    cover_price = float(settings.get("acrylic_cover_price" if material == "acrylic" else "digital_cover_price", 0))
     gst_percent = settings["gst_percent"]
     gift_wrap_fee = float(settings.get("gift_wrap_fee", 0) or 0)
-    subtotal = round(sheets * price_per_sheet, 2)
+    sheets_subtotal = round(sheets * price_per_sheet, 2)
+    subtotal = round(sheets_subtotal + cover_price, 2)
     discount = 0.0
     coupon_applied: Optional[dict] = None
     error: Optional[str] = None
@@ -126,6 +137,10 @@ async def compute_price(sheets: int, coupon_code: Optional[str], gift_wrap: bool
     return {
         "sheets": sheets,
         "price_per_sheet": price_per_sheet,
+        "paper_finish": finish,
+        "cover_material": material,
+        "cover_price": cover_price,
+        "sheets_subtotal": sheets_subtotal,
         "gst_percent": gst_percent,
         "subtotal": subtotal,
         "discount": discount,
@@ -141,7 +156,7 @@ async def compute_price(sheets: int, coupon_code: Optional[str], gift_wrap: bool
 
 @router.post("/pricing/calculate")
 async def calculate_price(payload: PriceRequest):
-    return await compute_price(payload.sheets, payload.coupon_code, payload.gift_wrap)
+    return await compute_price(payload.sheets, payload.coupon_code, payload.gift_wrap, payload.paper_finish, payload.cover_material)
 
 
 @router.get("/offers")
