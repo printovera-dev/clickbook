@@ -55,11 +55,11 @@ def _ensure_locked(album: dict) -> None:
 
 async def _save_design(album: dict, pages: list, kind: str, extra: Optional[dict] = None) -> dict:
     _ensure_locked(album)
-    if album.get("album_config") and not WEDDING_MIN_PAGES <= len(pages) <= WEDDING_MAX_PAGES:
+    if album.get("album_config") and len(pages) > WEDDING_MAX_PAGES:
         raise HTTPException(status_code=422, detail={
             "code": "wedding_page_count_out_of_range",
-            "message": f"Wedding albums must contain {WEDDING_MIN_PAGES}–{WEDDING_MAX_PAGES} pages.",
-            "pages": len(pages), "min_pages": WEDDING_MIN_PAGES, "max_pages": WEDDING_MAX_PAGES,
+            "message": f"Wedding albums can contain at most {WEDDING_MAX_PAGES} pages.",
+            "pages": len(pages), "max_pages": WEDDING_MAX_PAGES,
         })
     settings = await get_settings_doc()
     sheets = max(settings.get("min_sheets", 10), (len(pages) + 1) // 2)
