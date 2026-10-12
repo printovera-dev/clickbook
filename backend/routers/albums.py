@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from typing import List, Optional, Any, Dict
@@ -17,6 +17,7 @@ ALLOWED_EXT = (".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif")
 class AlbumCreate(BaseModel):
     cover_id: str
     name: Optional[str] = None
+    album_config: Optional[Dict[str, Any]] = None
 
 
 class PagesUpdate(BaseModel):
@@ -71,6 +72,18 @@ async def create_album(payload: AlbumCreate, customer: dict = Depends(get_curren
     if not cover:
         raise HTTPException(400, "Invalid cover")
     cover = (await with_thumbnails([cover]))[0]
+    config = payload.album_config
+    if config is not None:
+        if config.get("size") not in {"12x18", "24x24"}:
+            raise HTTPException(400, "Invalid Wedding Album size")
+        if config.get("paper_finish") not in {"gloss", "matte"}:
+            raise HTTPException(400, "Invalid paper finish")
+        if config.get("cover_material") not in {"digital", "acrylic"}:
+            raise HTTPException(400, "Invalid cover material")
+        size = config["size"]
+    else:
+        # Preserve existing ClickBook defaults and API contract.
+        size = "8x8"
     album = {
         "id": new_id(),
         "customer_id": customer["id"],
@@ -80,7 +93,10 @@ async def create_album(payload: AlbumCreate, customer: dict = Depends(get_curren
         "status": "draft",  # draft | ordered | delivered
         "photos": [],
         "pages": [],
-        "size": "8x8",
+        "size": size,
+        "paper_finish": config.get("paper_finish") if config else None,
+        "cover_material": config.get("cover_material") if config else None,
+        "album_config": config,
         "design_style": None,
         "cover_design": None,
         "locked": False,
@@ -143,7 +159,9 @@ async def update_album(album_id: str, payload: AlbumUpdate, customer: dict = Dep
 
 
 @router.post("/albums/{album_id}/photos")
-async def upload_photo(album_id: str, file: UploadFile = File(...), customer: dict = Depends(get_current_customer)):
+async def upload_photo(album_id: str, file: UploadFile = File(...), segment: str = Form("Unassigned"), customer: dict = Depends(get_current_customer)):
+    if segment not in {"Couple", "Ritual", "Dance", "Ceremony", "Guest", "Family", "Unassigned"}:
+        raise HTTPException(400, "Invalid photo category")
     _ensure_locked(await _owned_album(album_id, customer))
     data = await file.read()
     if len(data) > MAX_UPLOAD_BYTES:
@@ -160,6 +178,7 @@ async def upload_photo(album_id: str, file: UploadFile = File(...), customer: di
         "id": new_id(),
         "filename": filename,
         "uploaded_at": now_iso(),
+        "segment": segment,
         **meta,
         "thumbnail_url": public_url(meta["thumbnail_path"]),
         "preview_url": public_url(meta["preview_path"]),
