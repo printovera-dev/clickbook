@@ -15,6 +15,75 @@ def package_folder(order: dict) -> str:
     return safe_folder_name(f"{order['order_no']}_{order.get('album_name') or order.get('client_name') or ''}")
 
 
+def validate_print_handoff(album: dict) -> dict:
+    """Validate the frozen album snapshot before producing files; legacy ClickBooks keep their existing path."""
+    config = album.get("album_config") or {}
+    if not config:
+        return {"status": "legacy", "warnings": []}
+
+    size = config.get("size") or album.get("size")
+    paper_finish = config.get("paper_finish") or album.get("paper_finish")
+    cover_material = config.get("cover_material") or album.get("cover_material")
+    if size not in {"12x18", "24x24"}:
+        raise ValueError("Wedding print handoff has an unsupported album size.")
+    if paper_finish not in {"gloss", "matte"}:
+        raise ValueError("Wedding print handoff is missing a valid paper finish.")
+    if cover_material not in {"digital", "acrylic"}:
+        raise ValueError("Wedding print handoff is missing a valid cover material.")
+
+    pages = sorted(album.get("pages") or [], key=lambda p: p.get("order", 0))
+    page_count = len(pages)
+    if not 30 <= page_count <= 50:
+        raise ValueError(f"Wedding print handoff requires 30–50 pages; this album has {page_count}.")
+    if not album.get("cover_design"):
+        raise ValueError("Wedding print handoff is missing the approved cover design.")
+
+    photo_ids = {p.get("id") for p in album.get("photos", [])}
+    missing_refs = [
+        {"page": index + 1, "photo_id": photo_id}
+        for index, page in enumerate(pages)
+        for photo_id in (page.get("photo_ids") or [])
+        if photo_id not in photo_ids
+    ]
+    if missing_refs:
+        raise ValueError(f"Wedding print handoff contains {len(missing_refs)} missing photo reference(s).")
+
+    blank_pages = [index + 1 for index, page in enumerate(pages) if not (page.get("photo_ids") or [])]
+    low_resolution = 0
+    for photo in album.get("photos", []):
+        try:
+            width = int(photo.get("width") or photo.get("width_px") or 0)
+            height = int(photo.get("height") or photo.get("height_px") or 0)
+        except (TypeError, ValueError):
+            continue
+        if width > 0 and height > 0 and min(width, height) < 1200:
+            low_resolution += 1
+
+    warnings = []
+    if blank_pages:
+        warnings.append({
+            "code": "blank_pages",
+            "message": "Some pages contain no photo references; inspect these pages before printing.",
+            "page_numbers": blank_pages,
+        })
+    if low_resolution:
+        warnings.append({
+            "code": "low_resolution_photos",
+            "message": "Some source photos have a smallest dimension below 1200 pixels; inspect sharpness at print size.",
+            "photo_count": low_resolution,
+        })
+    width_px, height_px = pixel_dimensions({**album, "size": size, "album_config": {**config, "size": size}})
+    return {
+        "status": "passed_with_warnings" if warnings else "passed",
+        "page_count": page_count,
+        "size": size,
+        "paper_finish": paper_finish,
+        "cover_material": cover_material,
+        "pixel_dimensions": {"width": width_px, "height": height_px},
+        "warnings": warnings,
+    }
+
+
 async def build_production_package(order_id: str) -> dict:
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
@@ -22,6 +91,7 @@ async def build_production_package(order_id: str) -> dict:
     await db.orders.update_one({"id": order_id}, {"$set": {"production_package": {"status": "building", "started_at": now_iso()}}})
     try:
         album = order.get("album_snapshot") or {}
+        print_readiness = validate_print_handoff(album)
         layouts = await db.layouts.find({}, {"_id": 0}).to_list(50)
         layouts_by_id = {l["id"]: l for l in layouts}
         home = await db.home_content.find_one({"id": "default"}, {"_id": 0, "last_page_url": 1}) or {}
@@ -41,6 +111,7 @@ async def build_production_package(order_id: str) -> dict:
             "cover_material": album.get("cover_material"),
             "design_style": album.get("design_style"),
             "cover_style": (album.get("cover_design") or {}).get("style"),
+            "print_readiness": print_readiness,
             "gift_wrap": order.get("gift_wrap", False),
             "gift_note": order.get("gift_note", ""),
             "address": order.get("address"),
@@ -54,8 +125,10 @@ async def build_production_package(order_id: str) -> dict:
             "pdf_url": public_url(meta["pdf_path"]),
             "cover_url": public_url(meta["cover_path"]),
             "back_cover_url": public_url(meta["cover_path"].replace("cover.jpg", "back_cover.jpg")),
+            "manifest_url": public_url(meta["manifest_path"]),
             "print_urls": [public_url(p) for p in meta["print_paths"]],
             "pages": len(meta["print_paths"]),
+            "print_readiness": print_readiness,
             "size_bytes": meta["size_bytes"],
             "built_at": now_iso(),
         }
