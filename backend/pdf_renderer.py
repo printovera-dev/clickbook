@@ -47,7 +47,12 @@ def _color(c: Optional[str], fallback="#1C1917"):
 def _open_photo(photo: dict, tr: Optional[dict] = None, prefer_original: bool = False) -> Optional[Image.Image]:
     # Large wedding print sizes should use the uploaded original, not the legacy 3000px derivative.
     paths = (photo.get("original_path"), photo.get("print_path")) if prefer_original else (photo.get("print_path"), photo.get("original_path"))
-    data = next((get_file_bytes(path or "") for path in paths if path and get_file_bytes(path or "")), None)
+    data = None
+    for path in paths:
+        if path:
+            data = get_file_bytes(path)
+            if data:
+                break
     if not data:
         return None
     img = Image.open(io.BytesIO(data)).convert("RGB")
