@@ -108,3 +108,53 @@ def default_cover_design(style: str, photo_id: str, name: str) -> dict:
         "texts": [{"id": uuid.uuid4().hex[:8], "italic": False, "z": i + 1, **t, "text": t["text"].replace("{name}", name)}
                   for i, t in enumerate(st["texts"])],
     }
+
+
+# Wedding Album Studio: reusable page designs. These change layout and page colour,
+# while keeping the customer's selected photos and text objects intact.
+PAGE_DESIGN_PRESETS = [
+    {
+        "id": "page-design-classic-ivory", "name": "Classic Ivory",
+        "description": "Airy margins and a warm ivory page.",
+        "preset_key": "classic", "background": "#F7F3ED", "active": True, "display_order": 1,
+        "positions_by_count": {
+            "1": [{"x": 0.07, "y": 0.07, "w": 0.86, "h": 0.86}],
+            "2": [{"x": 0.07, "y": 0.07, "w": 0.86, "h": 0.42}, {"x": 0.07, "y": 0.51, "w": 0.86, "h": 0.42}],
+            "3": [{"x": 0.07, "y": 0.07, "w": 0.86, "h": 0.52}, {"x": 0.07, "y": 0.63, "w": 0.42, "h": 0.30}, {"x": 0.51, "y": 0.63, "w": 0.42, "h": 0.30}],
+            "4": [{"x": 0.07, "y": 0.07, "w": 0.42, "h": 0.42}, {"x": 0.51, "y": 0.07, "w": 0.42, "h": 0.42}, {"x": 0.07, "y": 0.51, "w": 0.42, "h": 0.42}, {"x": 0.51, "y": 0.51, "w": 0.42, "h": 0.42}],
+        },
+    },
+    {
+        "id": "page-design-editorial-white", "name": "Editorial White",
+        "description": "Magazine-inspired side-by-side composition.",
+        "preset_key": "editorial", "background": "#FFFFFF", "active": True, "display_order": 2,
+        "positions_by_count": {
+            "1": [{"x": 0.10, "y": 0.06, "w": 0.80, "h": 0.88}],
+            "2": [{"x": 0.06, "y": 0.08, "w": 0.43, "h": 0.84}, {"x": 0.51, "y": 0.08, "w": 0.43, "h": 0.84}],
+            "3": [{"x": 0.06, "y": 0.08, "w": 0.88, "h": 0.54}, {"x": 0.06, "y": 0.66, "w": 0.43, "h": 0.26}, {"x": 0.51, "y": 0.66, "w": 0.43, "h": 0.26}],
+            "4": [{"x": 0.06, "y": 0.08, "w": 0.43, "h": 0.40}, {"x": 0.51, "y": 0.08, "w": 0.43, "h": 0.40}, {"x": 0.06, "y": 0.52, "w": 0.43, "h": 0.40}, {"x": 0.51, "y": 0.52, "w": 0.43, "h": 0.40}],
+        },
+    },
+    {
+        "id": "page-design-cinematic", "name": "Cinematic",
+        "description": "Bold full-bleed photography on a deep charcoal page.",
+        "preset_key": "cinematic", "background": "#1C1917", "active": True, "display_order": 3,
+        "positions_by_count": {
+            "1": [{"x": 0.00, "y": 0.00, "w": 1.00, "h": 1.00}],
+            "2": [{"x": 0.00, "y": 0.00, "w": 1.00, "h": 0.495}, {"x": 0.00, "y": 0.505, "w": 1.00, "h": 0.495}],
+            "3": [{"x": 0.00, "y": 0.00, "w": 1.00, "h": 0.60}, {"x": 0.00, "y": 0.61, "w": 0.495, "h": 0.39}, {"x": 0.505, "y": 0.61, "w": 0.495, "h": 0.39}],
+            "4": [{"x": 0.00, "y": 0.00, "w": 0.495, "h": 0.495}, {"x": 0.505, "y": 0.00, "w": 0.495, "h": 0.495}, {"x": 0.00, "y": 0.505, "w": 0.495, "h": 0.495}, {"x": 0.505, "y": 0.505, "w": 0.495, "h": 0.495}],
+        },
+    },
+    {
+        "id": "page-design-romantic-blush", "name": "Romantic Blush",
+        "description": "Soft blush background with generous breathing room.",
+        "preset_key": "romantic", "background": "#F8E9E8", "active": True, "display_order": 4,
+        "positions_by_count": {
+            "1": [{"x": 0.11, "y": 0.08, "w": 0.78, "h": 0.84}],
+            "2": [{"x": 0.09, "y": 0.08, "w": 0.82, "h": 0.40}, {"x": 0.09, "y": 0.52, "w": 0.82, "h": 0.40}],
+            "3": [{"x": 0.09, "y": 0.08, "w": 0.82, "h": 0.48}, {"x": 0.09, "y": 0.60, "w": 0.40, "h": 0.32}, {"x": 0.51, "y": 0.60, "w": 0.40, "h": 0.32}],
+            "4": [{"x": 0.09, "y": 0.08, "w": 0.40, "h": 0.40}, {"x": 0.51, "y": 0.08, "w": 0.40, "h": 0.40}, {"x": 0.09, "y": 0.52, "w": 0.40, "h": 0.40}, {"x": 0.51, "y": 0.52, "w": 0.40, "h": 0.40}],
+        },
+    },
+]
