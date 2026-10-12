@@ -13,6 +13,10 @@ export default function AdminPricing() {
   const router = useRouter();
   const q = useQuery({ queryKey: ["settings"], queryFn: () => api.getSettings() });
   const [pricePerSheet, setPricePerSheet] = useState("");
+  const [glossyPrice, setGlossyPrice] = useState("200");
+  const [mattePrice, setMattePrice] = useState("250");
+  const [acrylicPrice, setAcrylicPrice] = useState("1500");
+  const [digitalPrice, setDigitalPrice] = useState("900");
   const [gst, setGst] = useState("");
   const [minSheets, setMinSheets] = useState("");
   const [maxSheets, setMaxSheets] = useState("");
@@ -31,6 +35,10 @@ export default function AdminPricing() {
   useEffect(() => {
     if (q.data?.settings) {
       setPricePerSheet(String(q.data.settings.price_per_sheet));
+      setGlossyPrice(String(q.data.settings.glossy_sheet_price ?? 200));
+      setMattePrice(String(q.data.settings.matte_sheet_price ?? 250));
+      setAcrylicPrice(String(q.data.settings.acrylic_cover_price ?? 1500));
+      setDigitalPrice(String(q.data.settings.digital_cover_price ?? 900));
       setGst(String(q.data.settings.gst_percent));
       setMinSheets(String(q.data.settings.min_sheets));
       setMaxSheets(String(q.data.settings.max_sheets));
@@ -42,6 +50,10 @@ export default function AdminPricing() {
   const save = async () => {
     await api.adminUpdateSettings({
       price_per_sheet: Number(pricePerSheet),
+      glossy_sheet_price: Number(glossyPrice),
+      matte_sheet_price: Number(mattePrice),
+      acrylic_cover_price: Number(acrylicPrice),
+      digital_cover_price: Number(digitalPrice),
       gst_percent: Number(gst),
       min_sheets: Number(minSheets),
       max_sheets: Number(maxSheets),
@@ -63,7 +75,16 @@ export default function AdminPricing() {
       <Text style={[s.h1, { marginTop: spacing.xl }]}>Pricing rules</Text>
       <Text style={[s.bodyMuted, { marginTop: 4 }]}>Applies to all new orders.</Text>
 
-      <Text style={[s.label, { marginTop: spacing.xl }]}>Price per sheet (₹)</Text>
+      <Text style={[s.h2, { marginTop: spacing.xl }]}>Wedding Album pricing</Text>
+      <Text style={[s.label, { marginTop: spacing.md }]}>Glossy sheet price (₹)</Text>
+      <TextInput testID="pricing-glossy-sheet" value={glossyPrice} onChangeText={setGlossyPrice} keyboardType="numeric" style={styles.input} />
+      <Text style={[s.label, { marginTop: spacing.md }]}>Matte sheet price (₹)</Text>
+      <TextInput testID="pricing-matte-sheet" value={mattePrice} onChangeText={setMattePrice} keyboardType="numeric" style={styles.input} />
+      <Text style={[s.label, { marginTop: spacing.md }]}>Acrylic cover per album (₹)</Text>
+      <TextInput testID="pricing-acrylic-cover" value={acrylicPrice} onChangeText={setAcrylicPrice} keyboardType="numeric" style={styles.input} />
+      <Text style={[s.label, { marginTop: spacing.md }]}>Digital cover per album (₹)</Text>
+      <TextInput testID="pricing-digital-cover" value={digitalPrice} onChangeText={setDigitalPrice} keyboardType="numeric" style={styles.input} />
+      <Text style={[s.label, { marginTop: spacing.xl }]}>Legacy ClickBook price per sheet (₹)</Text>
       <TextInput testID="pricing-per-sheet" value={pricePerSheet} onChangeText={setPricePerSheet} keyboardType="numeric" style={styles.input} />
       <Text style={[s.label, { marginTop: spacing.md }]}>GST %</Text>
       <TextInput testID="pricing-gst" value={gst} onChangeText={setGst} keyboardType="numeric" style={styles.input} />
