@@ -76,10 +76,11 @@ async function request<T = any>(
   return res.json();
 }
 
-async function uploadFile(path: string, uri: string, filename: string, webFile: any, admin: boolean) {
+async function uploadFile(path: string, uri: string, filename: string, webFile: any, admin: boolean, segment?: string) {
   {
     const token = admin ? await getAdminToken() : await getToken();
     const form = new FormData();
+    if (segment) form.append("segment", segment);
     if (Platform.OS === "web") {
       // Web: FormData needs a real File/Blob, not the RN {uri} shim
       let file: any = webFile;
@@ -138,8 +139,8 @@ export const api = {
     request(`/albums/${albumId}/photos/${photoId}`, { method: "DELETE" }),
 
   // Upload
-  uploadPhoto: (albumId: string, uri: string, filename: string, webFile?: any) =>
-    uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false),
+  uploadPhoto: (albumId: string, uri: string, filename: string, webFile?: any, segment?: string) =>
+    uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false, segment),
   adminUploadImage: (uri: string, filename: string, webFile?: any) =>
     uploadFile(`/admin/images`, uri, filename, webFile, true),
   adminUploadVideo: (uri: string, filename: string, webFile?: any) =>
