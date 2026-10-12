@@ -1,16 +1,56 @@
 // Album Designs: the design system customers choose from — album styles (layout rhythm) and cover styles.
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { useEffect, useState } from "react";
+import { View, Text, StyleSheet, Pressable, TextInput, Switch, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { AdminPage } from "@/src/components/admin-page";
 import { ALBUM_STYLES, COVER_STYLES } from "@/src/design";
-import { s } from "@/src/ui";
+import { s, Button } from "@/src/ui";
+import { api } from "@/src/api";
 import { colors, fonts, radius, spacing } from "@/src/theme";
 import Feather from "@react-native-vector-icons/feather";
 
 export default function AdminDesigns() {
   const router = useRouter();
+  const [pageDesigns, setPageDesigns] = useState<any[]>([]);
+  const [loadingDesigns, setLoadingDesigns] = useState(true);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const loadPageDesigns = async () => {
+    setLoadingDesigns(true);
+    try { const r = await api.adminPageDesigns(); setPageDesigns(r.designs || []); }
+    catch (e: any) { Alert.alert("Could not load page designs", e?.message || "Please try again"); }
+    finally { setLoadingDesigns(false); }
+  };
+  useEffect(() => { loadPageDesigns(); }, []);
+  const savePageDesign = async (d: any) => {
+    setSavingId(d.id);
+    try {
+      await api.adminUpdatePageDesign(d.id, { name: d.name, description: d.description || "", preset_key: d.preset_key, background: d.background, positions_by_count: d.positions_by_count, active: !!d.active, display_order: Number(d.display_order || 1) });
+      await loadPageDesigns();
+    } catch (e: any) { Alert.alert("Could not save design", e?.message || "Please try again"); }
+    finally { setSavingId(null); }
+  };
   return (
     <AdminPage title="Album Designs" testID="admin-designs">
+      <Text style={s.label}>Page design presets</Text>
+      <Text style={[s.bodyMuted, { marginTop: 4 }]}>Manage the four ready-made looks shown inside the page editor. Changes apply when a design is chosen; pages already saved keep their existing layout.</Text>
+      {loadingDesigns ? <Text style={[s.bodyMuted, { marginTop: spacing.md }]}>Loading page designs…</Text> : null}
+      <View style={styles.grid}>
+        {pageDesigns.map((d) => (
+          <View key={d.id} style={styles.card} testID={"admin-page-design-" + d.id}>
+            <View style={{ width: 112, height: 90, alignSelf: "center", backgroundColor: d.background || "#FFFFFF", borderWidth: 1, borderColor: colors.border }}>
+              {(d.positions_by_count?.["4"] || []).map((r: any, i: number) => <View key={i} style={{ position: "absolute", left: r.x * 112, top: r.y * 90, width: r.w * 112, height: r.h * 90, backgroundColor: d.preset_key === "cinematic" ? "#D6D3D1" : colors.borderStrong }} />)}
+            </View>
+            <Text style={[s.label, { marginTop: spacing.sm }]}>Design name</Text>
+            <TextInput value={d.name} onChangeText={(v) => setPageDesigns((all) => all.map((x) => x.id === d.id ? { ...x, name: v } : x))} style={styles.editInput} />
+            <Text style={[s.label, { marginTop: spacing.sm }]}>Description</Text>
+            <TextInput value={d.description || ""} onChangeText={(v) => setPageDesigns((all) => all.map((x) => x.id === d.id ? { ...x, description: v } : x))} style={styles.editInput} />
+            <View style={styles.settingRow}><Text style={s.bodyMuted}>Background colour</Text><TextInput value={d.background} autoCapitalize="characters" onChangeText={(v) => setPageDesigns((all) => all.map((x) => x.id === d.id ? { ...x, background: v } : x))} style={[styles.editInput, { width: 110 }]} /></View>
+            <View style={styles.settingRow}><Text style={s.bodyMuted}>Available to customers</Text><Switch value={!!d.active} onValueChange={(v) => setPageDesigns((all) => all.map((x) => x.id === d.id ? { ...x, active: v } : x))} /></View>
+            <Button label={savingId === d.id ? "Saving…" : "Save design"} loading={savingId === d.id} onPress={() => savePageDesign(d)} />
+          </View>
+        ))}
+      </View>
+      {!loadingDesigns && pageDesigns.length === 0 ? <Text style={[s.bodyMuted, { marginTop: spacing.md }]}>No page designs are available yet. Check that the backend startup seed completed.</Text> : null}
       <Text style={s.label}>Album styles</Text>
       <Text style={[s.bodyMuted, { marginTop: 4 }]}>Each style defines the rhythm of photos per page used by the auto-designer.</Text>
       <View style={styles.grid}>
@@ -56,4 +96,6 @@ const styles = StyleSheet.create({
   mini: { width: 36, height: 36, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, padding: 3, flexDirection: "row", flexWrap: "wrap", gap: 2, alignContent: "flex-start" },
   miniBox: { backgroundColor: colors.borderStrong, borderRadius: 1 },
   link: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.lg, minHeight: 44 },
+  editInput: { minHeight: 40, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 10, color: colors.onSurface, backgroundColor: colors.surface, fontFamily: fonts.text },
+  settingRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm, marginVertical: spacing.xs },
 });
