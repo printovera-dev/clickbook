@@ -9,7 +9,7 @@ import { FluidImage } from "@/src/components/fluid-image";
 import { Button, s } from "@/src/ui";
 import { colors, spacing, radius, fonts } from "@/src/theme";
 
-type AlbumSize = "12x18" | "24x24";
+type AlbumSize = "12x18" | "12x12";
 type Finish = "gloss" | "matte";
 type Material = "digital" | "acrylic";
 
@@ -87,7 +87,7 @@ export default function WeddingAlbumSetup() {
         <Text style={[s.h2, styles.sectionTitle]}>1. Album size</Text>
         <View style={styles.optionRow}>
           <Option title="12 × 18 inch" subtitle="Portrait landscape format" active={size === "12x18"} onPress={() => setSize("12x18")} />
-          <Option title="24 × 24 inch" subtitle="Large square album" active={size === "24x24"} onPress={() => setSize("24x24")} />
+          <Option title="12 × 12 inch" subtitle="Square album" active={size === "12x12"} onPress={() => setSize("12x12")} />
         </View>
 
         <Text style={[s.h2, styles.sectionTitle]}>2. Paper finish</Text>
