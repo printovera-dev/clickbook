@@ -17,7 +17,9 @@ import zipfile
 from pathlib import Path
 from typing import Optional
 
-STORAGE_DRIVER = os.environ.get("STORAGE_DRIVER", "local")
+STORAGE_DRIVER = os.environ.get("STORAGE_DRIVER", "local").strip().lower()
+if STORAGE_DRIVER not in {"local", "s3"}:
+    raise RuntimeError("STORAGE_DRIVER must be either 'local' or 's3'.")
 
 STORAGE_BASE = Path(os.environ.get("STORAGE_BASE", "/app/backend/storage"))
 PUBLIC_BASE_URL = os.environ.get("STORAGE_PUBLIC_URL", "/api/files")
@@ -48,7 +50,16 @@ def _get_s3():
 
 
 def _use_s3() -> bool:
-    return STORAGE_DRIVER == "s3" and bool(S3_ACCESS_KEY and S3_SECRET_KEY and S3_BUCKET)
+    if STORAGE_DRIVER != "s3":
+        return False
+    missing = [name for name, value in (
+        ("S3_ACCESS_KEY", S3_ACCESS_KEY),
+        ("S3_SECRET_KEY", S3_SECRET_KEY),
+        ("S3_BUCKET", S3_BUCKET),
+    ) if not value]
+    if missing:
+        raise RuntimeError("STORAGE_DRIVER=s3 requires: " + ", ".join(missing))
+    return True
 
 
 def _customer_root(customer_id: str, album_id: str) -> Path:
@@ -154,12 +165,27 @@ def safe_folder_name(name: str) -> str:
     return cleaned[:80] or "album"
 
 
+def _delete_prefix(rel_dir: str) -> None:
+    """Delete an existing package prefix before rebuilding so stale pages cannot ship."""
+    if ".." in rel_dir.split("/"):
+        raise ValueError("Invalid storage path")
+    if _use_s3():
+        prefix = rel_dir.rstrip("/") + "/"
+        paginator = _get_s3().get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+            objects = [{"Key": item["Key"]} for item in page.get("Contents", [])]
+            for start in range(0, len(objects), 1000):
+                batch = objects[start:start + 1000]
+                if batch:
+                    _get_s3().delete_objects(Bucket=S3_BUCKET, Delete={"Objects": batch, "Quiet": True})
+    else:
+        shutil.rmtree(STORAGE_BASE / rel_dir, ignore_errors=True)
+
+
 def save_production_package(folder: str, pdf: bytes, cover_jpg: bytes, page_jpgs: list, manifest: dict,
                             back_cover_jpg: bytes = None) -> dict:
     rel = f"{DOWNLOADS_DIR}/{safe_folder_name(folder)}"
-    if not _use_s3():
-        # rebuilds replace the folder so stale pages from an older render never ship to print
-        shutil.rmtree(STORAGE_BASE / rel, ignore_errors=True)
+    _delete_prefix(rel)
     pdf_path = f"{rel}/Album.pdf"
     cover_path = f"{rel}/Cover/cover.jpg"
     _put(pdf_path, pdf, "application/pdf")
@@ -178,9 +204,24 @@ def save_production_package(folder: str, pdf: bytes, cover_jpg: bytes, page_jpgs
 
 
 def list_dir_files(rel_dir: str) -> list:
-    """Relative file paths (with sizes) under a storage folder — local driver only."""
-    if _use_s3() or ".." in rel_dir.split("/"):
+    """Relative file paths (with sizes) under a local or S3-backed storage folder."""
+    if ".." in rel_dir.split("/"):
         return []
+    if _use_s3():
+        prefix = rel_dir.rstrip("/") + "/"
+        paginator = _get_s3().get_paginator("list_objects_v2")
+        out = []
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+            for item in page.get("Contents", []):
+                key = item["Key"]
+                if key.endswith("/"):
+                    continue
+                out.append({
+                    "path": key,
+                    "name": key[len(prefix):],
+                    "size_bytes": item.get("Size", 0),
+                })
+        return sorted(out, key=lambda item: item["name"])
     root = STORAGE_BASE / rel_dir
     if not root.is_dir():
         return []
@@ -192,14 +233,27 @@ def list_dir_files(rel_dir: str) -> list:
 
 
 def zip_dir(rel_dir: str) -> Optional[bytes]:
-    if _use_s3() or ".." in rel_dir.split("/"):
-        return None
-    root = STORAGE_BASE / rel_dir
-    if not root.is_dir():
+    """Create a ZIP for either local or S3 storage. ZIP output is currently buffered in memory."""
+    if ".." in rel_dir.split("/"):
         return None
     buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for p in sorted(root.rglob("*")):
-            if p.is_file():
-                zf.write(p, arcname=str(p.relative_to(root)))
+    if _use_s3():
+        files = list_dir_files(rel_dir)
+        if not files:
+            return None
+        prefix = rel_dir.rstrip("/") + "/"
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for item in files:
+                obj = _get_s3().get_object(Bucket=S3_BUCKET, Key=item["path"])
+                with zf.open(item["name"], "w") as member:
+                    shutil.copyfileobj(obj["Body"], member)
+                obj["Body"].close()
+    else:
+        root = STORAGE_BASE / rel_dir
+        if not root.is_dir():
+            return None
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for p in sorted(root.rglob("*")):
+                if p.is_file():
+                    zf.write(p, arcname=str(p.relative_to(root)))
     return buf.getvalue()
