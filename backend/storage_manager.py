@@ -236,9 +236,6 @@ def _delete_prefix(rel_dir: str) -> None:
     """Delete an existing package prefix before rebuilding so stale pages cannot ship."""
     if ".." in rel_dir.split("/"):
         raise ValueError("Invalid storage path")
-    current_prefix = _current_package_prefix(rel_dir)
-    if current_prefix:
-        rel_dir = current_prefix
     if _use_s3():
         prefix = rel_dir.rstrip("/") + "/"
         paginator = _get_s3().get_paginator("list_objects_v2")
@@ -303,6 +300,9 @@ def list_dir_files(rel_dir: str) -> list:
     """Relative file paths (with sizes) under a local or S3-backed storage folder."""
     if ".." in rel_dir.split("/"):
         return []
+    current_prefix = _current_package_prefix(rel_dir)
+    if current_prefix:
+        rel_dir = current_prefix
     if _use_s3():
         prefix = rel_dir.rstrip("/") + "/"
         paginator = _get_s3().get_paginator("list_objects_v2")
