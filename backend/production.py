@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from starlette.concurrency import run_in_threadpool
 
 from core import db, now_iso, logger
-from pdf_renderer import render_production_package
+from pdf_renderer import render_production_package, page_dimensions, pixel_dimensions
 from storage_manager import save_production_package, public_url, safe_folder_name, get_file_bytes
 
 DEFAULT_LAST_PAGE_URL = "/api/files/home/last-page.webp"
@@ -35,7 +35,10 @@ async def build_production_package(order_id: str) -> dict:
             "mobile": (order.get("customer_snapshot") or {}).get("mobile"),
             "sheets": order.get("sheets"),
             "pages": len(rendered["pages"]),
-            "size": "8x8 in @ 300 dpi",
+            "size": f"{page_dimensions(album)[0]:g}x{page_dimensions(album)[1]:g} in @ 300 dpi",
+            "pixel_dimensions": {"width": pixel_dimensions(album)[0], "height": pixel_dimensions(album)[1]},
+            "paper_finish": album.get("paper_finish"),
+            "cover_material": album.get("cover_material"),
             "design_style": album.get("design_style"),
             "cover_style": (album.get("cover_design") or {}).get("style"),
             "gift_wrap": order.get("gift_wrap", False),
