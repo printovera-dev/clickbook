@@ -88,7 +88,7 @@ async def create_album(payload: AlbumCreate, customer: dict = Depends(get_curren
     cover = (await with_thumbnails([cover]))[0]
     config = payload.album_config
     if config is not None:
-        if config.get("size") not in {"12x18", "24x24"}:
+        if config.get("size") not in {"12x18", "12x12"}:
             raise HTTPException(400, "Invalid Wedding Album size")
         if config.get("paper_finish") not in {"gloss", "matte"}:
             raise HTTPException(400, "Invalid paper finish")
