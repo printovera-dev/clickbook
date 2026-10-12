@@ -14,7 +14,7 @@ const COLS = 3;
 const GAP = spacing.sm;
 
 export default function UploadStep() {
-  const { albumId, notice, style: keepStyle, coverPhotoId: keepCover, project } = useLocalSearchParams<{ albumId: string; notice?: string; style?: string; coverPhotoId?: string; project?: string }>();
+  const { albumId, notice, style: keepStyle, coverPhotoId: keepCover, project, segmentOrder } = useLocalSearchParams<{ albumId: string; notice?: string; style?: string; coverPhotoId?: string; project?: string; segmentOrder?: string }>();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const qc = useQueryClient();
@@ -24,7 +24,12 @@ export default function UploadStep() {
   const [err, setErr] = useState("");
   const [segment, setSegment] = useState("Couple");
   const isWedding = project === "wedding";
-  const [segments, setSegments] = useState(["Couple", "Ritual", "Dance", "Ceremony", "Guest", "Family"]);
+  const [segments, setSegments] = useState(() => {
+    const defaults = ["Couple", "Ritual", "Dance", "Ceremony", "Guest", "Family"];
+    const requested = typeof segmentOrder === "string" ? segmentOrder.split(",") : [];
+    const valid = requested.filter((item, index) => defaults.includes(item) && requested.indexOf(item) === index);
+    return [...valid, ...defaults.filter((item) => !valid.includes(item))];
+  });
   const moveSelectedSegment = (direction: -1 | 1) => {
     setSegments((current) => {
       const index = current.indexOf(segment);
