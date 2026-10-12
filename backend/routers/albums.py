@@ -30,6 +30,7 @@ class GenerateRequest(BaseModel):
     style: Optional[str] = None  # elegant | balanced | gallery
     cover_photo_id: Optional[str] = None
     segment_order: Optional[List[str]] = None
+    category_designs: Optional[Dict[str, str]] = None
     allow_short: bool = False  # admin/test escape hatch only
 
 
@@ -247,37 +248,74 @@ async def auto_generate(album_id: str, payload: Optional[GenerateRequest] = None
     layouts_by_count = {l["photo_count"]: l for l in layouts}
     bgs = await db.backgrounds.find({"active": True}, {"_id": 0}).to_list(100)
     default_bg = bgs[0]["color"] if bgs else "#FFFFFF"
-
-    # Style rhythm (photos per page); falls back to smaller layouts near the end.
+    is_wedding = bool(album.get("album_config"))
+    allowed_segments = {"Couple", "Ritual", "Dance", "Ceremony", "Guest", "Family"}
+    category_design_map = {}
+    if is_wedding:
+        # Resolve one active category-specific design for each section; explicit request
+        # overrides its configured default, while inactive/invalid IDs are ignored.
+        requested = payload.category_designs if payload and payload.category_designs else {}
+        for segment in allowed_segments:
+            design_id = requested.get(segment) or f"page-design-category-{segment.lower()}"
+            design = await db.page_designs.find_one({"id": design_id, "active": True, "segment": segment}, {"_id": 0})
+            if design:
+                category_design_map[segment] = design
+        # Fallback to the active general designs when a category design is not configured.
+        general_designs = await db.page_designs.find({"active": True, "$or": [{"segment": "All"}, {"segment": {"$exists": False}}]}, {"_id": 0}).sort("display_order", 1).to_list(20)
+    else:
+        general_designs = []
+    # Style rhythm still determines how many photos fit on each page. Wedding photos
+    # are grouped by category first, so each page inherits that category's design.
     pages = []
-    i = 0
     idx = 0
     rhythm = STYLE_RHYTHMS[style]
-    while i < len(photos):
-        want = rhythm[idx % len(rhythm)]
-        chosen = None
-        for count in (want, 2, 1):
-            if count <= (len(photos) - i) and layouts_by_count.get(count):
-                chosen = layouts_by_count[count]
-                break
-        if not chosen:
-            chosen = layouts_by_count.get(1)
-            count = 1
-        else:
-            count = chosen["photo_count"]
-        pages.append({
-            "id": new_id(),
-            "layout_id": chosen["id"] if chosen else "",
-            "layout_photo_count": count,
-            "photo_ids": [photos[i + k]["id"] for k in range(count)],
-            "images": {str(k): {"photo_id": photos[i + k]["id"], **default_transform()} for k in range(count)},
-            "texts": [],
-            "background": default_bg,
-            "text": "",
-            "order": idx,
-        })
-        i += count
-        idx += 1
+    photo_groups = []
+    if is_wedding:
+        for segment in (payload.segment_order if payload and payload.segment_order else ["Couple", "Ritual", "Dance", "Ceremony", "Guest", "Family"]):
+            group = [p for p in photos if p.get("segment") == segment]
+            if group:
+                photo_groups.append((segment, group))
+        unassigned = [p for p in photos if p.get("segment") not in allowed_segments]
+        if unassigned:
+            photo_groups.append(("Unassigned", unassigned))
+    else:
+        photo_groups = [(None, photos)]
+    for segment, group_photos in photo_groups:
+        i = 0
+        while i < len(group_photos):
+            want = rhythm[idx % len(rhythm)]
+            chosen = None
+            for count in (want, 2, 1):
+                if count <= (len(group_photos) - i) and layouts_by_count.get(count):
+                    chosen = layouts_by_count[count]
+                    break
+            if not chosen:
+                chosen = layouts_by_count.get(1)
+                count = 1
+            else:
+                count = chosen["photo_count"]
+            design = category_design_map.get(segment) if segment else None
+            if is_wedding and not design and general_designs:
+                design = general_designs[idx % len(general_designs)]
+            rects = (design or {}).get("positions_by_count", {}).get(str(count), [])
+            page = {
+                "id": new_id(),
+                "layout_id": chosen["id"] if chosen else "",
+                "layout_photo_count": count,
+                "photo_ids": [group_photos[i + k]["id"] for k in range(count)],
+                "images": {str(k): {"photo_id": group_photos[i + k]["id"], **default_transform()} for k in range(count)},
+                "texts": [],
+                "background": (design or {}).get("background", default_bg),
+                "text": "",
+                "order": idx,
+                "segment": segment,
+            }
+            if len(rects) == count:
+                page["slots"] = rects
+                page["design_preset_id"] = design["id"]
+            pages.append(page)
+            i += count
+            idx += 1
 
     extra = {"design_style": style}
     cover_pid = payload.cover_photo_id if payload and payload.cover_photo_id else None
