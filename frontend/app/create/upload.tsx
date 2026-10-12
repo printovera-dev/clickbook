@@ -181,7 +181,7 @@ export default function UploadStep() {
                 <View testID="wedding-photo-categories" style={styles.segmentWrap}>
                   {segments.map((item) => (
                     <Pressable key={item} testID={`wedding-segment-${item.toLowerCase()}`} onPress={() => setSegment(item)} style={[styles.segmentChip, segment === item && styles.segmentChipActive]} accessibilityRole="button" accessibilityState={{ selected: segment === item }}>
-                      <Text style={[styles.segmentText, segment === item && styles.segmentTextActive]}>{item}</Text>
+                      <Text style={[styles.segmentText, segment === item && styles.segmentTextActive]}>{item} · {photos.filter((photo: any) => photo.segment === item).length}</Text>
                     </Pressable>
                   ))}
                 </View>
