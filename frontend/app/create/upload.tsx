@@ -114,9 +114,10 @@ export default function UploadStep() {
 
   const generate = async () => {
     if (photos.length === 0) { setErr("Please upload at least 1 photo"); return; }
+    const orderParam = isWedding ? segments.join(",") : undefined;
     keepStyle
-      ? router.replace({ pathname: "/create/generating", params: { albumId: String(albumId), style: String(keepStyle), coverPhotoId: String(keepCover || ""), ...(isWedding ? { project: "wedding" } : {}) } })
-      : router.replace({ pathname: "/create/style", params: { albumId: String(albumId), ...(isWedding ? { project: "wedding" } : {}) } });
+      ? router.replace({ pathname: "/create/generating", params: { albumId: String(albumId), style: String(keepStyle), coverPhotoId: String(keepCover || ""), ...(orderParam ? { segmentOrder: orderParam } : {}), ...(isWedding ? { project: "wedding" } : {}) } })
+      : router.replace({ pathname: "/create/style", params: { albumId: String(albumId), ...(orderParam ? { segmentOrder: orderParam } : {}), ...(isWedding ? { project: "wedding" } : {}) } });
   };
 
   const renderItem = useCallback(({ item: p, index }: { item: any; index: number }) => {
