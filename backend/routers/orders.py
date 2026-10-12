@@ -86,11 +86,15 @@ async def create_order(payload: OrderCreate, customer: dict = Depends(get_curren
             )
     sheets = album.get("sheets") or ((page_count + 1) // 2)
     album_config = album.get("album_config") or {}
-    price = await compute_price(
-        sheets, payload.coupon_code, payload.gift_wrap,
-        album_config.get("paper_finish") or album.get("paper_finish") or "gloss",
-        album_config.get("cover_material") or album.get("cover_material") or "digital",
-    )
+    if album_config:
+        price = await compute_price(
+            sheets, payload.coupon_code, payload.gift_wrap,
+            album_config.get("paper_finish") or album.get("paper_finish") or "gloss",
+            album_config.get("cover_material") or album.get("cover_material") or "digital",
+        )
+    else:
+        # Preserve legacy ClickBook pricing for non-wedding albums.
+        price = await compute_price(sheets, payload.coupon_code, payload.gift_wrap)
     if price.get("coupon_error"):
         raise HTTPException(400, price["coupon_error"])
 
