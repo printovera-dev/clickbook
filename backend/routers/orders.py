@@ -85,7 +85,12 @@ async def create_order(payload: OrderCreate, customer: dict = Depends(get_curren
                 },
             )
     sheets = album.get("sheets") or ((page_count + 1) // 2)
-    price = await compute_price(sheets, payload.coupon_code, payload.gift_wrap)
+    album_config = album.get("album_config") or {}
+    price = await compute_price(
+        sheets, payload.coupon_code, payload.gift_wrap,
+        album_config.get("paper_finish") or album.get("paper_finish") or "gloss",
+        album_config.get("cover_material") or album.get("cover_material") or "digital",
+    )
     if price.get("coupon_error"):
         raise HTTPException(400, price["coupon_error"])
 
