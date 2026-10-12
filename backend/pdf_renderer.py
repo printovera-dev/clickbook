@@ -1,5 +1,4 @@
-"""Print-ready PDF renderer (8x8 in @ 300 dpi) built from the saved design model — same crop/offset
-math and text model as the app's PageCanvas. Uses print-resolution derivatives, never the preview."""
+"""Print-ready PDF renderer. Legacy ClickBook remains 8x8 in @ 300 DPI; Wedding Album sizes use their saved physical dimensions."""
 import gc
 import io
 from pathlib import Path
@@ -11,6 +10,21 @@ from storage_manager import get_file_bytes
 
 DPI = 300
 PAGE_PX = 8 * DPI
+LEGACY_PAGE_IN = (8.0, 8.0)
+
+
+def page_dimensions(album: dict) -> tuple[float, float]:
+    """Return width and height in inches; legacy albums stay 8x8."""
+    config = album.get("album_config") or {}
+    size = config.get("size") or album.get("size") or "8x8"
+    return {"8x8": (8.0, 8.0), "12x18": (12.0, 18.0), "24x24": (24.0, 24.0)}.get(size, LEGACY_PAGE_IN)
+
+
+def pixel_dimensions(album: dict) -> tuple[int, int]:
+    w, h = page_dimensions(album)
+    return int(round(w * DPI)), int(round(h * DPI))
+
+
 FONT_DIR = Path(__file__).parent / "fonts"
 
 
@@ -41,18 +55,19 @@ def _open_photo(photo: dict, tr: Optional[dict] = None) -> Optional[Image.Image]
     return img
 
 
-def _load_last_page(size_px: int, last_page_bytes: Optional[bytes]) -> Image.Image:
-    """Fixed closing page for every ClickBook (branding page, admin-replaceable via Home CMS)."""
-    canvas = Image.new("RGB", (size_px, size_px), (255, 255, 255))
+def _load_last_page(size_px: int, last_page_bytes: Optional[bytes], height_px: Optional[int] = None) -> Image.Image:
+    """Fixed closing page fitted within the target page dimensions."""
+    height_px = height_px or size_px
+    canvas = Image.new("RGB", (size_px, height_px), (255, 255, 255))
     if not last_page_bytes:
         return canvas
     try:
         img = Image.open(io.BytesIO(last_page_bytes)).convert("RGB")
     except Exception:  # noqa: BLE001
         return canvas
-    r = min(size_px / img.width, size_px / img.height)
+    r = min(size_px / img.width, height_px / img.height)
     w, h = max(1, int(img.width * r)), max(1, int(img.height * r))
-    canvas.paste(img.resize((w, h), Image.LANCZOS), ((size_px - w) // 2, (size_px - h) // 2))
+    canvas.paste(img.resize((w, h), Image.LANCZOS), ((size_px - w) // 2, (height_px - h) // 2))
     return canvas
 
 
@@ -72,13 +87,14 @@ def _wrap(draw: ImageDraw.ImageDraw, text: str, font, max_w: int):
     return lines
 
 
-def draw_texts(canvas: Image.Image, texts: list, size_px: int):
+def draw_texts(canvas: Image.Image, texts: list, size_px: int, height_px: Optional[int] = None):
     draw = ImageDraw.Draw(canvas)
+    height_px = height_px or size_px
     for t in sorted(texts or [], key=lambda x: x.get("z", 0)):
         if not (t.get("text") or "").strip():
             continue
-        x, y = int(t.get("x", 0.1) * size_px), int(t.get("y", 0.1) * size_px)
-        w, h = int(t.get("w", 0.8) * size_px), int(t.get("h", 0.2) * size_px)
+        x, y = int(t.get("x", 0.1) * size_px), int(t.get("y", 0.1) * height_px)
+        w, h = int(t.get("w", 0.8) * size_px), int(t.get("h", 0.2) * height_px)
         px = float(t.get("size", 0.05)) * size_px
         font = _font(t.get("font", "lora"), t.get("weight", "regular"), px)
         lines = _wrap(draw, t["text"], font, w)
@@ -94,8 +110,9 @@ def draw_texts(canvas: Image.Image, texts: list, size_px: int):
             draw.text((lx, ly), line, font=font, fill=color)
 
 
-def render_page(page: dict, photos_by_id: dict, layouts_by_id: dict, size_px: int = PAGE_PX) -> Image.Image:
-    canvas = Image.new("RGB", (size_px, size_px), _color(page.get("background"), "#FFFFFF"))
+def render_page(page: dict, photos_by_id: dict, layouts_by_id: dict, size_px: int = PAGE_PX, height_px: Optional[int] = None) -> Image.Image:
+    height_px = height_px or size_px
+    canvas = Image.new("RGB", (size_px, height_px), _color(page.get("background"), "#FFFFFF"))
     photo_ids = page.get("photo_ids", [])
     layout = layouts_by_id.get(page.get("layout_id"))
     positions = (layout or {}).get("positions") or DEFAULT_POSITIONS.get(len(photo_ids)) or DEFAULT_POSITIONS[1]
@@ -105,8 +122,8 @@ def render_page(page: dict, photos_by_id: dict, layouts_by_id: dict, size_px: in
         if not photo:
             continue
         pos = positions[i]
-        sx, sy = int(pos["x"] * size_px), int(pos["y"] * size_px)
-        sw, sh = max(1, int(pos["w"] * size_px)), max(1, int(pos["h"] * size_px))
+        sx, sy = int(pos["x"] * size_px), int(pos["y"] * height_px)
+        sw, sh = max(1, int(pos["w"] * size_px)), max(1, int(pos["h"] * height_px))
         tr = images.get(str(i)) or default_transform()
         img = _open_photo(photo, tr)
         if img is None:
@@ -116,25 +133,26 @@ def render_page(page: dict, photos_by_id: dict, layouts_by_id: dict, size_px: in
         slot = Image.new("RGB", (sw, sh), _color(page.get("background"), "#FFFFFF"))
         slot.paste(scaled, (int(dx), int(dy)))
         canvas.paste(slot, (sx, sy))
-    draw_texts(canvas, page.get("texts") or [], size_px)
+    draw_texts(canvas, page.get("texts") or [], size_px, height_px)
     # legacy single caption
     if page.get("text") and not page.get("texts"):
         draw_texts(canvas, [{"text": page["text"], "x": 0.06, "y": 0.9, "w": 0.88, "h": 0.08, "size": 0.035,
-                             "font": "playfair", "align": "left"}], size_px)
+                             "font": "playfair", "align": "left"}], size_px, height_px)
     return canvas
 
 
-def render_cover(album: dict, photos_by_id: dict, size_px: int = PAGE_PX) -> Image.Image:
-    """Cover: uses album.cover_design when present (photo + transform + texts), else brand fallback."""
+def render_cover(album: dict, photos_by_id: dict, size_px: int = PAGE_PX, height_px: Optional[int] = None) -> Image.Image:
+    """Render the front cover at the configured physical aspect ratio."""
+    height_px = height_px or size_px
     cd = album.get("cover_design") or {}
-    canvas = Image.new("RGB", (size_px, size_px), _color(cd.get("background"), "#C56A47"))
+    canvas = Image.new("RGB", (size_px, height_px), _color(cd.get("background"), "#C56A47"))
     photo = photos_by_id.get(cd.get("photo_id"))
     if photo:
         img = _open_photo(photo, cd.get("image"))
         if img is not None:
             frame = cd.get("frame") or {"x": 0, "y": 0, "w": 1, "h": 1}
-            sx, sy = int(frame["x"] * size_px), int(frame["y"] * size_px)
-            sw, sh = max(1, int(frame["w"] * size_px)), max(1, int(frame["h"] * size_px))
+            sx, sy = int(frame["x"] * size_px), int(frame["y"] * height_px)
+            sw, sh = max(1, int(frame["w"] * size_px)), max(1, int(frame["h"] * height_px))
             dx, dy, dw, dh = image_draw_rect(sw, sh, img.width, img.height, cd.get("image") or default_transform())
             slot = Image.new("RGB", (sw, sh), _color(cd.get("background"), "#C56A47"))
             slot.paste(img.resize((max(1, int(dw)), max(1, int(dh))), Image.LANCZOS), (int(dx), int(dy)))
@@ -145,18 +163,18 @@ def render_cover(album: dict, photos_by_id: dict, size_px: int = PAGE_PX) -> Ima
                   "color": "#FFFFFF"},
                  {"text": album.get("name", "My Album"), "x": 0.08, "y": 0.83, "w": 0.84, "h": 0.1, "size": 0.06,
                   "font": "playfair", "color": "#FFFFFF"}]
-    draw_texts(canvas, texts, size_px)
+    draw_texts(canvas, texts, size_px, height_px)
     return canvas
 
 
 def render_frames(album: dict, layouts_by_id: dict, back_cover_bytes: Optional[bytes] = None):
-    """Returns (cover_image, [page_images], back_cover_image) at 8x8 in @ 300 dpi.
-    The back cover is the fixed ClickBook branding artwork (admin-replaceable)."""
+    """Return cover, pages and back cover at the configured size and 300 DPI."""
     photos_by_id = {p["id"]: p for p in album.get("photos", [])}
     pages_sorted = sorted(album.get("pages", []), key=lambda p: p.get("order", 0))
-    cover = render_cover(album, photos_by_id)
-    pages = [render_page(p, photos_by_id, layouts_by_id) for p in pages_sorted]
-    back = _load_last_page(PAGE_PX, back_cover_bytes)
+    width_px, height_px = pixel_dimensions(album)
+    cover = render_cover(album, photos_by_id, width_px, height_px)
+    pages = [render_page(p, photos_by_id, layouts_by_id, width_px, height_px) for p in pages_sorted]
+    back = _load_last_page(width_px, back_cover_bytes, height_px)
     return cover, pages, back
 
 
@@ -177,11 +195,13 @@ def _jpeg_size(data: bytes) -> tuple[int, int]:
         return im.size
 
 
-def jpegs_to_pdf(jpegs: list, page_in: float = 8.0) -> bytes:
-    """Low-memory PDF writer: embeds the already-encoded JPEG pages as DCTDecode image XObjects, one 8×8 in page
-    each, without decoding them again. Pillow's PDF writer needs every decoded frame in RAM at once (≈17 MB/page →
-    ~1 GB for a 40-page album), which exceeded the production container's memory and killed the worker."""
-    pt = page_in * 72
+def jpegs_to_pdf(jpegs: list, page_in: float | tuple[float, float] = 8.0) -> bytes:
+    """Embed JPEGs as DCTDecode XObjects on explicitly sized PDF pages without decoding them again."""
+    if isinstance(page_in, (tuple, list)):
+        page_w_in, page_h_in = float(page_in[0]), float(page_in[1])
+    else:
+        page_w_in = page_h_in = float(page_in)
+    pt_w, pt_h = page_w_in * 72, page_h_in * 72
     objs: list = []  # list of bytes bodies; object number = index + 1
 
     def add(body: bytes) -> int:
@@ -196,10 +216,10 @@ def jpegs_to_pdf(jpegs: list, page_in: float = 8.0) -> bytes:
         w, h = _jpeg_size(data)
         img_no = add(b"<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceRGB /BitsPerComponent 8 "
                      b"/Filter /DCTDecode /Length %d >>\nstream\n" % (w, h, len(data)) + data + b"\nendstream")
-        content = b"q %.2f 0 0 %.2f 0 0 cm /Im0 Do Q" % (pt, pt)
+        content = b"q %.2f 0 0 %.2f 0 0 cm /Im0 Do Q" % (pt_w, pt_h)
         content_no = add(b"<< /Length %d >>\nstream\n" % len(content) + content + b"\nendstream")
         page_no = add(b"<< /Type /Page /Parent %d 0 R /MediaBox [0 0 %.2f %.2f] /Resources << /XObject << /Im0 %d 0 R >> >> "
-                      b"/Contents %d 0 R >>" % (pages_obj_no, pt, pt, img_no, content_no))
+                      b"/Contents %d 0 R >>" % (pages_obj_no, pt_w, pt_h, img_no, content_no))
         page_refs.append(page_no)
     objs[0] = b"<< /Type /Catalog /Pages 2 0 R >>"
     objs[1] = b"<< /Type /Pages /Kids [" + b" ".join(b"%d 0 R" % n for n in page_refs) + b"] /Count %d >>" % len(page_refs)
@@ -229,17 +249,23 @@ def render_production_package(album: dict, layouts_by_id: dict, back_cover_bytes
     photos_by_id = {p["id"]: p for p in album.get("photos", [])}
     pages_sorted = sorted(album.get("pages", []), key=lambda p: p.get("order", 0))
 
-    cover_jpg = frame_to_jpeg(render_cover(album, photos_by_id))
+    width_px, height_px = pixel_dimensions(album)
+    physical_size = page_dimensions(album)
+    cover_jpg = frame_to_jpeg(render_cover(album, photos_by_id, width_px, height_px))
     page_jpgs = []
     for p in pages_sorted:
-        frame = render_page(p, photos_by_id, layouts_by_id)
+        frame = render_page(p, photos_by_id, layouts_by_id, width_px, height_px)
         page_jpgs.append(frame_to_jpeg(frame))
         frame.close()
         del frame
         gc.collect()
-    back_jpg = frame_to_jpeg(_load_last_page(PAGE_PX, back_cover_bytes))
+    back_jpg = frame_to_jpeg(_load_last_page(width_px, back_cover_bytes, height_px))
     return {
-        "pdf": jpegs_to_pdf([cover_jpg, *page_jpgs, back_jpg]),
+        "pdf": jpegs_to_pdf([cover_jpg, *page_jpgs, back_jpg], physical_size),
+        "width_px": width_px,
+        "height_px": height_px,
+        "width_in": physical_size[0],
+        "height_in": physical_size[1],
         "cover": cover_jpg,
         "back_cover": back_jpg,
         "pages": page_jpgs,
