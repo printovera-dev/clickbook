@@ -233,7 +233,7 @@ def safe_folder_name(name: str) -> str:
 
 
 def _delete_prefix(rel_dir: str) -> None:
-    """Delete an existing package prefix before rebuilding so stale pages cannot ship."""
+    """Delete a specific storage prefix; callers must pass a physical version prefix when cleaning packages."""
     if ".." in rel_dir.split("/"):
         raise ValueError("Invalid storage path")
     if _use_s3():
@@ -297,10 +297,12 @@ def save_production_package(folder: str, pdf: bytes, cover_jpg: bytes, page_jpgs
 
 
 def list_dir_files(rel_dir: str) -> list:
-    """Relative file paths (with sizes) under a local or S3-backed storage folder."""
+    """List files, exposing stable logical paths for published production packages."""
     if ".." in rel_dir.split("/"):
         return []
+    logical_dir = rel_dir.rstrip("/")
     current_prefix = _current_package_prefix(rel_dir)
+    is_published_package = current_prefix is not None
     if current_prefix:
         rel_dir = current_prefix
     if _use_s3():
@@ -312,9 +314,10 @@ def list_dir_files(rel_dir: str) -> list:
                 key = item["Key"]
                 if key.endswith("/"):
                     continue
+                relative_name = key[len(prefix):]
                 out.append({
-                    "path": key,
-                    "name": key[len(prefix):],
+                    "path": f"{logical_dir}/{relative_name}" if is_published_package else key,
+                    "name": relative_name,
                     "size_bytes": item.get("Size", 0),
                 })
         return sorted(out, key=lambda item: item["name"])
@@ -324,7 +327,13 @@ def list_dir_files(rel_dir: str) -> list:
     out = []
     for p in sorted(root.rglob("*")):
         if p.is_file():
-            out.append({"path": str(p.relative_to(STORAGE_BASE)), "name": str(p.relative_to(root)), "size_bytes": p.stat().st_size})
+            relative_name = str(p.relative_to(root))
+            physical_path = str(p.relative_to(STORAGE_BASE))
+            out.append({
+                "path": f"{logical_dir}/{relative_name}" if is_published_package else physical_path,
+                "name": relative_name,
+                "size_bytes": p.stat().st_size,
+            })
     return out
 
 
