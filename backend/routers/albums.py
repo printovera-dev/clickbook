@@ -81,6 +81,11 @@ async def create_album(payload: AlbumCreate, customer: dict = Depends(get_curren
             raise HTTPException(400, "Invalid paper finish")
         if config.get("cover_material") not in {"digital", "acrylic"}:
             raise HTTPException(400, "Invalid cover material")
+        compatible_materials = cover.get("compatible_materials") or cover.get("cover_materials")
+        if isinstance(compatible_materials, list) and compatible_materials and config["cover_material"] not in compatible_materials:
+            raise HTTPException(400, "The selected cover design is not compatible with this cover material")
+        if cover.get("style") not in {"signature", "classic", "editorial"}:
+            raise HTTPException(400, "The selected cover is missing a valid Wedding Album style")
         size = config["size"]
     else:
         # Preserve existing ClickBook defaults and API contract.
