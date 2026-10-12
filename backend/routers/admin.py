@@ -3,14 +3,14 @@ import io
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Header
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 
 from core import (db, now_iso, new_id, get_current_admin, get_settings_doc, verify_password, hash_password,
                   make_admin_token, admin_from_token)
-from storage_manager import save_original, public_url, list_dir_files, zip_dir, _put
+from storage_manager import save_original, public_url, list_dir_files, zip_dir_to_tempfile, _put
 from production import schedule_production_package, production_build_is_stale, STALE_BUILD_MESSAGE
 from routers.notifications import notify_order_status
 
@@ -235,12 +235,27 @@ async def order_downloads_zip(order_id: str, token: str = ""):
     order = await db.orders.find_one({"id": order_id}, {"_id": 0, "order_no": 1, "production_package": 1})
     if not order or not (order.get("production_package") or {}).get("dir"):
         raise HTTPException(404, "Production package not built yet")
-    data = await run_in_threadpool(zip_dir, order["production_package"]["dir"])
-    if data is None:
+    archive = await run_in_threadpool(zip_dir_to_tempfile, order["production_package"]["dir"])
+    if archive is None:
         raise HTTPException(404, "Package folder missing")
     name = order["production_package"]["dir"].split("/")[-1]
-    return Response(content=data, media_type="application/zip",
-                    headers={"Content-Disposition": f'attachment; filename="{name}.zip"'})
+
+    def stream_archive():
+        try:
+            while True:
+                chunk = archive.read(1024 * 1024)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            archive.close()
+
+    return StreamingResponse(
+        stream_archive(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{name}.zip"'},
+        background=None,
+    )
 
 
 # ---- Admin-managed images (covers, backgrounds, process bots, promos) ----
