@@ -163,10 +163,20 @@ export default function AdminOrders() {
               {pkg?.status === "ready" ? (
                 <View>
                   <Text style={[s.bodyMuted, { fontSize: 12 }]} testID="admin-package-dir">{pkg.dir}/ · {pkg.pages} pages · {fmtBytes(pkg.size_bytes)}</Text>
+                  {pkg.print_readiness ? (
+                    <View style={{ marginTop: spacing.md, padding: spacing.md, borderWidth: 1, borderColor: pkg.print_readiness.status === "passed" || pkg.print_readiness.status === "legacy" ? colors.border : colors.error, borderRadius: radius.md }} testID="admin-print-readiness">
+                      <Text style={s.label}>PRINT HANDOFF · {String(pkg.print_readiness.status).replace(/_/g, " ").toUpperCase()}</Text>
+                      {pkg.print_readiness.size ? <Text style={[s.body, { marginTop: 4 }]}>{pkg.print_readiness.size.replace("x", " × ")} in · {pkg.print_readiness.pixel_dimensions?.width} × {pkg.print_readiness.pixel_dimensions?.height} px · {pkg.print_readiness.paper_finish} paper · {pkg.print_readiness.cover_material} cover</Text> : null}
+                      {(pkg.print_readiness.warnings || []).map((warning: any, index: number) => (
+                        <Text key={warning.code || index} style={[s.bodyMuted, { marginTop: spacing.sm }]}>{warning.message}</Text>
+                      ))}
+                    </View>
+                  ) : null}
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.md }}>
                     <FileChip icon="file-text" label="Album.pdf" testID="admin-file-pdf" onPress={() => Linking.openURL(fileUrl(pkg.pdf_url)!)} />
                     <FileChip icon="image" label="Cover/cover.jpg" testID="admin-file-cover" onPress={() => Linking.openURL(fileUrl(pkg.cover_url)!)} />
                     <FileChip icon="layers" label={`Print/ (${pkg.pages} pages)`} testID="admin-file-print" onPress={() => Linking.openURL(fileUrl(pkg.print_urls?.[0])!)} />
+                    {pkg.manifest_url ? <FileChip icon="clipboard" label="manifest.json" testID="admin-file-manifest" onPress={() => Linking.openURL(fileUrl(pkg.manifest_url)!)} /> : null}
                   </View>
                   <Button testID="admin-download-zip" label="Download all (ZIP)" onPress={openZip} style={{ marginTop: spacing.md }} size="sm" />
                 </View>
