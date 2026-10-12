@@ -16,7 +16,8 @@ export type Page = {
   id: string; layout_id: string; layout_photo_count: number; photo_ids: string[];
   images?: Record<string, ImageTransform>; texts?: TextObject[];
   background: string; text?: string; order?: number;
-  slots?: Rect[]; // explicit slot rects (used for covers)
+  slots?: Rect[]; // explicit slot rects (used for covers and page design presets)
+  design_preset_id?: string;
 };
 export type CoverDesign = {
   style: CoverStyleKey; photo_id: string; image: ImageTransform; frame: Rect; background: string; texts: TextObject[];
