@@ -6,7 +6,7 @@ import { s } from "@/src/ui";
 import { colors, spacing, fonts } from "@/src/theme";
 
 export default function Generating() {
-  const { albumId, style, coverPhotoId } = useLocalSearchParams<{ albumId: string; style?: string; coverPhotoId?: string }>();
+  const { albumId, style, coverPhotoId, project } = useLocalSearchParams<{ albumId: string; style?: string; coverPhotoId?: string; project?: string }>();
   const router = useRouter();
   const [err, setErr] = useState("");
   const [retryKey, setRetryKey] = useState(0);
@@ -17,7 +17,7 @@ export default function Generating() {
         setTimeout(() => router.replace({ pathname: "/album/[id]/preview", params: { id: String(albumId) } }), 400);
       } catch (e: any) {
         if (e?.detail?.code === "insufficient_photos") {
-          router.replace({ pathname: "/create/upload", params: { albumId: String(albumId), notice: e.detail.message, style: String(style || ""), coverPhotoId: String(coverPhotoId || "") } });
+          router.replace({ pathname: "/create/upload", params: { albumId: String(albumId), notice: e.detail.message, style: String(style || ""), coverPhotoId: String(coverPhotoId || ""), ...(project === "wedding" ? { project: "wedding" } : {}) } });
           return;
         }
         setErr(e?.message || "Could not design your album. Please try again.");
