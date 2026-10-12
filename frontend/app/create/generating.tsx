@@ -6,18 +6,23 @@ import { s } from "@/src/ui";
 import { colors, spacing, fonts } from "@/src/theme";
 
 export default function Generating() {
-  const { albumId, style, coverPhotoId, project } = useLocalSearchParams<{ albumId: string; style?: string; coverPhotoId?: string; project?: string }>();
+  const { albumId, style, coverPhotoId, project, segmentOrder } = useLocalSearchParams<{ albumId: string; style?: string; coverPhotoId?: string; project?: string; segmentOrder?: string }>();
   const router = useRouter();
   const [err, setErr] = useState("");
   const [retryKey, setRetryKey] = useState(0);
   useEffect(() => {
     (async () => {
       try {
-        await api.autoGenerate(String(albumId), style ? String(style) : undefined, coverPhotoId ? String(coverPhotoId) : undefined);
+        await api.autoGenerate(
+          String(albumId),
+          style ? String(style) : undefined,
+          coverPhotoId ? String(coverPhotoId) : undefined,
+          project === "wedding" && segmentOrder ? String(segmentOrder).split(",") : undefined,
+        );
         setTimeout(() => router.replace({ pathname: "/album/[id]/preview", params: { id: String(albumId) } }), 400);
       } catch (e: any) {
         if (e?.detail?.code === "insufficient_photos") {
-          router.replace({ pathname: "/create/upload", params: { albumId: String(albumId), notice: e.detail.message, style: String(style || ""), coverPhotoId: String(coverPhotoId || ""), ...(project === "wedding" ? { project: "wedding" } : {}) } });
+          router.replace({ pathname: "/create/upload", params: { albumId: String(albumId), notice: e.detail.message, style: String(style || ""), coverPhotoId: String(coverPhotoId || ""), ...(segmentOrder ? { segmentOrder: String(segmentOrder) } : {}), ...(project === "wedding" ? { project: "wedding" } : {}) } });
           return;
         }
         setErr(e?.message || "Could not design your album. Please try again.");
