@@ -9,8 +9,17 @@ from storage_manager import resolve_path, get_file_bytes
 
 router = APIRouter(tags=["files"])
 
-CACHE = {"Cache-Control": "public, max-age=31536000, immutable"}  # keys are content-addressed UUIDs
+CACHE = {"Cache-Control": "public, max-age=31536000, immutable"}  # UUID-addressed uploads are immutable
+MUTABLE_CACHE = {"Cache-Control": "no-store, max-age=0"}
 CHUNK = 1024 * 1024
+
+
+def _cache_headers(full_path: str) -> dict:
+    # Production package names (Album.pdf, page_001.jpg, manifest.json) are stable
+    # across rebuilds, so they must not inherit immutable caching.
+    if full_path == "Downloads" or full_path.startswith("Downloads/"):
+        return MUTABLE_CACHE
+    return CACHE
 
 
 def _iter_file(path: str, start: int, end: int):
@@ -39,12 +48,12 @@ async def serve_file(full_path: str, request: Request):
             end = min(int(e), size - 1) if (e and s) else size - 1
             if start > end or start >= size:
                 return Response(status_code=416, headers={"Content-Range": f"bytes */{size}"})
-            headers = {**CACHE, "Content-Range": f"bytes {start}-{end}/{size}", "Accept-Ranges": "bytes",
+            headers = {**_cache_headers(full_path), "Content-Range": f"bytes {start}-{end}/{size}", "Accept-Ranges": "bytes",
                        "Content-Length": str(end - start + 1)}
             return StreamingResponse(_iter_file(str(p), start, end), status_code=206, media_type=ct, headers=headers)
-        return FileResponse(str(p), headers={**CACHE, "Accept-Ranges": "bytes"}, media_type=ct)
+        return FileResponse(str(p), headers={**_cache_headers(full_path), "Accept-Ranges": "bytes"}, media_type=ct)
     data = get_file_bytes(full_path)
     if data is None:
         raise HTTPException(404, "File not found")
     ct = mimetypes.guess_type(full_path)[0] or "application/octet-stream"
-    return Response(content=data, media_type=ct, headers=CACHE)
+    return Response(content=data, media_type=ct, headers=_cache_headers(full_path))
