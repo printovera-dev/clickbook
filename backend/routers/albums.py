@@ -12,6 +12,8 @@ router = APIRouter(tags=["albums"])
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 ALLOWED_EXT = (".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif")
+WEDDING_MIN_PAGES = 30
+WEDDING_MAX_PAGES = 50
 
 
 class AlbumCreate(BaseModel):
@@ -53,6 +55,12 @@ def _ensure_locked(album: dict) -> None:
 
 async def _save_design(album: dict, pages: list, kind: str, extra: Optional[dict] = None) -> dict:
     _ensure_locked(album)
+    if album.get("album_config") and not WEDDING_MIN_PAGES <= len(pages) <= WEDDING_MAX_PAGES:
+        raise HTTPException(status_code=422, detail={
+            "code": "wedding_page_count_out_of_range",
+            "message": f"Wedding albums must contain {WEDDING_MIN_PAGES}–{WEDDING_MAX_PAGES} pages.",
+            "pages": len(pages), "min_pages": WEDDING_MIN_PAGES, "max_pages": WEDDING_MAX_PAGES,
+        })
     settings = await get_settings_doc()
     sheets = max(settings.get("min_sheets", 10), (len(pages) + 1) // 2)
     version = album.get("version", 1) + 1
@@ -275,21 +283,38 @@ async def auto_generate(album_id: str, payload: Optional[GenerateRequest] = None
         extra["cover_design"] = default_cover_design(cover_style, cover_pid or photos[0]["id"], album.get("name", "My Album"))
     elif cover_pid:
         extra["cover_design"] = {**album["cover_design"], "photo_id": cover_pid, "image": default_transform()}
-    # Minimum-sheet rule (2 pages per sheet): never present an under-filled design as ready.
-    settings = await get_settings_doc()
-    min_sheets = int(settings.get("min_sheets", 20))
-    required_pages = min_sheets * 2
-    if len(pages) < required_pages and not (payload and payload.allow_short):
-        avg = sum(rhythm) / len(rhythm)
-        need_more = max(1, int(round((required_pages - len(pages)) * avg)))
+    # Wedding albums have a fixed 30–50 individual-page range.
+    # Legacy ClickBook keeps the existing configured minimum-sheet rule.
+    is_wedding = bool(album.get("album_config"))
+    if is_wedding and len(pages) > WEDDING_MAX_PAGES:
+        raise HTTPException(status_code=422, detail={
+            "code": "too_many_pages",
+            "message": f"Wedding albums can contain at most {WEDDING_MAX_PAGES} pages. Reduce the number of photos or choose a layout that uses fewer pages.",
+            "pages": len(pages), "max_pages": WEDDING_MAX_PAGES,
+            "photos": len(photos), "style": style,
+        })
+    if is_wedding and len(pages) < WEDDING_MIN_PAGES:
         raise HTTPException(status_code=422, detail={
             "code": "insufficient_photos",
-            "message": f"A ClickBook needs at least {min_sheets} sheets ({required_pages} pages). "
-                       f"Your {len(photos)} photos fill {len(pages)} pages in the {style.title()} style — "
-                       f"please add about {need_more} more photos.",
-            "pages": len(pages), "required_pages": required_pages, "min_sheets": min_sheets,
-            "photos": len(photos), "need_more": need_more, "style": style,
+            "message": f"Wedding albums must contain at least {WEDDING_MIN_PAGES} pages. Add more photos or choose a layout that uses more pages.",
+            "pages": len(pages), "required_pages": WEDDING_MIN_PAGES,
+            "photos": len(photos), "style": style,
         })
+    if not is_wedding:
+        settings = await get_settings_doc()
+        min_sheets = int(settings.get("min_sheets", 20))
+        required_pages = min_sheets * 2
+        if len(pages) < required_pages and not (payload and payload.allow_short):
+            avg = sum(rhythm) / len(rhythm)
+            need_more = max(1, int(round((required_pages - len(pages)) * avg)))
+            raise HTTPException(status_code=422, detail={
+                "code": "insufficient_photos",
+                "message": f"A ClickBook needs at least {min_sheets} sheets ({required_pages} pages). "
+                           f"Your {len(photos)} photos fill {len(pages)} pages in the {style.title()} style — "
+                           f"please add about {need_more} more photos.",
+                "pages": len(pages), "required_pages": required_pages, "min_sheets": min_sheets,
+                "photos": len(photos), "need_more": need_more, "style": style,
+            })
     return {"album": await _save_design(album, pages, "auto", extra)}
 
 
