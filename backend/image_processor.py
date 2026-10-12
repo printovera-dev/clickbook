@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 THUMB_MAX = 400      # editor grid / photo strip
 PREVIEW_MAX = 1200   # 3D book preview
-PRINT_MAX = 3000     # 8x8" @ ~300dpi + bleed
+PRINT_MAX = 7200     # Supports 24x24" @ 300 DPI; actual output resolution depends on source image
 
 
 def _encode(img: Image.Image, max_side: int, quality: int, fmt: str = "JPEG") -> bytes:
