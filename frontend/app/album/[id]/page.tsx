@@ -18,7 +18,7 @@ import {
   slotRects, imageDrawRect, defaultTransform, newTextObject, fontFamilyFor, coverToPage, pageToCover, rotatedDims,
 } from "@/src/design";
 
-type Tool = "image" | "replace" | "text" | "layout" | "background" | "coverstyle";
+type Tool = "image" | "replace" | "text" | "layout" | "design" | "background" | "coverstyle";
 const { width: SCREEN_W } = Dimensions.get("window");
 
 export default function PageEditor() {
@@ -30,6 +30,7 @@ export default function PageEditor() {
   const qc = useQueryClient();
   const albumQ = useQuery({ queryKey: ["album", id], queryFn: () => api.getAlbum(String(id)), enabled: !!id });
   const bgQ = useQuery({ queryKey: ["backgrounds"], queryFn: () => api.listBackgrounds() });
+  const pageDesignsQ = useQuery({ queryKey: ["page-designs"], queryFn: () => api.listPageDesigns(), enabled: !isCover });
   const album = albumQ.data?.album;
   useEffect(() => { if (album?.locked) router.replace({ pathname: "/album/[id]/preview", params: { id: String(id) } }); }, [album?.locked, id, router]);
   const photos: Photo[] = album?.photos || [];
@@ -61,7 +62,7 @@ export default function PageEditor() {
         if (initialTool === "text") {
           const t = newTextObject({ z: base.texts.length + 1 });
           setPage({ ...base, texts: [...base.texts, t] }); setHistory([base]); setSelText(t.id); setSelSlot(null); setTool("text"); setEditingText(true);
-        } else { setPage(base); if (initialTool && ["image", "replace", "layout", "background"].includes(initialTool)) setTool(initialTool as Tool); }
+        } else { setPage(base); if (initialTool && ["image", "replace", "layout", "design", "background"].includes(initialTool)) setTool(initialTool as Tool); }
       }
     }
   }, [album, page, pageIndex, isCover, initialTool]);
@@ -206,6 +207,16 @@ export default function PageEditor() {
       Alert.alert("Upload failed", e?.message || "Please try again");
     } finally { setUploadingNew(false); }
   };
+  const applyPageDesign = (design: any) => {
+    if (!page || isCover) return;
+    const positions = design.positions_by_count?.[String(page.photo_ids.length)];
+    if (!Array.isArray(positions) || positions.length !== page.photo_ids.length) { Alert.alert("Design unavailable", "This design does not support the current number of photos on this page."); return; }
+    const images: Record<string, any> = {};
+    page.photo_ids.forEach((pid, i) => { images[String(i)] = { ...defaultTransform(), photo_id: pid }; });
+    // Apply only to this page. Keep selected photos and text; reset crops for new frames.
+    commit({ ...page, slots: positions.map((r: any) => ({ x: r.x, y: r.y, w: r.w, h: r.h })), background: design.background || page.background, design_preset_id: design.id, images });
+    setSelSlot(0); setSelText(null); setTool("design");
+  };
   const setCoverStyle = (key: string) => {
     if (!page) return;
     const st = COVER_STYLES.find((c) => c.key === key); if (!st) return;
@@ -246,7 +257,7 @@ export default function PageEditor() {
     { key: "image", icon: "move", label: "Adjust Image" },
     { key: "replace", icon: "image", label: "Change Image" },
     { key: "text", icon: "type", label: "Add Text" },
-    isCover ? { key: "coverstyle", icon: "book", label: "Change Cover Style" } : { key: "layout", icon: "grid", label: "Change Layout" },
+    isCover ? { key: "coverstyle", icon: "book", label: "Change Cover Style" } : { key: "layout", icon: "grid", label: "Change Layout" }, { key: "design", icon: "layers", label: "Page Design" },
     { key: "background", icon: "droplet", label: "Background" },
   ];
 
@@ -411,6 +422,28 @@ export default function PageEditor() {
             </ScrollView>
           ) : null}
 
+          {tool === "design" && !isCover ? (
+            <View style={{ gap: spacing.sm }}>
+              <Text style={[s.label, { paddingHorizontal: spacing.md }]}>Don’t like this design? Choose a new look for this page.</Text>
+              {pageDesignsQ.isLoading ? <Text style={[s.bodyMuted, { paddingHorizontal: spacing.md }]}>Loading page designs…</Text> : null}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+                {(pageDesignsQ.data?.designs || []).slice(0, 4).map((d: any) => {
+                  const rects = d.positions_by_count?.[String(page.photo_ids.length)] || [];
+                  const active = page.design_preset_id === d.id;
+                  return (
+                    <Pressable key={d.id} testID={"page-design-" + d.id} onPress={() => applyPageDesign(d)} style={[styles.layoutCard, { width: 112 }, active && { borderColor: colors.brandPrimary, backgroundColor: colors.brandTertiary }]}>
+                      <View style={{ width: 64, height: 64, backgroundColor: d.background || "#FFFFFF", borderWidth: 1, borderColor: colors.border }}>
+                        {rects.map((r: any, i: number) => <View key={i} style={{ position: "absolute", left: r.x * 64, top: r.y * 64, width: r.w * 64, height: r.h * 64, backgroundColor: d.preset_key === "cinematic" ? "#D6D3D1" : colors.borderStrong }} />)}
+                      </View>
+                      <Text style={{ fontFamily: fonts.text, fontSize: 12, color: colors.onSurface, marginTop: 5, textAlign: "center" }}>{d.name}</Text>
+                      <Text style={{ fontFamily: fonts.text, fontSize: 10, color: colors.muted, textAlign: "center" }} numberOfLines={2}>{d.description}</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              {!pageDesignsQ.isLoading && !(pageDesignsQ.data?.designs || []).length ? <Text style={[s.bodyMuted, { paddingHorizontal: spacing.md }]}>No page designs are active. Ask your album administrator to enable presets.</Text> : null}
+            </View>
+          ) : null}
           {tool === "coverstyle" ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
               {COVER_STYLES.map((c) => (
