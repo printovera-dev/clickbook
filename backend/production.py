@@ -24,7 +24,7 @@ def validate_print_handoff(album: dict) -> dict:
     size = config.get("size") or album.get("size")
     paper_finish = config.get("paper_finish") or album.get("paper_finish")
     cover_material = config.get("cover_material") or album.get("cover_material")
-    if size not in {"12x18", "24x24"}:
+    if size not in {"12x18", "12x12"}:
         raise ValueError("Wedding print handoff has an unsupported album size.")
     if paper_finish not in {"gloss", "matte"}:
         raise ValueError("Wedding print handoff is missing a valid paper finish.")
@@ -105,7 +105,11 @@ async def build_production_package(order_id: str) -> dict:
             "mobile": (order.get("customer_snapshot") or {}).get("mobile"),
             "sheets": order.get("sheets"),
             "pages": len(rendered["pages"]),
-            "size": f"{page_dimensions(album)[0]:g}x{page_dimensions(album)[1]:g} in @ 300 dpi",
+            "size": f"{page_dimensions(album)[0]:g}x{page_dimensions(album)[1]:g} in",
+            "resolution_ppi": 300,
+            "source_resolution_policy": {"minimum_effective_ppi": 200, "target_effective_ppi": 300},
+            "output_formats": ["PDF", "JPEG"],
+            "jpeg_quality": 95,
             "pixel_dimensions": {"width": pixel_dimensions(album)[0], "height": pixel_dimensions(album)[1]},
             "paper_finish": album.get("paper_finish"),
             "cover_material": album.get("cover_material"),
