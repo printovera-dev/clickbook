@@ -13,6 +13,7 @@ import logging
 import os
 import re
 import shutil
+import tempfile
 import uuid
 import zipfile
 from pathlib import Path
@@ -337,31 +338,52 @@ def list_dir_files(rel_dir: str) -> list:
     return out
 
 
-def zip_dir(rel_dir: str) -> Optional[bytes]:
-    """Create a ZIP for either local or S3 storage. ZIP output is currently buffered in memory."""
+def zip_dir_to_tempfile(rel_dir: str):
+    """Create a ZIP in a disk-backed temporary file to avoid buffering large packages in RAM.
+
+    Caller owns the returned file and must close it after streaming. Returns None for missing
+    or empty directories. The package pointer is resolved first so only the published version
+    is included in the archive.
+    """
     if ".." in rel_dir.split("/"):
         return None
-    buf = io.BytesIO()
     current_prefix = _current_package_prefix(rel_dir)
     if current_prefix:
         rel_dir = current_prefix
-    if _use_s3():
-        files = list_dir_files(rel_dir)
-        if not files:
-            return None
-        prefix = rel_dir.rstrip("/") + "/"
-        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-            for item in files:
-                obj = _get_s3().get_object(Bucket=S3_BUCKET, Key=item["path"])
-                with zf.open(item["name"], "w") as member:
-                    shutil.copyfileobj(obj["Body"], member)
-                obj["Body"].close()
-    else:
-        root = STORAGE_BASE / rel_dir
-        if not root.is_dir():
-            return None
-        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-            for p in sorted(root.rglob("*")):
-                if p.is_file():
-                    zf.write(p, arcname=str(p.relative_to(root)))
-    return buf.getvalue()
+    files = list_dir_files(rel_dir)
+    if not files:
+        return None
+
+    archive = tempfile.TemporaryFile(mode="w+b")
+    try:
+        with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
+            if _use_s3():
+                for item in files:
+                    obj = _get_s3().get_object(Bucket=S3_BUCKET, Key=item["path"])
+                    body = obj["Body"]
+                    try:
+                        with zf.open(item["name"], "w") as member:
+                            shutil.copyfileobj(body, member, length=1024 * 1024)
+                    finally:
+                        body.close()
+            else:
+                for item in files:
+                    path = resolve_path(item["path"])
+                    if path:
+                        zf.write(path, arcname=item["name"])
+        archive.seek(0)
+        return archive
+    except Exception:
+        archive.close()
+        raise
+
+
+def zip_dir(rel_dir: str) -> Optional[bytes]:
+    """Compatibility helper for small callers; prefer zip_dir_to_tempfile for downloads."""
+    archive = zip_dir_to_tempfile(rel_dir)
+    if archive is None:
+        return None
+    try:
+        return archive.read()
+    finally:
+        archive.close()
