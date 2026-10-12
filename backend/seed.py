@@ -1,10 +1,13 @@
 """Idempotent seed data: settings, covers, layouts, backgrounds, offers, process bots, admin."""
 import os
 from core import db, now_iso, new_id, hash_password
-from design import COVER_STYLES
+from design import COVER_STYLES, PAGE_DESIGN_PRESETS
 
 
 async def seed():
+    # Add the four starter page designs once; preserve all admin edits on later startups.
+    for preset in PAGE_DESIGN_PRESETS:
+        await db.page_designs.update_one({"id": preset["id"]}, {"$setOnInsert": dict(preset)}, upsert=True)
     if not await db.settings.find_one({"id": "default"}):
         await db.settings.insert_one({
             "id": "default", "price_per_sheet": 90, "gst_percent": 18,
