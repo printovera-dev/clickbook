@@ -219,7 +219,12 @@ async def auto_generate(album_id: str, payload: Optional[GenerateRequest] = None
         if len(payload.segment_order) != len(set(payload.segment_order)) or any(s not in allowed_segments for s in payload.segment_order):
             raise HTTPException(400, "Invalid wedding photo category order")
         rank = {segment: index for index, segment in enumerate(payload.segment_order)}
-        photos.sort(key=lambda photo: (rank.get(photo.get("segment"), len(rank)), album.get("photos", []).index(photo)))
+        photos = [
+            photo for _, photo in sorted(
+                enumerate(photos),
+                key=lambda item: (rank.get(item[1].get("segment"), len(rank)), item[0]),
+            )
+        ]
     layouts = await db.layouts.find({"active": True}, {"_id": 0}).to_list(50)
     layouts_by_count = {l["photo_count"]: l for l in layouts}
     bgs = await db.backgrounds.find({"active": True}, {"_id": 0}).to_list(100)
