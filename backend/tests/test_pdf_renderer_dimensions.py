@@ -24,10 +24,10 @@ def test_twelve_by_eighteen_is_300_dpi():
     assert pixel_dimensions(album) == (3600, 5400)
 
 
-def test_twenty_four_square_is_300_dpi():
-    album = {"album_config": {"size": "24x24"}}
-    assert page_dimensions(album) == (24.0, 24.0)
-    assert pixel_dimensions(album) == (7200, 7200)
+def test_twelve_by_twelve_is_300_dpi():
+    album = {"album_config": {"size": "12x12"}}
+    assert page_dimensions(album) == (12.0, 12.0)
+    assert pixel_dimensions(album) == (3600, 3600)
 
 
 def test_pdf_media_box_uses_selected_physical_size():
