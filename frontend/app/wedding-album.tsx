@@ -34,7 +34,29 @@ export default function WeddingAlbumSetup() {
       const allowed = c.compatible_materials || c.cover_materials;
       return !Array.isArray(allowed) || allowed.length === 0 || allowed.includes(material);
     });
-    return compatible.slice(0, 3);
+
+    // Prefer one catalog design for each established style instead of accidentally
+    // showing three covers from the same style just because of catalog order.
+    const styleOrder = ["signature", "classic", "editorial"];
+    const selected: any[] = [];
+    const used = new Set<string>();
+    for (const style of styleOrder) {
+      const match = compatible.find((c: any) => String(c.style || "").toLowerCase() === style && !used.has(c.id));
+      if (match) {
+        selected.push(match);
+        used.add(match.id);
+      }
+    }
+    // Older catalog records may not have a style field. Fill missing slots with
+    // distinct compatible covers so older catalogs remain usable.
+    for (const cover of compatible) {
+      if (selected.length >= 3) break;
+      if (!used.has(cover.id)) {
+        selected.push(cover);
+        used.add(cover.id);
+      }
+    }
+    return selected;
   }, [coversQuery.data, material]);
 
   const create = async () => {
@@ -103,6 +125,7 @@ export default function WeddingAlbumSetup() {
                 <FluidImage uri={fileUrl(cover.image_url)} width={180} ratio={1} maxHeight={180} recyclingKey={cover.id} style={styles.coverImage} />
                 <View style={{ padding: spacing.md }}>
                   <Text style={s.h2}>{cover.name}</Text>
+                  {cover.style ? <Text style={[styles.coverStyle, { marginTop: 3 }]}>{String(cover.style).toUpperCase()}</Text> : null}
                   {cover.description ? <Text style={[s.bodyMuted, { marginTop: 3 }]}>{cover.description}</Text> : null}
                   {active ? <Text style={styles.selectedText}>✓ Selected</Text> : null}
                 </View>
@@ -148,6 +171,7 @@ const styles = StyleSheet.create({
   coverCardActive: { borderColor: colors.brandPrimary, borderWidth: 2 },
   coverImage: { width: 120, height: 120, alignSelf: "center", backgroundColor: colors.surfaceSecondary },
   selectedText: { color: colors.brandPrimary, fontFamily: fonts.text, fontWeight: "700", marginTop: spacing.sm },
+  coverStyle: { color: colors.brandPrimary, fontFamily: fonts.text, fontWeight: "700", fontSize: 10, letterSpacing: 1 },
   error: { color: colors.error, marginTop: spacing.md },
   footer: { position: "absolute", left: 0, right: 0, bottom: 0, padding: spacing.xl, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
 });
