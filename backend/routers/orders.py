@@ -49,17 +49,41 @@ async def create_order(payload: OrderCreate, customer: dict = Depends(get_curren
     if not album.get("pages"):
         raise HTTPException(400, "Album not designed yet")
     page_count = len(album["pages"])
-    if album.get("album_config") and not 30 <= page_count <= 50:
-        raise HTTPException(
-            422,
-            detail={
-                "code": "wedding_page_count_out_of_range",
-                "message": "Wedding albums must contain 30–50 pages before ordering. Please return to the editor and adjust the page count.",
-                "pages": page_count,
-                "min_pages": 30,
-                "max_pages": 50,
-            },
+    if album.get("album_config"):
+        if not 30 <= page_count <= 50:
+            raise HTTPException(
+                422,
+                detail={
+                    "code": "wedding_page_count_out_of_range",
+                    "message": "Wedding albums must contain 30–50 pages before ordering. Please return to the editor and adjust the page count.",
+                    "pages": page_count,
+                    "min_pages": 30,
+                    "max_pages": 50,
+                },
+            )
+        if not album.get("cover_design"):
+            raise HTTPException(
+                422,
+                detail={
+                    "code": "wedding_cover_missing",
+                    "message": "Please finish designing the wedding album cover before ordering.",
+                },
+            )
+        photo_ids = {photo.get("id") for photo in album.get("photos", [])}
+        missing_photo_refs = sum(
+            1 for page in album.get("pages", [])
+            for photo_id in (page.get("photo_ids") or [])
+            if photo_id not in photo_ids
         )
+        if missing_photo_refs:
+            raise HTTPException(
+                422,
+                detail={
+                    "code": "wedding_missing_photos",
+                    "message": "Some album pages refer to photos that are no longer available. Please correct those pages before ordering.",
+                    "missing_photo_references": missing_photo_refs,
+                },
+            )
     sheets = album.get("sheets") or ((page_count + 1) // 2)
     price = await compute_price(sheets, payload.coupon_code, payload.gift_wrap)
     if price.get("coupon_error"):
