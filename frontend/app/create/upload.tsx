@@ -24,7 +24,17 @@ export default function UploadStep() {
   const [err, setErr] = useState("");
   const [segment, setSegment] = useState("Couple");
   const isWedding = project === "wedding";
-  const segments = ["Couple", "Ritual", "Dance", "Ceremony", "Guest", "Family"];
+  const [segments, setSegments] = useState(["Couple", "Ritual", "Dance", "Ceremony", "Guest", "Family"]);
+  const moveSelectedSegment = (direction: -1 | 1) => {
+    setSegments((current) => {
+      const index = current.indexOf(segment);
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= current.length) return current;
+      const reordered = [...current];
+      [reordered[index], reordered[nextIndex]] = [reordered[nextIndex], reordered[index]];
+      return reordered;
+    });
+  };
 
   const q = useQuery({ queryKey: ["album", albumId], queryFn: () => api.getAlbum(String(albumId)), enabled: !!albumId });
   const photos: any[] = q.data?.album?.photos || [];
@@ -160,7 +170,28 @@ export default function UploadStep() {
               </View>
             ) : null}
             <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>{isWedding ? "Choose a category, then add photos. Each upload goes into the selected category." : "Pick from your gallery — as many as you like. We’ll design the album automatically."}</Text>
-            {isWedding ? <View testID="wedding-photo-categories" style={styles.segmentWrap}>{segments.map((item) => <Pressable key={item} testID={`wedding-segment-${item.toLowerCase()}`} onPress={() => setSegment(item)} style={[styles.segmentChip, segment === item && styles.segmentChipActive]}><Text style={[styles.segmentText, segment === item && styles.segmentTextActive]}>{item}</Text></Pressable>)}</View> : null}
+            {isWedding ? (
+              <>
+                <View testID="wedding-photo-categories" style={styles.segmentWrap}>
+                  {segments.map((item) => (
+                    <Pressable key={item} testID={`wedding-segment-${item.toLowerCase()}`} onPress={() => setSegment(item)} style={[styles.segmentChip, segment === item && styles.segmentChipActive]} accessibilityRole="button" accessibilityState={{ selected: segment === item }}>
+                      <Text style={[styles.segmentText, segment === item && styles.segmentTextActive]}>{item}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <View style={styles.segmentReorder}>
+                  <Text style={s.bodyMuted}>Reorder “{segment}”</Text>
+                  <Pressable accessibilityRole="button" accessibilityLabel={`Move ${segment} earlier`} onPress={() => moveSelectedSegment(-1)} disabled={segments[0] === segment} style={[styles.moveButton, segments[0] === segment && styles.moveButtonDisabled]}>
+                    <Feather name="chevron-left" size={16} color={segments[0] === segment ? colors.muted : colors.onSurface} />
+                    <Text style={styles.moveButtonText}>Earlier</Text>
+                  </Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel={`Move ${segment} later`} onPress={() => moveSelectedSegment(1)} disabled={segments[segments.length - 1] === segment} style={[styles.moveButton, segments[segments.length - 1] === segment && styles.moveButtonDisabled]}>
+                    <Text style={styles.moveButtonText}>Later</Text>
+                    <Feather name="chevron-right" size={16} color={segments[segments.length - 1] === segment ? colors.muted : colors.onSurface} />
+                  </Pressable>
+                </View>
+              </>
+            ) : null}
 
             <Pressable testID="upload-pick-button" onPress={pickAndUpload} disabled={uploading} style={styles.dropzone}>
               {uploading ? (
@@ -193,6 +224,10 @@ export default function UploadStep() {
 const styles = StyleSheet.create({
   topbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: spacing.xl },
   segmentWrap: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.md },
+  segmentReorder: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.sm, marginBottom: spacing.sm },
+  moveButton: { flexDirection: "row", alignItems: "center", gap: 2, paddingVertical: 5, paddingHorizontal: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm },
+  moveButtonDisabled: { opacity: 0.4 },
+  moveButtonText: { color: colors.onSurface, fontFamily: fonts.text, fontSize: 12 },
   segmentChip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary },
   segmentChipActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
   segmentText: { color: colors.onSurface, fontFamily: fonts.text, fontSize: 13 },
