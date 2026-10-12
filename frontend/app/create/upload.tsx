@@ -14,7 +14,7 @@ const COLS = 3;
 const GAP = spacing.sm;
 
 export default function UploadStep() {
-  const { albumId, notice, style: keepStyle, coverPhotoId: keepCover } = useLocalSearchParams<{ albumId: string; notice?: string; style?: string; coverPhotoId?: string }>();
+  const { albumId, notice, style: keepStyle, coverPhotoId: keepCover, project } = useLocalSearchParams<{ albumId: string; notice?: string; style?: string; coverPhotoId?: string; project?: string }>();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const qc = useQueryClient();
@@ -22,6 +22,9 @@ export default function UploadStep() {
   const cell = Math.floor((width - spacing.xl * 2 - GAP * (COLS - 1)) / COLS);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [err, setErr] = useState("");
+  const [segment, setSegment] = useState("Couple");
+  const isWedding = project === "wedding";
+  const segments = ["Couple", "Ritual", "Dance", "Ceremony", "Guest", "Family"];
 
   const q = useQuery({ queryKey: ["album", albumId], queryFn: () => api.getAlbum(String(albumId)), enabled: !!albumId });
   const photos: any[] = q.data?.album?.photos || [];
@@ -72,7 +75,7 @@ export default function UploadStep() {
         const name = asset.fileName || `photo_${Date.now()}_${i}.jpg`;
         try {
           // one file at a time: only a single upload body is ever held in memory
-          const r = await api.uploadPhoto(String(albumId), asset.uri, name, (asset as any).file);
+          const r = await api.uploadPhoto(String(albumId), asset.uri, name, (asset as any).file, isWedding ? segment : undefined);
           qc.setQueryData(["album", albumId], (old: any) => old ? { ...old, album: { ...old.album, photos: [...(old.album.photos || []), r.photo] } } : old);
         } catch (e: any) {
           failed += 1;
@@ -102,8 +105,8 @@ export default function UploadStep() {
   const generate = async () => {
     if (photos.length === 0) { setErr("Please upload at least 1 photo"); return; }
     keepStyle
-      ? router.replace({ pathname: "/create/generating", params: { albumId: String(albumId), style: String(keepStyle), coverPhotoId: String(keepCover || "") } })
-      : router.replace({ pathname: "/create/style", params: { albumId: String(albumId) } });
+      ? router.replace({ pathname: "/create/generating", params: { albumId: String(albumId), style: String(keepStyle), coverPhotoId: String(keepCover || ""), ...(isWedding ? { project: "wedding" } : {}) } })
+      : router.replace({ pathname: "/create/style", params: { albumId: String(albumId), ...(isWedding ? { project: "wedding" } : {}) } });
   };
 
   const renderItem = useCallback(({ item: p, index }: { item: any; index: number }) => {
@@ -130,7 +133,7 @@ export default function UploadStep() {
     <View style={{ flex: 1, backgroundColor: colors.surface, paddingTop: insets.top }}>
       <View style={styles.topbar}>
         <Pressable onPress={() => router.back()} testID="upload-back" hitSlop={12}><Feather name="arrow-left" size={22} color={colors.onSurface} /></Pressable>
-        <Text style={s.label}>Step 2 of 3</Text>
+        <Text style={s.label}>{isWedding ? "WEDDING ALBUM · STEP 3" : "Step 2 of 3"}</Text>
         <View style={{ width: 22 }} />
       </View>
       <FlatList
@@ -148,7 +151,7 @@ export default function UploadStep() {
         contentContainerStyle={{ padding: spacing.xl, paddingBottom: 140 }}
         ListHeaderComponent={
           <View>
-            <Text style={s.h1}>Upload your photos</Text>
+            <Text style={s.h1}>{isWedding ? "Organise your wedding photos" : "Upload your photos"}</Text>
             {notice ? (
               <View testID="upload-notice" style={styles.notice}>
                 <Text style={{ color: colors.onBrandTertiary, fontFamily: fonts.text, fontWeight: "600" }}>More photos needed</Text>
@@ -156,7 +159,8 @@ export default function UploadStep() {
                 <Text style={[s.bodyMuted, { marginTop: 4 }]}>Your uploaded photos are kept — just add more and continue.</Text>
               </View>
             ) : null}
-            <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>Pick from your gallery — as many as you like. We&apos;ll design the album automatically.</Text>
+            <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>{isWedding ? "Choose a category, then add photos. Each upload goes into the selected category." : "Pick from your gallery — as many as you like. We’ll design the album automatically."}</Text>
+            {isWedding ? <View testID="wedding-photo-categories" style={styles.segmentWrap}>{segments.map((item) => <Pressable key={item} testID={`wedding-segment-${item.toLowerCase()}`} onPress={() => setSegment(item)} style={[styles.segmentChip, segment === item && styles.segmentChipActive]}><Text style={[styles.segmentText, segment === item && styles.segmentTextActive]}>{item}</Text></Pressable>)}</View> : null}
 
             <Pressable testID="upload-pick-button" onPress={pickAndUpload} disabled={uploading} style={styles.dropzone}>
               {uploading ? (
@@ -168,7 +172,7 @@ export default function UploadStep() {
               ) : (
                 <>
                   <Feather name="upload-cloud" size={40} color={colors.brandPrimary} />
-                  <Text style={[s.h2, { marginTop: spacing.sm }]}>Add photos</Text>
+                  <Text style={[s.h2, { marginTop: spacing.sm }]}>{isWedding ? `Add ${segment} photos` : "Add photos"}</Text>
                   <Text style={[s.bodyMuted, { marginTop: 4 }]}>Tap to select from gallery</Text>
                 </>
               )}
@@ -188,6 +192,11 @@ export default function UploadStep() {
 
 const styles = StyleSheet.create({
   topbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: spacing.xl },
+  segmentWrap: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.md },
+  segmentChip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary },
+  segmentChipActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
+  segmentText: { color: colors.onSurface, fontFamily: fonts.text, fontSize: 13 },
+  segmentTextActive: { color: colors.onBrandPrimary, fontWeight: "700" },
   notice: { marginTop: spacing.md, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.brandTertiary, borderWidth: 1, borderColor: colors.brandSecondary },
   dropzone: {
     marginTop: spacing.xl,
