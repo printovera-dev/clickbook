@@ -29,6 +29,7 @@ class CoverIn(BaseModel):
     description: Optional[str] = ""
     image_url: str
     style: Optional[str] = None  # signature | classic | editorial
+    compatible_materials: List[str] = ["digital", "acrylic"]
     active: bool = True
     display_order: int = 0
 
@@ -357,16 +358,30 @@ async def export_orders_xlsx(range: str = "monthly", token: Optional[str] = None
 
 # ---- Covers ----
 
+def _validate_cover_payload(payload: CoverIn) -> dict:
+    data = payload.dict()
+    if data.get("style") not in (None, "signature", "classic", "editorial"):
+        raise HTTPException(400, "Cover style must be signature, classic, or editorial")
+    allowed = {"digital", "acrylic"}
+    materials = data.get("compatible_materials") or []
+    if not materials or any(item not in allowed for item in materials):
+        raise HTTPException(400, "Choose at least one valid cover material: digital or acrylic")
+    data["compatible_materials"] = sorted(set(materials))
+    return data
+
+
 @router.post("/covers")
 async def create_cover(payload: CoverIn, admin: dict = Depends(get_current_admin)):
-    doc = {"id": new_id(), **payload.dict(), "created_at": now_iso()}
+    doc = {"id": new_id(), **_validate_cover_payload(payload), "created_at": now_iso()}
     await db.covers.insert_one(dict(doc))
     return {"cover": doc}
 
 
 @router.put("/covers/{cover_id}")
 async def update_cover(cover_id: str, payload: CoverIn, admin: dict = Depends(get_current_admin)):
-    await db.covers.update_one({"id": cover_id}, {"$set": payload.dict()})
+    result = await db.covers.update_one({"id": cover_id}, {"$set": _validate_cover_payload(payload)})
+    if not result.matched_count:
+        raise HTTPException(404, "Cover not found")
     return {"success": True}
 
 
