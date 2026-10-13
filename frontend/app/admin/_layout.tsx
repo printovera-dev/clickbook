@@ -28,7 +28,10 @@ export default function AdminLayout() {
       catch { await setAdminToken(null); if (alive) { setState("denied"); router.replace("/admin/login"); } }
     })();
     return () => { alive = false; };
-  }, [isLogin, pathname, router]);
+  // Depend on the route, not the router object: router identity may change between renders,
+  // which would rerun this auth effect after setState and can cause React error #185.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLogin, pathname]);
 
   if (isLogin) return <Slot />;
   if (state !== "ok") {
