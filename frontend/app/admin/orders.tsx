@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Modal, RefreshControl, Linking, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Modal, RefreshControl, Linking, ActivityIndicator, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
@@ -41,6 +41,22 @@ export default function AdminOrders() {
     setSelected(null); setNote(""); setTracking("");
     q.refetch();
   };
+  const confirmDeleteDeliveredOrder = () => {
+    if (!selected || selected.production_status !== "delivered") return;
+    Alert.alert("Remove delivered order files?", "The production files and uploaded album files will be removed. The customer order number and sheet count will remain in order history.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Continue", style: "destructive", onPress: async () => {
+        try {
+          await api.adminDeleteOrder(selected.id);
+          setSelected(null);
+          await q.refetch();
+        } catch (error: any) {
+          Alert.alert("Could not complete", error?.message || "The order was not removed. Please check storage and try again.");
+        }
+      } },
+    ]);
+  };
+
   const buildPackage = async () => {
     if (!selected) return;
     setBuilding(true); setBuildError(null);
@@ -146,6 +162,9 @@ export default function AdminOrders() {
             <TextInput testID="admin-tracking-input" value={tracking} onChangeText={setTracking} placeholder="Tracking number (optional)" placeholderTextColor={colors.muted} style={styles.input} />
             <TextInput testID="admin-note-input" value={note} onChangeText={setNote} placeholder="Note (optional) — sent to the customer" placeholderTextColor={colors.muted} style={styles.input} />
             <Button testID="admin-notify-customer" label="Message customer" variant="outline" onPress={notifyCustomer} style={{ marginTop: spacing.md }} />
+            {selected?.production_status === "delivered" ? (
+              <Button testID="admin-delete-delivered-order" label="Remove delivered order files" variant="outline" onPress={confirmDeleteDeliveredOrder} style={{ marginTop: spacing.md }} />
+            ) : null}
 
             <Text style={[s.label, { marginTop: spacing.xl }]}>Production files</Text>
             <View style={styles.pkgCard} testID="admin-production-package">
