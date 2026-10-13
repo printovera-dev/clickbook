@@ -44,6 +44,11 @@ export default function Orders() {
                   {new Date(o.created_at).toLocaleDateString()} · {o.sheets} sheets · ₹{o.price?.total}
                 </Text>
                 <StatusBadge order={o} testID={`order-status-${o.id}`} />
+                {o.archived ? (
+                  <Text testID={`order-archived-${o.id}`} style={{ marginTop: spacing.xs, color: colors.muted, fontFamily: fonts.text, fontSize: 12 }}>
+                    Files deleted · Order history retained
+                  </Text>
+                ) : null}
               </View>
               <Feather name="chevron-right" color={colors.muted} size={22} />
             </Pressable>
