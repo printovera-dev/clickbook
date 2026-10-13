@@ -45,9 +45,17 @@ export default function AdminOrders() {
     q.refetch();
   };
   const confirmDeleteDeliveredOrder = async () => {
-    if (!selected || selected.production_status !== "delivered" || deleteBusy) return;
+    if (!selected) {
+      setDeleteError("No order is selected. Close this dialog and reopen the delivered order.");
+      return;
+    }
+    if (String(selected.production_status || "").toLowerCase() !== "delivered") {
+      setDeleteError("This action is only available for delivered orders. Current status: " + (selected.production_status || "unknown") + ".");
+      return;
+    }
+    if (deleteBusy) return;
     setDeleteBusy(true);
-    setDeleteError(null);
+    setDeleteError("Sending deletion request…");
     try {
       await api.adminDeleteOrder(selected.id);
       setConfirmDeleteOpen(false);
@@ -174,7 +182,7 @@ export default function AdminOrders() {
                 {deleteError ? <Text testID="admin-delete-error" style={{ color: colors.error, marginTop: spacing.sm }}>{deleteError}</Text> : null}
                 <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.md }}>
                   <View style={{ flex: 1 }}><Button label="Cancel" variant="outline" disabled={deleteBusy} onPress={() => setConfirmDeleteOpen(false)} /></View>
-                  <View style={{ flex: 1 }}><Button testID="admin-delete-confirm" label={deleteBusy ? "Removing…" : "Confirm removal"} onPress={confirmDeleteDeliveredOrder} loading={deleteBusy} /></View>
+                  <View style={{ flex: 1 }}><Button testID="admin-delete-confirm" label={deleteBusy ? "Removing…" : "Confirm removal"} onPress={() => { setDeleteError("Confirm clicked; starting request…"); void confirmDeleteDeliveredOrder(); }} loading={deleteBusy} /></View>
                 </View>
               </View>
             ) : null}
