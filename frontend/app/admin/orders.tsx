@@ -174,18 +174,20 @@ export default function AdminOrders() {
             <TextInput testID="admin-note-input" value={note} onChangeText={setNote} placeholder="Note (optional) — sent to the customer" placeholderTextColor={colors.muted} style={styles.input} />
             <Button testID="admin-notify-customer" label="Message customer" variant="outline" onPress={notifyCustomer} style={{ marginTop: spacing.md }} />
             {selected?.production_status === "delivered" ? (
-              <Button testID="admin-delete-delivered-order" label="Remove delivered order files" variant="outline" onPress={() => { setDeleteError(null); setConfirmDeleteOpen(true); }} style={{ marginTop: spacing.md }} />
-            {confirmDeleteOpen ? (
-              <View testID="admin-delete-confirmation" style={{ borderWidth: 1, borderColor: colors.borderStrong, borderRadius: radius.lg, padding: spacing.lg, marginTop: spacing.md, backgroundColor: colors.surface }}>
-                <Text style={s.h2}>Confirm file removal</Text>
-                <Text style={[s.body, { marginTop: spacing.sm }]}>Production files and uploaded album files will be removed. The customer order number and sheet count will remain visible.</Text>
-                {deleteError ? <Text testID="admin-delete-error" style={{ color: colors.error, marginTop: spacing.sm }}>{deleteError}</Text> : null}
-                <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.md }}>
-                  <View style={{ flex: 1 }}><Button label="Cancel" variant="outline" disabled={deleteBusy} onPress={() => setConfirmDeleteOpen(false)} /></View>
-                  <View style={{ flex: 1 }}><Button testID="admin-delete-confirm" label={deleteBusy ? "Removing…" : "Confirm removal"} onPress={() => { setDeleteError("Confirm clicked; starting request…"); void confirmDeleteDeliveredOrder(); }} loading={deleteBusy} /></View>
-                </View>
-              </View>
-            ) : null}
+              <>
+                <Button testID="admin-delete-delivered-order" label="Remove delivered order files" variant="outline" onPress={() => { setDeleteError(null); setConfirmDeleteOpen(true); }} style={{ marginTop: spacing.md }} />
+                {confirmDeleteOpen ? (
+                  <View testID="admin-delete-confirmation" style={{ borderWidth: 1, borderColor: colors.borderStrong, borderRadius: radius.lg, padding: spacing.lg, marginTop: spacing.md, backgroundColor: colors.surface }}>
+                    <Text style={s.h2}>Confirm file removal</Text>
+                    <Text style={[s.body, { marginTop: spacing.sm }]}>Production files and uploaded album files will be removed. The customer order number and sheet count will remain visible.</Text>
+                    {deleteError ? <Text testID="admin-delete-error" style={{ color: colors.error, marginTop: spacing.sm }}>{deleteError}</Text> : null}
+                    <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.md }}>
+                      <View style={{ flex: 1 }}><Button label="Cancel" variant="outline" disabled={deleteBusy} onPress={() => setConfirmDeleteOpen(false)} /></View>
+                      <View style={{ flex: 1 }}><Button testID="admin-delete-confirm" label={deleteBusy ? "Removing…" : "Confirm removal"} onPress={() => { setDeleteError("Confirm clicked; starting request…"); void confirmDeleteDeliveredOrder(); }} loading={deleteBusy} /></View>
+                    </View>
+                  </View>
+                ) : null}
+              </>
             ) : null}
 
             <Text style={[s.label, { marginTop: spacing.xl }]}>Production files</Text>
