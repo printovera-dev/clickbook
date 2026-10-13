@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Modal, RefreshControl, Linking, ActivityIndicator, Alert } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Modal, RefreshControl, Linking, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
@@ -25,6 +25,9 @@ export default function AdminOrders() {
   const [tracking, setTracking] = useState("");
   const [building, setBuilding] = useState(false);
   const [buildError, setBuildError] = useState<string | null>(null);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const q = useQuery({ queryKey: ["admin-orders", filter], queryFn: () => api.adminOrders(filter || undefined) });
   const orders = q.data?.orders || [];
   const downloads = useQuery({
@@ -41,20 +44,20 @@ export default function AdminOrders() {
     setSelected(null); setNote(""); setTracking("");
     q.refetch();
   };
-  const confirmDeleteDeliveredOrder = () => {
-    if (!selected || selected.production_status !== "delivered") return;
-    Alert.alert("Remove delivered order files?", "The production files and uploaded album files will be removed. The customer order number and sheet count will remain in order history.", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Continue", style: "destructive", onPress: async () => {
-        try {
-          await api.adminDeleteOrder(selected.id);
-          setSelected(null);
-          await q.refetch();
-        } catch (error: any) {
-          Alert.alert("Could not complete", error?.message || "The order was not removed. Please check storage and try again.");
-        }
-      } },
-    ]);
+  const confirmDeleteDeliveredOrder = async () => {
+    if (!selected || selected.production_status !== "delivered" || deleteBusy) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      await api.adminDeleteOrder(selected.id);
+      setConfirmDeleteOpen(false);
+      setSelected(null);
+      await q.refetch();
+    } catch (error: any) {
+      setDeleteError(error?.message || "The server could not remove the files. The order was not deleted.");
+    } finally {
+      setDeleteBusy(false);
+    }
   };
 
   const buildPackage = async () => {
@@ -134,6 +137,19 @@ export default function AdminOrders() {
         />
       </ScrollView>
 
+      <Modal visible={confirmDeleteOpen} transparent animationType="fade" onRequestClose={() => { if (!deleteBusy) setConfirmDeleteOpen(false); }}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "center", padding: spacing.xl }}>
+          <View style={{ backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.xl }}>
+            <Text style={s.h2}>Remove delivered order files?</Text>
+            <Text style={[s.body, { marginTop: spacing.md }]}>The production package and uploaded album files will be removed. The customer will still see the order number and sheet count in order history. This cannot be undone.</Text>
+            {deleteError ? <Text style={{ color: colors.error, marginTop: spacing.md }}>{deleteError}</Text> : null}
+            <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: spacing.sm, marginTop: spacing.xl }}>
+              <Button label="Cancel" variant="outline" disabled={deleteBusy} onPress={() => setConfirmDeleteOpen(false)} />
+              <Button label={deleteBusy ? "Removing…" : "Confirm removal"} onPress={confirmDeleteDeliveredOrder} loading={deleteBusy} />
+            </View>
+          </View>
+        </View>
+      </Modal>
       <Modal visible={!!selected} transparent animationType="slide" onRequestClose={() => setSelected(null)}>
         <View style={styles.modalWrap}>
           <View style={[styles.modal, { paddingBottom: insets.bottom + spacing.xl }]}>
@@ -163,7 +179,7 @@ export default function AdminOrders() {
             <TextInput testID="admin-note-input" value={note} onChangeText={setNote} placeholder="Note (optional) — sent to the customer" placeholderTextColor={colors.muted} style={styles.input} />
             <Button testID="admin-notify-customer" label="Message customer" variant="outline" onPress={notifyCustomer} style={{ marginTop: spacing.md }} />
             {selected?.production_status === "delivered" ? (
-              <Button testID="admin-delete-delivered-order" label="Remove delivered order files" variant="outline" onPress={confirmDeleteDeliveredOrder} style={{ marginTop: spacing.md }} />
+              <Button testID="admin-delete-delivered-order" label="Remove delivered order files" variant="outline" onPress={() => { setDeleteError(null); setConfirmDeleteOpen(true); }} style={{ marginTop: spacing.md }} />
             ) : null}
 
             <Text style={[s.label, { marginTop: spacing.xl }]}>Production files</Text>
