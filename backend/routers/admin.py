@@ -213,8 +213,16 @@ async def delete_delivered_order(order_id: str, admin: dict = Depends(get_curren
         raise HTTPException(status_code=502, detail="File cleanup failed; order records were kept")
     await db.design_versions.delete_many({"album_id": album_id})
     await db.albums.delete_one({"id": album_id, "customer_id": customer_id})
-    await db.orders.delete_one({"id": order_id})
-    return {"success": True, "files_removed": True}
+    # Keep a lightweight order record so the customer can still see the order number and sheet count.
+    await db.orders.update_one(
+        {"id": order_id, "customer_id": customer_id},
+        {"$set": {
+            "archived": True,
+            "files_deleted": True,
+            "archived_at": now_iso(),
+        }},
+    )
+    return {"success": True, "files_removed": True, "order_archived": True}
 
 
 @router.post("/orders/{order_id}/pdf", status_code=202)
