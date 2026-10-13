@@ -167,7 +167,11 @@ async def admin_albums(admin: dict = Depends(get_current_admin), status: Optiona
 
 @router.get("/orders")
 async def admin_orders(admin: dict = Depends(get_current_admin), status: Optional[str] = None):
-    q = {"production_status": status} if status else {}
+    # Archived delivered orders remain in the database for customer order history,
+    # but must no longer appear in the active admin production list.
+    q: dict = {"archived": {"$ne": True}}
+    if status:
+        q["production_status"] = status
     orders = await db.orders.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
     return {"orders": orders}
 
@@ -202,11 +206,16 @@ async def delete_delivered_order(order_id: str, admin: dict = Depends(get_curren
     album_id, customer_id = order.get("album_id"), order.get("customer_id")
     if not album_id or not customer_id:
         raise HTTPException(status_code=409, detail="Order storage references are missing")
+    package_dir = (order.get("production_package") or {}).get("dir")
+    # Older package records may have paths but no explicit directory field.
+    if not package_dir:
+        pdf_path = (order.get("production_package") or {}).get("pdf_path") or order.get("pdf_path")
+        if pdf_path:
+            package_dir = str(Path(pdf_path).parent)
+    album_dir = f"clickbook/customers/{customer_id}/albums/{album_id}"
     try:
-        package_dir = (order.get("production_package") or {}).get("dir")
-        if package_dir:
-            delete_storage_dir(package_dir)
-        delete_storage_dir(f"clickbook/customers/{customer_id}/albums/{album_id}")
+        production_files_removed = delete_storage_dir(package_dir) if package_dir else 0
+        album_files_removed = delete_storage_dir(album_dir)
     except Exception:
         from core import logger
         logger.exception("Could not clean files for delivered order %s", order_id)
@@ -214,15 +223,25 @@ async def delete_delivered_order(order_id: str, admin: dict = Depends(get_curren
     await db.design_versions.delete_many({"album_id": album_id})
     await db.albums.delete_one({"id": album_id, "customer_id": customer_id})
     # Keep a lightweight order record so the customer can still see the order number and sheet count.
-    await db.orders.update_one(
+    update_result = await db.orders.update_one(
         {"id": order_id, "customer_id": customer_id},
         {"$set": {
             "archived": True,
             "files_deleted": True,
+            "files_deleted_at": now_iso(),
+            "files_removed_count": production_files_removed + album_files_removed,
             "archived_at": now_iso(),
         }},
     )
-    return {"success": True, "files_removed": True, "order_archived": True}
+    if not update_result.matched_count:
+        raise HTTPException(status_code=500, detail="Files were cleaned but the order could not be archived")
+    return {
+        "success": True,
+        "files_removed": True,
+        "production_files_removed": production_files_removed,
+        "album_files_removed": album_files_removed,
+        "order_archived": True,
+    }
 
 
 @router.post("/orders/{order_id}/pdf", status_code=202)
