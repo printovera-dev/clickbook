@@ -237,6 +237,37 @@ def save_production_package(folder: str, pdf: bytes, cover_jpg: bytes, page_jpgs
             "manifest_path": f"{rel}/manifest.json", "size_bytes": total}
 
 
+
+def delete_storage_dir(rel_dir: str) -> int:
+    """Delete every file beneath a storage directory; returns the number of deleted objects/files."""
+    if not rel_dir or ".." in rel_dir.split("/") or rel_dir.startswith("/"):
+        raise ValueError("Invalid storage directory")
+    if _use_s3():
+        prefix = rel_dir.strip("/") + "/"
+        client = _get_s3()
+        paginator = client.get_paginator("list_objects_v2")
+        deleted = 0
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+            keys = [{"Key": obj["Key"]} for obj in page.get("Contents", []) if obj.get("Key")]
+            for start in range(0, len(keys), 1000):
+                batch = keys[start:start + 1000]
+                if batch:
+                    result = client.delete_objects(Bucket=S3_BUCKET, Delete={"Objects": batch, "Quiet": True})
+                    errors = result.get("Errors", [])
+                    if errors:
+                        raise RuntimeError(f"S3 delete failed for {len(errors)} object(s)")
+                    deleted += len(batch)
+        return deleted
+    root = STORAGE_BASE / rel_dir
+    if not root.exists():
+        return 0
+    if not root.is_dir():
+        raise ValueError("Storage path is not a directory")
+    count = sum(1 for p in root.rglob("*") if p.is_file())
+    shutil.rmtree(root)
+    return count
+
+
 def list_dir_files(rel_dir: str) -> list:
     """List relative file paths and sizes under a storage folder (local or S3)."""
     if ".." in rel_dir.split("/"):
