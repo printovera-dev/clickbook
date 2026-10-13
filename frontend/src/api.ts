@@ -195,6 +195,7 @@ export const api = {
     request<{ orders: any[] }>(`/admin/orders${status ? `?status=${status}` : ""}`, { admin: true }),
   adminUpdateOrderStatus: (id: string, data: any) =>
     request(`/admin/orders/${id}/status`, { method: "PUT", body: data, admin: true }),
+  adminDeleteOrder: (id: string) => request(`/admin/orders/${id}`, { method: "DELETE", admin: true }),
   adminGeneratePdf: (id: string) => request<any>(`/admin/orders/${id}/pdf`, { method: "POST", body: {}, admin: true }),
   adminOrderDownloads: (id: string) => request<{ package: any; files: any[] }>(`/admin/orders/${id}/downloads`, { admin: true }),
   adminDownloadsZipUrl: async (id: string) => `${BASE}/api/admin/orders/${id}/downloads.zip?token=${encodeURIComponent((await getAdminToken()) || "")}`,
