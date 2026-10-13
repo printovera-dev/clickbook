@@ -10,7 +10,7 @@ from typing import Optional, List, Dict, Any
 
 from core import (db, now_iso, new_id, get_current_admin, get_settings_doc, verify_password, hash_password,
                   make_admin_token, admin_from_token)
-from storage_manager import save_original, public_url, list_dir_files, zip_dir, _put
+from storage_manager import save_original, public_url, list_dir_files, zip_dir, delete_storage_dir, _put
 from production import schedule_production_package, production_build_is_stale, STALE_BUILD_MESSAGE
 from routers.notifications import notify_order_status
 
@@ -190,6 +190,31 @@ async def update_order_status(order_id: str, payload: StatusUpdate, admin: dict 
             await db.albums.update_one({"id": order["album_id"]}, {"$set": {"status": "delivered"}})
         await notify_order_status(order, payload.production_status, payload.note or "")
     return {"success": True}
+
+
+@router.delete("/orders/{order_id}")
+async def delete_delivered_order(order_id: str, admin: dict = Depends(get_current_admin)):
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.get("production_status") != "delivered":
+        raise HTTPException(status_code=409, detail="Only delivered orders can be deleted")
+    album_id, customer_id = order.get("album_id"), order.get("customer_id")
+    if not album_id or not customer_id:
+        raise HTTPException(status_code=409, detail="Order storage references are missing")
+    try:
+        package_dir = (order.get("production_package") or {}).get("dir")
+        if package_dir:
+            delete_storage_dir(package_dir)
+        delete_storage_dir(f"clickbook/customers/{customer_id}/albums/{album_id}")
+    except Exception:
+        from core import logger
+        logger.exception("Could not clean files for delivered order %s", order_id)
+        raise HTTPException(status_code=502, detail="File cleanup failed; order records were kept")
+    await db.design_versions.delete_many({"album_id": album_id})
+    await db.albums.delete_one({"id": album_id, "customer_id": customer_id})
+    await db.orders.delete_one({"id": order_id})
+    return {"success": True, "files_removed": True}
 
 
 @router.post("/orders/{order_id}/pdf", status_code=202)
