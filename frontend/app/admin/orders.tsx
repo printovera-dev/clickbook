@@ -83,7 +83,10 @@ export default function AdminOrders() {
     }
   };
   const pkgReady = pkg?.status === "ready";
-  useEffect(() => { if (pkgReady) q.refetch(); }, [pkgReady, q]);
+  // `useQuery` returns a new result object on renders; depending on `q` here
+  // retriggers this effect after every refetch and can create React error #185.
+  const refetchOrders = q.refetch;
+  useEffect(() => { if (pkgReady) void refetchOrders(); }, [pkgReady, refetchOrders]);
   const exportXlsx = async (range: "daily" | "weekly" | "monthly" | "all") => {
     const token = await getAdminToken();
     if (token) Linking.openURL(api.adminOrdersExportUrl(range, token));
