@@ -3,7 +3,7 @@
 Two drivers:
 - local (default): VPS-style on-disk layout at STORAGE_BASE — for self-hosted servers.
 - s3: S3-compatible object storage (Emergent Object Storage / AWS / any S3 bucket).
-  Enabled when S3_ACCESS_KEY + S3_SECRET_KEY + S3_BUCKET are set, or STORAGE_DRIVER=s3.
+  Enabled only when STORAGE_DRIVER=s3; required settings are validated and never silently fall back.
 
 Driver selection: env `STORAGE_DRIVER` ("local" | "s3"). Default "local".
 """
@@ -48,7 +48,28 @@ def _get_s3():
 
 
 def _use_s3() -> bool:
-    return STORAGE_DRIVER == "s3" and bool(S3_ACCESS_KEY and S3_SECRET_KEY and S3_BUCKET)
+    """Return whether S3 is active; never silently fall back to ephemeral disk.
+
+    When STORAGE_DRIVER=s3 is explicitly selected, missing credentials or bucket
+    configuration must fail the storage operation rather than write files locally.
+    """
+    if STORAGE_DRIVER != "s3":
+        return False
+
+    missing = [
+        name for name, value in (
+            ("S3_ACCESS_KEY", S3_ACCESS_KEY),
+            ("S3_SECRET_KEY", S3_SECRET_KEY),
+            ("S3_BUCKET", S3_BUCKET),
+        )
+        if not value.strip()
+    ]
+    if missing:
+        raise RuntimeError(
+            "STORAGE_DRIVER=s3 but required storage settings are missing: "
+            + ", ".join(missing)
+        )
+    return True
 
 
 def _customer_root(customer_id: str, album_id: str) -> Path:
@@ -72,12 +93,21 @@ def _put(rel_path: str, data: bytes, content_type: str = "application/octet-stre
 
 
 def _get_bytes(rel_path: str) -> Optional[bytes]:
+    if ".." in rel_path.split("/"):
+        return None
     if _use_s3():
+        from botocore.exceptions import ClientError
         try:
             obj = _get_s3().get_object(Bucket=S3_BUCKET, Key=rel_path)
             return obj["Body"].read()
-        except Exception:
-            return None
+        except ClientError as exc:
+            code = str(exc.response.get("Error", {}).get("Code", ""))
+            status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+            if code in {"NoSuchKey", "NotFound", "404"} or status == 404:
+                return None
+            # Surface permission, credentials, and service failures instead of
+            # disguising an S3 outage as a missing file.
+            raise
     p = resolve_path(rel_path)
     if not p:
         return None
@@ -130,6 +160,36 @@ def resolve_path(rel_path: str) -> Optional[Path]:
 
 def get_file_bytes(rel_path: str) -> Optional[bytes]:
     return _get_bytes(rel_path)
+
+
+def get_s3_file_range(rel_path: str, start: int, end: int):
+    """Return (bytes, total_size) for an inclusive byte range, or None if absent."""
+    if ".." in rel_path.split("/"):
+        return None
+    if not _use_s3():
+        return None
+    from botocore.exceptions import ClientError
+    client = _get_s3()
+    try:
+        head = client.head_object(Bucket=S3_BUCKET, Key=rel_path)
+        total = int(head["ContentLength"])
+        if start < 0 or end < start or start >= total:
+            return (b"", total)
+        end = min(end, total - 1)
+        obj = client.get_object(
+            Bucket=S3_BUCKET, Key=rel_path,
+            Range=f"bytes={start}-{end}",
+        )
+        try:
+            return (obj["Body"].read(), total)
+        finally:
+            obj["Body"].close()
+    except ClientError as exc:
+        code = str(exc.response.get("Error", {}).get("Code", ""))
+        status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+        if code in {"NoSuchKey", "NotFound", "404"} or status == 404:
+            return None
+        raise
 
 
 def public_url(rel_path: str) -> str:

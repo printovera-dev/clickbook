@@ -5,7 +5,7 @@ import os
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 
-from storage_manager import resolve_path, get_file_bytes
+from storage_manager import resolve_path, get_file_bytes, get_s3_file_range
 
 router = APIRouter(tags=["files"])
 
@@ -43,8 +43,55 @@ async def serve_file(full_path: str, request: Request):
                        "Content-Length": str(end - start + 1)}
             return StreamingResponse(_iter_file(str(p), start, end), status_code=206, media_type=ct, headers=headers)
         return FileResponse(str(p), headers={**CACHE, "Accept-Ranges": "bytes"}, media_type=ct)
+    ct = mimetypes.guess_type(full_path)[0] or "application/octet-stream"
+    rng = request.headers.get("range")
+    if rng and rng.startswith("bytes="):
+        spec = rng[6:].split(",")[0].strip()
+        start_text, sep, end_text = spec.partition("-")
+        try:
+            if not sep or (not start_text and not end_text):
+                raise ValueError("invalid range")
+            if start_text:
+                start = int(start_text)
+                if end_text:
+                    end = int(end_text)
+                else:
+                    probe = get_s3_file_range(full_path, 0, 0)
+                    if probe is None:
+                        raise HTTPException(404, "File not found")
+                    _, total = probe
+                    end = total - 1
+            else:
+                suffix_length = int(end_text)
+                if suffix_length <= 0:
+                    raise ValueError("invalid suffix range")
+                # S3 requires an explicit start. Fetching the object size lets
+                # us convert a suffix range into an ordinary inclusive range.
+                from storage_manager import get_s3_file_range
+                probe = get_s3_file_range(full_path, 0, 0)
+                if probe is None:
+                    raise HTTPException(404, "File not found")
+                _, total = probe
+                start = max(0, total - suffix_length)
+                end = total - 1
+            ranged = get_s3_file_range(full_path, start, end)
+        except ValueError:
+            raise HTTPException(416, "Invalid byte range")
+        if ranged is None:
+            raise HTTPException(404, "File not found")
+        data, total = ranged
+        if start >= total or end < start:
+            return Response(status_code=416, headers={"Content-Range": f"bytes */{total}"})
+        actual_end = start + len(data) - 1
+        headers = {
+            **CACHE,
+            "Accept-Ranges": "bytes",
+            "Content-Range": f"bytes {start}-{actual_end}/{total}",
+            "Content-Length": str(len(data)),
+        }
+        return Response(content=data, status_code=206, media_type=ct, headers=headers)
+
     data = get_file_bytes(full_path)
     if data is None:
         raise HTTPException(404, "File not found")
-    ct = mimetypes.guess_type(full_path)[0] or "application/octet-stream"
-    return Response(content=data, media_type=ct, headers=CACHE)
+    return Response(content=data, media_type=ct, headers={**CACHE, "Accept-Ranges": "bytes"})
