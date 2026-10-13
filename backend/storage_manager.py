@@ -238,9 +238,24 @@ def save_production_package(folder: str, pdf: bytes, cover_jpg: bytes, page_jpgs
 
 
 def list_dir_files(rel_dir: str) -> list:
-    """Relative file paths (with sizes) under a storage folder — local driver only."""
-    if _use_s3() or ".." in rel_dir.split("/"):
+    """List relative file paths and sizes under a storage folder (local or S3)."""
+    if ".." in rel_dir.split("/"):
         return []
+    if _use_s3():
+        prefix = rel_dir.strip("/") + "/"
+        paginator = _get_s3().get_paginator("list_objects_v2")
+        out = []
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                key = obj.get("Key", "")
+                if not key or key.endswith("/"):
+                    continue
+                out.append({
+                    "path": key,
+                    "name": key[len(prefix):],
+                    "size_bytes": int(obj.get("Size", 0)),
+                })
+        return sorted(out, key=lambda item: item["name"])
     root = STORAGE_BASE / rel_dir
     if not root.is_dir():
         return []
@@ -252,12 +267,31 @@ def list_dir_files(rel_dir: str) -> list:
 
 
 def zip_dir(rel_dir: str) -> Optional[bytes]:
-    if _use_s3() or ".." in rel_dir.split("/"):
+    """Create a ZIP of a package folder from local storage or S3 objects."""
+    if ".." in rel_dir.split("/"):
         return None
+    buf = io.BytesIO()
+    if _use_s3():
+        prefix = rel_dir.strip("/") + "/"
+        paginator = _get_s3().get_paginator("list_objects_v2")
+        found = False
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+                for obj in page.get("Contents", []):
+                    key = obj.get("Key", "")
+                    if not key or key.endswith("/"):
+                        continue
+                    found = True
+                    response = _get_s3().get_object(Bucket=S3_BUCKET, Key=key)
+                    body = response["Body"]
+                    try:
+                        zf.writestr(key[len(prefix):], body.read())
+                    finally:
+                        body.close()
+        return buf.getvalue() if found else None
     root = STORAGE_BASE / rel_dir
     if not root.is_dir():
         return None
-    buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for p in sorted(root.rglob("*")):
             if p.is_file():
