@@ -67,7 +67,6 @@ async def serve_file(full_path: str, request: Request):
                     raise ValueError("invalid suffix range")
                 # S3 requires an explicit start. Fetching the object size lets
                 # us convert a suffix range into an ordinary inclusive range.
-                from storage_manager import get_s3_file_range
                 probe = get_s3_file_range(full_path, 0, 0)
                 if probe is None:
                     raise HTTPException(404, "File not found")
