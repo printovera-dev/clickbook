@@ -1,5 +1,5 @@
-import { useCallback, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList, useWindowDimensions, Alert, Platform } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList, useWindowDimensions, Alert, Platform, Image } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -22,7 +22,21 @@ export default function UploadStep() {
   const cell = Math.floor((width - spacing.xl * 2 - GAP * (COLS - 1)) / COLS);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [localPreviews, setLocalPreviews] = useState<any[]>([]);
+  const [hintVisible, setHintVisible] = useState(true);
+  const [activityTick, setActivityTick] = useState(0);
+  const [savingOrder, setSavingOrder] = useState(false);
   const [err, setErr] = useState("");
+  const hintTimer = useRef<any>(null);
+
+  const registerActivity = useCallback(() => {
+    setHintVisible(false);
+    setActivityTick((n) => n + 1);
+  }, []);
+
+  useEffect(() => {
+    hintTimer.current = setTimeout(() => setHintVisible(true), 50000);
+    return () => clearTimeout(hintTimer.current);
+  }, [activityTick]);
 
   const q = useQuery({ queryKey: ["album", albumId], queryFn: () => api.getAlbum(String(albumId)), enabled: !!albumId });
   const photos: any[] = q.data?.album?.photos || [];
@@ -68,6 +82,7 @@ export default function UploadStep() {
       // Show the selected photos immediately, while uploads and server derivatives run.
       setLocalPreviews(assets.map((asset, i) => ({
         key: `local-preview-${Date.now()}-${i}`,
+        index: i,
         localPreview: true,
         localUri: asset.uri,
         filename: asset.fileName || `photo_${i}.jpg`,
@@ -90,6 +105,7 @@ export default function UploadStep() {
           try {
             const r = await api.uploadPhoto(String(albumId), asset.uri, name, (asset as any).file);
             uploaded.push({ index: i, photo: r.photo });
+            setLocalPreviews((prev) => prev.map((item) => item.index === i ? { ...item, completedPhoto: r.photo } : item));
           } catch (e: any) {
             failed += 1;
             lastError = e?.message || "upload failed";
@@ -104,12 +120,21 @@ export default function UploadStep() {
       // network requests finished first. Keep partial successes if any files failed.
       uploaded.sort((a, b) => a.index - b.index);
       if (uploaded.length) {
+        const existing: any[] = q.data?.album?.photos || [];
+        const orderedUploaded = uploaded.sort((a, b) => a.index - b.index).map((item) => item.photo);
+        const finalPhotos = [...existing, ...orderedUploaded];
+        // Persist the selected order after parallel uploads finish; API insert order can differ.
+        try {
+          await api.reorderPhotos(String(albumId), finalPhotos.map((p) => p.id));
+        } catch {
+          // Keep the local sequence visible; a refresh can retry if the order endpoint is unavailable.
+        }
         qc.setQueryData(["album", albumId], (old: any) => old
-          ? { ...old, album: { ...old.album, photos: [...(old.album.photos || []), ...uploaded.map((item) => item.photo)] } }
+          ? { ...old, album: { ...old.album, photos: finalPhotos } }
           : old);
       }
-      setLocalPreviews([]);
       await q.refetch();
+      setLocalPreviews([]);
       if (failed > 0) {
         setErr(failed === assets.length
           ? `Upload failed: ${lastError}`
@@ -123,6 +148,27 @@ export default function UploadStep() {
     }
   };
 
+  const movePhoto = useCallback(async (photoId: string, delta: number) => {
+    registerActivity();
+    const current: any[] = q.data?.album?.photos || [];
+    const from = current.findIndex((p) => p.id === photoId);
+    const to = from + delta;
+    if (from < 0 || to < 0 || to >= current.length) return;
+    const next = [...current];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    qc.setQueryData(["album", albumId], (old: any) => old ? { ...old, album: { ...old.album, photos: next } } : old);
+    setSavingOrder(true);
+    try {
+      await api.reorderPhotos(String(albumId), next.map((p) => p.id));
+    } catch (e: any) {
+      setErr(e?.message || "Could not save photo order");
+      await q.refetch();
+    } finally {
+      setSavingOrder(false);
+    }
+  }, [albumId, q, qc, registerActivity]);
+
   const removePhoto = useCallback(async (pid: string) => {
     qc.setQueryData(["album", albumId], (old: any) => old ? { ...old, album: { ...old.album, photos: (old.album.photos || []).filter((p: any) => p.id !== pid) } } : old);
     await api.deletePhoto(String(albumId), pid);
@@ -130,6 +176,7 @@ export default function UploadStep() {
   }, [albumId, q, qc]);
 
   const generate = async () => {
+    registerActivity();
     if (photos.length === 0) { setErr("Please upload at least 1 photo"); return; }
     keepStyle
       ? router.replace({ pathname: "/create/generating", params: { albumId: String(albumId), style: String(keepStyle), coverPhotoId: String(keepCover || "") } })
@@ -137,30 +184,55 @@ export default function UploadStep() {
   };
 
   const renderItem = useCallback(({ item: p, index }: { item: any; index: number }) => {
-    const ready = !!p.id && !!p.thumbnail_url && !p.pending;
-    const localPreview = !!p.localPreview && !!p.localUri;
+    const completedPhoto = p.completedPhoto;
+    const actual = completedPhoto || p;
+    const ready = !!actual.id && !!actual.thumbnail_url && !p.pending;
+    const localPreview = !!p.localPreview && !!p.localUri && !completedPhoto;
+    const canReorder = ready && !uploading;
+    const qualityWarnings: string[] = actual.quality_warnings || [];
+    const unprintable = actual.printable === false || qualityWarnings.length > 0;
     return (
-      <View style={{ width: cell, height: cell, marginLeft: index % COLS === 0 ? 0 : GAP, marginBottom: GAP }} testID={ready ? `upload-photo-${p.id}` : localPreview ? `upload-local-preview-${index}` : `upload-pending-${index}`} pointerEvents={ready ? "auto" : "none"}>
-        {ready ? <Thumb uri={p.thumbnail_url} recyclingKey={p.id} style={styles.thumb} /> : localPreview ? (
+      <View
+        style={{ width: cell, height: cell, marginLeft: index % COLS === 0 ? 0 : GAP, marginBottom: GAP }}
+        testID={ready ? `upload-photo-${actual.id}` : localPreview ? `upload-local-preview-${index}` : `upload-pending-${index}`}
+        pointerEvents="auto"
+        onTouchStart={registerActivity}
+        {...({ onPointerEnter: registerActivity } as any)}
+      >
+        {ready ? <Thumb uri={actual.thumbnail_url} recyclingKey={actual.id} style={styles.thumb} /> : localPreview ? (
           <View style={styles.thumb}>
-            <Thumb uri={p.localUri} recyclingKey={p.key} style={styles.thumb} transition={0} />
+            <Image source={{ uri: p.localUri }} style={styles.localImage} resizeMode="cover" />
             <View style={styles.previewSpinner}><ActivityIndicator color="#FFF" size="small" /></View>
           </View>
         ) : (
           <View style={[styles.thumb, { alignItems: "center", justifyContent: "center" }]}><ActivityIndicator color={colors.brandPrimary} /></View>
         )}
+        {ready && unprintable ? (
+          <View style={styles.qualityBadge} accessibilityLabel="Replace this image: it may not print clearly">
+            <Feather name="alert-triangle" size={13} color="#FFF" />
+          </View>
+        ) : null}
         {ready ? (
-          <Pressable style={styles.thumbRemove} onPress={() => removePhoto(p.id)} testID={`upload-remove-${p.id}`} hitSlop={6}>
-            <Feather name="x" size={14} color="#FFF" />
-          </Pressable>
+          <View style={styles.thumbRemove}>
+            <Pressable onPress={() => removePhoto(actual.id)} testID={`upload-remove-${actual.id}`} hitSlop={6}>
+              <Feather name="x" size={14} color="#FFF" />
+            </Pressable>
+          </View>
+        ) : null}
+        {canReorder ? (
+          <View style={styles.reorderControls}>
+            <Pressable disabled={index < COLS} onPress={() => movePhoto(actual.id, -COLS)} style={styles.reorderButton} accessibilityLabel="Move photo up"><Feather name="chevron-up" size={14} color="#FFF" /></Pressable>
+            <Pressable disabled={index % COLS === 0} onPress={() => movePhoto(actual.id, -1)} style={styles.reorderButton} accessibilityLabel="Move photo left"><Feather name="chevron-left" size={14} color="#FFF" /></Pressable>
+            <Pressable disabled={index % COLS === COLS - 1 || index === photos.length - 1} onPress={() => movePhoto(actual.id, 1)} style={styles.reorderButton} accessibilityLabel="Move photo right"><Feather name="chevron-right" size={14} color="#FFF" /></Pressable>
+            <Pressable disabled={index + COLS >= photos.length} onPress={() => movePhoto(actual.id, COLS)} style={styles.reorderButton} accessibilityLabel="Move photo down"><Feather name="chevron-down" size={14} color="#FFF" /></Pressable>
+          </View>
         ) : null}
       </View>
     );
-  }, [cell, removePhoto]);
+  }, [cell, movePhoto, photos.length, registerActivity, removePhoto, uploading]);
 
   const uploading = !!progress;
-  const pendingTiles = progress ? Array.from({ length: Math.max(0, progress.total - progress.done) }, (_, i) => ({ id: "", pending: true, key: `pending-${i}` })) : [];
-  const gridData = [...photos, ...localPreviews, ...pendingTiles];
+  const gridData = [...photos, ...localPreviews];
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface, paddingTop: insets.top }}>
@@ -169,6 +241,7 @@ export default function UploadStep() {
         <Text style={s.label}>Step 2 of 3</Text>
         <View style={{ width: 22 }} />
       </View>
+      <View style={{ flex: 1 }} {...({ onPointerMove: registerActivity } as any)}>
       <FlatList
         testID="upload-photo-grid"
         data={gridData}
@@ -215,8 +288,14 @@ export default function UploadStep() {
           </View>
         }
       />
+      {hintVisible && !uploading ? (
+        <View pointerEvents="none" style={styles.sequenceHint}>
+          <Text style={styles.sequenceHintText}>Move the image sequence as you want it in your album</Text>
+        </View>
+      ) : null}
+      </View>
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
-        <Button testID="upload-generate-button" label={`Design my album (${photos.length} photos)`} onPress={generate} disabled={photos.length === 0 || uploading} />
+        <Button testID="upload-generate-button" label={`Design my album (${photos.length} photos)`} onPress={generate} disabled={photos.length === 0 || uploading || savingOrder} />
       </View>
     </View>
   );
@@ -238,7 +317,13 @@ const styles = StyleSheet.create({
   bar: { marginTop: spacing.md, width: "100%", height: 4, borderRadius: 2, backgroundColor: colors.surfaceTertiary, overflow: "hidden" },
   barFill: { height: 4, backgroundColor: colors.brandPrimary },
   thumb: { width: "100%", height: "100%", borderRadius: radius.sm },
+  localImage: { width: "100%", height: "100%", borderRadius: radius.sm },
   previewSpinner: { position: "absolute", right: 5, bottom: 5, width: 24, height: 24, borderRadius: 12, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" },
+  qualityBadge: { position: "absolute", top: 4, left: 4, width: 25, height: 25, borderRadius: 13, backgroundColor: "#D91E18", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#FFF" },
+  reorderControls: { position: "absolute", left: 3, right: 3, bottom: 3, flexDirection: "row", justifyContent: "space-between", gap: 2 },
+  reorderButton: { width: 23, height: 23, borderRadius: 12, backgroundColor: "rgba(0,0,0,0.68)", alignItems: "center", justifyContent: "center" },
+  sequenceHint: { position: "absolute", top: "42%", left: spacing.xl, right: spacing.xl, alignItems: "center", justifyContent: "center" },
+  sequenceHintText: { color: "#FFF", backgroundColor: "rgba(20,20,20,0.82)", borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, textAlign: "center", fontFamily: fonts.text, fontWeight: "600" },
   thumbRemove: {
     position: "absolute", top: 4, right: 4,
     width: 24, height: 24, borderRadius: 12,
