@@ -92,9 +92,10 @@ export default function UploadStep() {
       let nextIndex = 0;
       let completed = 0;
       const uploaded: { index: number; photo: any }[] = [];
-      // Keep a small concurrency limit: several photos can transfer at once without
-      // creating one request per selected image or overwhelming mobile memory/network.
-      const concurrency = Math.min(2, assets.length);
+      // Three concurrent uploads improve throughput while keeping memory and backend
+      // image-processing load bounded. Each failed upload gets one retry for transient
+      // network interruptions; a permanent failure is reported with its filename.
+      const concurrency = Math.min(3, assets.length);
       const worker = async () => {
         while (true) {
           const i = nextIndex++;
@@ -102,7 +103,22 @@ export default function UploadStep() {
           const asset = assets[i];
           const name = asset.fileName || `photo_${Date.now()}_${i}.jpg`;
           try {
-            const r = await api.uploadPhoto(String(albumId), asset.uri, name, (asset as any).file);
+            let r: any;
+            let firstError: any = null;
+            try {
+              r = await api.uploadPhoto(String(albumId), asset.uri, name, (asset as any).file);
+            } catch (e: any) {
+              firstError = e;
+              // Retry once for a dropped connection / transient gateway issue.
+              // Do not retry clear client validation errors such as unsupported type or too-large files.
+              const message = String(e?.message || "").toLowerCase();
+              const status = Number(e?.status || 0);
+              const retryable = !status || status === 408 || status === 429 || status >= 500 ||
+                message.includes("failed to fetch") || message.includes("network");
+              if (!retryable) throw e;
+              await new Promise((resolve) => setTimeout(resolve, 700));
+              r = await api.uploadPhoto(String(albumId), asset.uri, name, (asset as any).file);
+            }
             uploaded.push({ index: i, photo: r.photo });
             setLocalPreviews((prev) => prev.map((item) => item.index === i ? { ...item, completedPhoto: r.photo } : item));
           } catch (e: any) {
@@ -139,7 +155,7 @@ export default function UploadStep() {
         const failedLabel = failedNames.slice(0, 3).join(", ");
         setErr(failed === assets.length
           ? "All " + assets.length + " uploads failed: " + lastError + (failedLabel ? " (" + failedLabel + (failedNames.length > 3 ? ", …" : "") + ")" : "")
-          : failed + " of " + assets.length + " photos failed" + (failedLabel ? ": " + failedLabel + (failedNames.length > 3 ? ", …" : "") : "") + ". Please retry.");
+          : failed + " of " + assets.length + " photos failed" + (failedLabel ? ": " + failedLabel + (failedNames.length > 3 ? ", …" : "") : "") + ". Error: " + lastError + ". Please retry.");
       }
     } catch (e: any) {
       setErr(e.message || "Upload failed");
