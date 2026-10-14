@@ -23,6 +23,10 @@ class CompleteUploadRequest(BaseModel):
     key: str
 
 
+class PhotoOrderRequest(BaseModel):
+    photo_ids: List[str]
+
+
 class AlbumCreate(BaseModel):
     cover_id: str
     name: Optional[str] = None
@@ -226,6 +230,24 @@ async def upload_photo(album_id: str, file: UploadFile = File(...), customer: di
         {"$push": {"photos": photo}, "$set": {"updated_at": now_iso()}},
     )
     return {"photo": photo}
+
+
+@router.put("/albums/{album_id}/photos/order")
+async def reorder_album_photos(album_id: str, payload: PhotoOrderRequest,
+                               customer: dict = Depends(get_current_customer)):
+    album = await _owned_album(album_id, customer)
+    _ensure_locked(album)
+    current = album.get("photos") or []
+    current_by_id = {photo.get("id"): photo for photo in current if photo.get("id")}
+    requested = payload.photo_ids
+    if len(requested) != len(current_by_id) or len(set(requested)) != len(requested) or set(requested) != set(current_by_id):
+        raise HTTPException(400, "Photo sequence must include every album photo exactly once")
+    ordered = [current_by_id[photo_id] for photo_id in requested]
+    await db.albums.update_one(
+        {"id": album_id, "customer_id": customer["id"]},
+        {"$set": {"photos": ordered, "updated_at": now_iso()}},
+    )
+    return {"photos": ordered}
 
 
 @router.delete("/albums/{album_id}/photos/{photo_id}")
