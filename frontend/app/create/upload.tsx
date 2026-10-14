@@ -25,6 +25,7 @@ export default function UploadStep() {
   const [hintVisible, setHintVisible] = useState(true);
   const [savingOrder, setSavingOrder] = useState(false);
   const [hoveredQualityId, setHoveredQualityId] = useState<string | null>(null);
+  const [draggedPhotoId, setDraggedPhotoId] = useState<string | null>(null);
   const [err, setErr] = useState("");
   const hintTimer = useRef<any>(null);
   const qualityBlink = useRef(new Animated.Value(1)).current;
@@ -96,6 +97,7 @@ export default function UploadStep() {
         index: i,
         localPreview: true,
         localUri: asset.uri,
+        size_bytes: asset.fileSize || 0,
         filename: asset.fileName || `photo_${i}.jpg`,
       })));
       setProgress({ done: 0, total: assets.length });
@@ -180,6 +182,29 @@ export default function UploadStep() {
     }
   }, [albumId, q, qc, registerActivity]);
 
+  const movePhotoTo = useCallback(async (photoId: string, targetPhotoId: string) => {
+    registerActivity();
+    if (photoId === targetPhotoId) return;
+    const current: any[] = q.data?.album?.photos || [];
+    const from = current.findIndex((p) => p.id === photoId);
+    const to = current.findIndex((p) => p.id === targetPhotoId);
+    if (from < 0 || to < 0 || from === to) return;
+    const next = [...current];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    qc.setQueryData(["album", albumId], (old: any) => old ? { ...old, album: { ...old.album, photos: next } } : old);
+    setSavingOrder(true);
+    try {
+      await api.reorderPhotos(String(albumId), next.map((p) => p.id));
+    } catch (e: any) {
+      setErr(e?.message || "Could not save photo order");
+      await q.refetch();
+    } finally {
+      setSavingOrder(false);
+      setDraggedPhotoId(null);
+    }
+  }, [albumId, q, qc, registerActivity]);
+
   const removePhoto = useCallback(async (pid: string) => {
     qc.setQueryData(["album", albumId], (old: any) => old ? { ...old, album: { ...old.album, photos: (old.album.photos || []).filter((p: any) => p.id !== pid) } } : old);
     await api.deletePhoto(String(albumId), pid);
@@ -190,7 +215,7 @@ export default function UploadStep() {
     registerActivity();
     if (photos.length === 0) { setErr("Please upload at least 1 photo"); return; }
     keepStyle
-      ? router.replace({ pathname: "/create/generating", params: { albumId: String(albumId), style: String(keepStyle), coverPhotoId: String(keepCover || "") } })
+      ? router.replace({ pathname: "/create/generating", params: { albumId: String(albumId), style: String(keepStyle), coverPhotoId: String(photos[0]?.id || keepCover || "") } })
       : router.replace({ pathname: "/create/style", params: { albumId: String(albumId) } });
   };
 
@@ -202,9 +227,8 @@ export default function UploadStep() {
     const ready = !!actual.id && !!actual.thumbnail_url && !p.pending;
     const localPreview = !!p.localPreview && !!p.localUri && !completedPhoto;
     const canReorder = ready && !uploading;
-    const qualityWarnings: string[] = actual.quality_warnings || [];
-    const lowResolution = Number(actual.width) > 0 && Number(actual.height) > 0 && Math.min(Number(actual.width), Number(actual.height)) < 1800;
-    const unprintable = actual.printable === false || qualityWarnings.length > 0 || lowResolution;
+    const fileSize = Number(actual.size_bytes ?? actual.fileSize ?? 0);
+    const needsReplacement = fileSize > 0 && fileSize < 100 * 1024;
     return (
       <View
         style={{ width: cell, height: cell, marginLeft: index % COLS === 0 ? 0 : GAP, marginBottom: GAP }}
@@ -212,7 +236,28 @@ export default function UploadStep() {
         pointerEvents="auto"
         onTouchStart={registerActivity}
         {...({
-          onPointerEnter: () => { registerActivity(); if (unprintable && actual.id) setHoveredQualityId(actual.id); },
+          draggable: Platform.OS === "web" && ready && !uploading,
+          onDragStart: (event: any) => {
+            if (Platform.OS !== "web" || !ready || uploading) return;
+            setDraggedPhotoId(actual.id);
+            event?.dataTransfer?.setData?.("text/plain", actual.id);
+            if (event?.dataTransfer) event.dataTransfer.effectAllowed = "move";
+            registerActivity();
+          },
+          onDragOver: (event: any) => {
+            if (Platform.OS === "web" && draggedPhotoId && draggedPhotoId !== actual.id) {
+              event?.preventDefault?.();
+              if (event?.dataTransfer) event.dataTransfer.dropEffect = "move";
+            }
+          },
+          onDrop: (event: any) => {
+            event?.preventDefault?.();
+            const sourceId = event?.dataTransfer?.getData?.("text/plain") || draggedPhotoId;
+            if (sourceId && ready && sourceId !== actual.id) void movePhotoTo(sourceId, actual.id);
+            setDraggedPhotoId(null);
+          },
+          onDragEnd: () => setDraggedPhotoId(null),
+          onPointerEnter: () => { registerActivity(); if (needsReplacement && actual.id) setHoveredQualityId(actual.id); },
           onPointerLeave: () => setHoveredQualityId(null),
         } as any)}
       >
@@ -224,14 +269,20 @@ export default function UploadStep() {
         ) : (
           <View style={[styles.thumb, { alignItems: "center", justifyContent: "center" }]}><ActivityIndicator color={colors.brandPrimary} /></View>
         )}
-        {ready && unprintable ? (
-          <Animated.View style={[styles.qualityBadge, { opacity: qualityBlink }]} accessibilityLabel="Replace this image: it may not print clearly">
+        {index === 0 && ready ? (
+          <View style={styles.coverBadge} pointerEvents="none">
+            <Feather name="star" size={10} color="#FFF" />
+            <Text style={styles.coverBadgeText}>COVER IMAGE</Text>
+          </View>
+        ) : null}
+        {needsReplacement ? (
+          <Animated.View style={[styles.qualityBadge, { opacity: qualityBlink }]} accessibilityLabel="Replace this image: file is smaller than 100 KB">
             <Feather name="alert-triangle" size={13} color="#FFF" />
           </Animated.View>
         ) : null}
-        {ready && unprintable && hoveredQualityId === actual.id ? (
+        {needsReplacement && hoveredQualityId === actual.id ? (
           <View pointerEvents="none" style={styles.qualityTooltip}>
-            <Text style={styles.qualityTooltipText}>Replace image — may not print clearly</Text>
+            <Text style={styles.qualityTooltipText}>Replace image — file is smaller than 100 KB</Text>
           </View>
         ) : null}
         {ready ? (
@@ -251,7 +302,7 @@ export default function UploadStep() {
         ) : null}
       </View>
     );
-  }, [cell, hoveredQualityId, movePhoto, photos.length, qualityBlink, registerActivity, removePhoto, uploading]);
+  }, [cell, draggedPhotoId, hoveredQualityId, movePhoto, movePhotoTo, photos.length, qualityBlink, registerActivity, removePhoto, uploading]);
 
 
   const gridData = [...photos, ...localPreviews];
@@ -342,6 +393,8 @@ const styles = StyleSheet.create({
   localImage: { width: "100%", height: "100%", borderRadius: radius.sm },
   previewSpinner: { position: "absolute", right: 5, bottom: 5, width: 24, height: 24, borderRadius: 12, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" },
   qualityBadge: { position: "absolute", top: 4, left: 4, width: 25, height: 25, borderRadius: 13, backgroundColor: "#D91E18", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#FFF" },
+  coverBadge: { position: "absolute", top: 4, left: 30, right: 30, alignSelf: "center", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 3, backgroundColor: "rgba(28,25,23,0.82)", borderRadius: 4, paddingHorizontal: 5, paddingVertical: 4 },
+  coverBadgeText: { color: "#FFF", fontSize: 8, fontWeight: "700", letterSpacing: 0.5 },
   qualityTooltip: { position: "absolute", top: 31, left: 3, right: 3, zIndex: 5, backgroundColor: "#B91C1C", borderRadius: 4, paddingHorizontal: 4, paddingVertical: 3 },
   qualityTooltipText: { color: "#FFF", fontSize: 9, lineHeight: 11, fontWeight: "600", textAlign: "center" },
   reorderControls: { position: "absolute", left: 3, right: 3, bottom: 3, flexDirection: "row", justifyContent: "space-between", gap: 2 },
