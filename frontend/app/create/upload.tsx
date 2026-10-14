@@ -23,7 +23,6 @@ export default function UploadStep() {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [localPreviews, setLocalPreviews] = useState<any[]>([]);
   const [hintVisible, setHintVisible] = useState(true);
-  const [activityTick, setActivityTick] = useState(0);
   const [savingOrder, setSavingOrder] = useState(false);
   const [hoveredQualityId, setHoveredQualityId] = useState<string | null>(null);
   const [err, setErr] = useState("");
@@ -41,13 +40,14 @@ export default function UploadStep() {
 
   const registerActivity = useCallback(() => {
     setHintVisible(false);
-    setActivityTick((n) => n + 1);
+    clearTimeout(hintTimer.current);
+    hintTimer.current = setTimeout(() => setHintVisible(true), 50000);
   }, []);
 
   useEffect(() => {
     hintTimer.current = setTimeout(() => setHintVisible(true), 50000);
     return () => clearTimeout(hintTimer.current);
-  }, [activityTick]);
+  }, []);
 
   const q = useQuery({ queryKey: ["album", albumId], queryFn: () => api.getAlbum(String(albumId)), enabled: !!albumId });
   const photos: any[] = q.data?.album?.photos || [];
