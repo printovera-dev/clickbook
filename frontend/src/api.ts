@@ -2,8 +2,15 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 
-export const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
-
+// Do not send API calls to the customer-facing website: it serves the frontend,
+// not the FastAPI routes. Keep explicit non-website API overrides supported.
+const configuredBackend = (process.env.EXPO_PUBLIC_BACKEND_URL || "").replace(/\/$/, "");
+const customerWebsite = "https://clickbook.world";
+const kubernsBackend = "https://clickbook-conflict-041026-2004-a001739.kuberns.cloud";
+export const BASE =
+  !configuredBackend || configuredBackend === customerWebsite
+    ? kubernsBackend
+    : configuredBackend;
 export const TOKEN_KEY = "clickbook.customerToken";
 export const ADMIN_TOKEN_KEY = "clickbook.adminToken";
 
