@@ -203,7 +203,8 @@ export default function UploadStep() {
     const localPreview = !!p.localPreview && !!p.localUri && !completedPhoto;
     const canReorder = ready && !uploading;
     const qualityWarnings: string[] = actual.quality_warnings || [];
-    const unprintable = actual.printable === false || qualityWarnings.length > 0;
+    const lowResolution = Number(actual.width) > 0 && Number(actual.height) > 0 && Math.min(Number(actual.width), Number(actual.height)) < 1800;
+    const unprintable = actual.printable === false || qualityWarnings.length > 0 || lowResolution;
     return (
       <View
         style={{ width: cell, height: cell, marginLeft: index % COLS === 0 ? 0 : GAP, marginBottom: GAP }}
