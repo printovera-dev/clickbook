@@ -92,6 +92,66 @@ def _put(rel_path: str, data: bytes, content_type: str = "application/octet-stre
         p.write_bytes(data)
 
 
+def create_presigned_upload(customer_id: str, album_id: str, filename: str) -> Optional[dict]:
+    """Create a short-lived direct-to-S3 upload URL. Return None for local storage."""
+    if STORAGE_DRIVER != "s3":
+        return None
+    _use_s3()  # validate required configuration; never silently fall back to local disk
+    ext = os.path.splitext(filename)[1].lower() or ".jpg"
+    base = uuid.uuid4().hex
+    key = f"clickbook/customers/{customer_id}/albums/{album_id}/originals/{base}{ext}"
+    url = _get_s3().generate_presigned_url(
+        "put_object",
+        Params={"Bucket": S3_BUCKET, "Key": key},
+        ExpiresIn=900,
+    )
+    return {"upload_url": url, "key": key}
+
+
+def finalize_presigned_upload(customer_id: str, album_id: str, filename: str, key: str,
+                              max_bytes: int = 20 * 1024 * 1024) -> dict:
+    """Validate a direct S3 upload and create only its derived assets (original already exists)."""
+    from image_processor import make_derivatives
+
+    ext = os.path.splitext(filename)[1].lower() or ".jpg"
+    expected_prefix = f"clickbook/customers/{customer_id}/albums/{album_id}/originals/"
+    basename = os.path.basename(key)
+    base, key_ext = os.path.splitext(basename)
+    if (not _use_s3() or not key.startswith(expected_prefix) or "/" in basename
+            or not re.fullmatch(r"[0-9a-f]{32}", base) or key_ext.lower() != ext):
+        raise ValueError("Invalid upload key")
+    data = _get_bytes(key)
+    if data is None:
+        raise ValueError("Uploaded file not found in storage")
+    if len(data) > max_bytes:
+        raise ValueError("File too large (max 20MB)")
+    try:
+        derivs = make_derivatives(data)
+    except ValueError:
+        raise
+    rel = f"clickbook/customers/{customer_id}/albums/{album_id}"
+    jpg_key = f"{base}.jpg"
+    webp_key = f"{base}.webp"
+    _put(f"{rel}/thumbnails/{webp_key}", derivs["thumbnail"], "image/webp")
+    _put(f"{rel}/previews/{webp_key}", derivs["preview"], "image/webp")
+    _put(f"{rel}/print/{jpg_key}", derivs["print"], "image/jpeg")
+    return {
+        "storage_key": basename,
+        "original_path": key,
+        "thumbnail_path": f"{rel}/thumbnails/{webp_key}",
+        "preview_path": f"{rel}/previews/{webp_key}",
+        "print_path": f"{rel}/print/{jpg_key}",
+        "size_bytes": len(data),
+        "width": derivs["width"],
+        "height": derivs["height"],
+        "derivative_bytes": {
+            "thumbnail": len(derivs["thumbnail"]),
+            "preview": len(derivs["preview"]),
+            "print": len(derivs["print"]),
+        },
+    }
+
+
 def _get_bytes(rel_path: str) -> Optional[bytes]:
     if ".." in rel_path.split("/"):
         return None
