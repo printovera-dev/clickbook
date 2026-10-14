@@ -2,15 +2,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 
-// Do not send API calls to the customer-facing website: it serves the frontend,
-// not the FastAPI routes. Keep explicit non-website API overrides supported.
-const configuredBackend = (process.env.EXPO_PUBLIC_BACKEND_URL || "").replace(/\/$/, "");
-const customerWebsite = "https://clickbook.world";
-const kubernsBackend = "https://clickbook-conflict-041026-2004-a001739.kuberns.cloud";
-export const BASE =
-  !configuredBackend || configuredBackend === customerWebsite
-    ? kubernsBackend
-    : configuredBackend;
+export const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
+
 export const TOKEN_KEY = "clickbook.customerToken";
 export const ADMIN_TOKEN_KEY = "clickbook.adminToken";
 
@@ -146,56 +139,13 @@ export const api = {
   reorderPhotos: (albumId: string, photoIds: string[]) =>
     request<{ photos: any[] }>(`/albums/${albumId}/photos/order`, { method: "PUT", body: { photo_ids: photoIds } }),
 
-  // Upload photo bytes directly to S3 when S3 storage is enabled.
-  // Local-storage deployments keep using the established multipart endpoint.
+  // Upload photos directly to S3 when configured, avoiding routing every large image
+  // through the API server. Local-storage deployments retain the existing multipart path.
   uploadPhoto: async (albumId: string, uri: string, filename: string, webFile?: any) => {
-    const presign = await request<{ direct_upload: boolean; upload_url?: string; key?: string }>(
-      `/albums/${albumId}/photos/presign`,
-      { method: "POST", body: { filename } },
-    );
-
-    if (!presign.direct_upload || !presign.upload_url || !presign.key) {
-      return uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false);
-    }
-
-    let fileBody: any;
-    let contentType = "application/octet-stream";
-    if (Platform.OS === "web") {
-      let file: any = webFile;
-      if (!file) {
-        const resp = await fetch(uri);
-        if (!resp.ok) throw new Error("Could not read selected photo");
-        const blob = await resp.blob();
-        file = new File([blob], filename, { type: blob.type || "image/jpeg" });
-      }
-      if (typeof file.size === "number" && file.size > 20 * 1024 * 1024) {
-        throw new Error("File too large (max 20MB)");
-      }
-      fileBody = file;
-      contentType = file.type || "image/jpeg";
-    } else {
-      const { File: ExpoFile } = await import("expo-file-system");
-      fileBody = new ExpoFile(uri);
-      const size = Number((fileBody as any).size || 0);
-      if (size > 20 * 1024 * 1024) throw new Error("File too large (max 20MB)");
-      contentType = (fileBody as any).type || "image/jpeg";
-    }
-
-    // The presigned URL is scoped to one object. Never send the customer token to S3.
-    const put = await fetch(presign.upload_url, {
-      method: "PUT",
-      headers: { "Content-Type": contentType },
-      body: fileBody,
-    } as any);
-    if (!put.ok) {
-      throw new Error(`Direct S3 upload failed (HTTP ${put.status}). Please retry.`);
-    }
-
-    // Confirm the stored object and register it in the album using the authenticated API.
-    return request<{ photo: any }>(`/albums/${albumId}/photos/complete`, {
-      method: "POST",
-      body: { filename, key: presign.key },
-    });
+    // Temporarily use the established backend multipart upload path while the
+    // S3 bucket CORS configuration is unavailable to the frontend deployment.
+    // This avoids failing every upload on a cross-origin S3 PUT.
+    return uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false);
   },
   adminUploadImage: (uri: string, filename: string, webFile?: any) =>
     uploadFile(`/admin/images`, uri, filename, webFile, true),
