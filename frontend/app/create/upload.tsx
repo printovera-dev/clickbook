@@ -71,25 +71,10 @@ export default function UploadStep() {
         preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
       });
       if (res.canceled) return;
-      // Duplicate detection: same file name + byte size (within this selection and against already-uploaded photos).
-      const seen = new Set<string>(photos.map((p: any) => `${p.filename}|${p.size_bytes}`));
-      const unique: typeof res.assets = []; let dupes = 0;
-      for (const a of res.assets) {
-        const key = `${a.fileName || ""}|${a.fileSize || 0}`;
-        if (a.fileName && a.fileSize && seen.has(key)) { dupes += 1; continue; }
-        seen.add(key); unique.push(a);
-      }
-      let assets = res.assets;
-      if (dupes > 0) {
-        const skip = await new Promise<boolean>((resolve) => {
-          if (Platform.OS === "web") return resolve(window.confirm(`Duplicate images found (${dupes}). Do you want to skip the duplicate images?`));
-          Alert.alert("Duplicate images found", `${dupes} duplicate image${dupes > 1 ? "s" : ""} found. Do you want to skip the duplicate images?`, [
-            { text: "Keep all", style: "cancel", onPress: () => resolve(false) },
-            { text: "Skip duplicates", onPress: () => resolve(true) },
-          ]);
-        });
-        if (skip) assets = unique;
-      }
+      // Do not silently drop selected photos based only on matching filenames and sizes.
+      // Different wedding photos from different cameras can share both; upload every
+      // selected asset in the exact picker order.
+      const assets = res.assets;
       if (!assets.length) return;
       // Show the selected photos immediately, while uploads and server derivatives run.
       setLocalPreviews(assets.map((asset, i) => ({
@@ -103,12 +88,13 @@ export default function UploadStep() {
       setProgress({ done: 0, total: assets.length });
       let failed = 0;
       let lastError = "";
+      const failedNames: string[] = [];
       let nextIndex = 0;
       let completed = 0;
       const uploaded: { index: number; photo: any }[] = [];
       // Keep a small concurrency limit: several photos can transfer at once without
       // creating one request per selected image or overwhelming mobile memory/network.
-      const concurrency = Math.min(4, assets.length);
+      const concurrency = Math.min(2, assets.length);
       const worker = async () => {
         while (true) {
           const i = nextIndex++;
@@ -122,6 +108,7 @@ export default function UploadStep() {
           } catch (e: any) {
             failed += 1;
             lastError = e?.message || "upload failed";
+            failedNames.push(name);
           } finally {
             completed += 1;
             setProgress({ done: completed, total: assets.length });
@@ -149,9 +136,10 @@ export default function UploadStep() {
       await q.refetch();
       setLocalPreviews([]);
       if (failed > 0) {
+        const failedLabel = failedNames.slice(0, 3).join(", ");
         setErr(failed === assets.length
-          ? `Upload failed: ${lastError}`
-          : `${failed} of ${assets.length} photos failed to upload. Please retry.`);
+          ? "All " + assets.length + " uploads failed: " + lastError + (failedLabel ? " (" + failedLabel + (failedNames.length > 3 ? ", …" : "") + ")" : "")
+          : failed + " of " + assets.length + " photos failed" + (failedLabel ? ": " + failedLabel + (failedNames.length > 3 ? ", …" : "") : "") + ". Please retry.");
       }
     } catch (e: any) {
       setErr(e.message || "Upload failed");
