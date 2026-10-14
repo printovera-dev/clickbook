@@ -37,7 +37,14 @@ export default function RootLayout() {
         <ErrorBoundary>
           <QueryClientProvider client={queryClient}>
             <StatusBar style="dark" />
-            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#FAFAF8" } }} />
+            <Stack screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: "#FAFAF8" },
+              // Expo Router / React Native Screens web transitions can hit a TDZ
+              // error in ZoomTransitionTargetContextProvider on route changes.
+              // Keep native transitions unchanged; disable them only in the web build.
+              ...(Platform.OS === "web" ? { animation: "none" as const } : {}),
+            }} />
             <InstallBanner />
           </QueryClientProvider>
         </ErrorBoundary>
