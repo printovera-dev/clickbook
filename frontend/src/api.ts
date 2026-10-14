@@ -146,13 +146,56 @@ export const api = {
   reorderPhotos: (albumId: string, photoIds: string[]) =>
     request<{ photos: any[] }>(`/albums/${albumId}/photos/order`, { method: "PUT", body: { photo_ids: photoIds } }),
 
-  // Upload photos directly to S3 when configured, avoiding routing every large image
-  // through the API server. Local-storage deployments retain the existing multipart path.
+  // Upload photo bytes directly to S3 when S3 storage is enabled.
+  // Local-storage deployments keep using the established multipart endpoint.
   uploadPhoto: async (albumId: string, uri: string, filename: string, webFile?: any) => {
-    // Temporarily use the established backend multipart upload path while the
-    // S3 bucket CORS configuration is unavailable to the frontend deployment.
-    // This avoids failing every upload on a cross-origin S3 PUT.
-    return uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false);
+    const presign = await request<{ direct_upload: boolean; upload_url?: string; key?: string }>(
+      `/albums/${albumId}/photos/presign`,
+      { method: "POST", body: { filename } },
+    );
+
+    if (!presign.direct_upload || !presign.upload_url || !presign.key) {
+      return uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false);
+    }
+
+    let fileBody: any;
+    let contentType = "application/octet-stream";
+    if (Platform.OS === "web") {
+      let file: any = webFile;
+      if (!file) {
+        const resp = await fetch(uri);
+        if (!resp.ok) throw new Error("Could not read selected photo");
+        const blob = await resp.blob();
+        file = new File([blob], filename, { type: blob.type || "image/jpeg" });
+      }
+      if (typeof file.size === "number" && file.size > 20 * 1024 * 1024) {
+        throw new Error("File too large (max 20MB)");
+      }
+      fileBody = file;
+      contentType = file.type || "image/jpeg";
+    } else {
+      const { File: ExpoFile } = await import("expo-file-system");
+      fileBody = new ExpoFile(uri);
+      const size = Number((fileBody as any).size || 0);
+      if (size > 20 * 1024 * 1024) throw new Error("File too large (max 20MB)");
+      contentType = (fileBody as any).type || "image/jpeg";
+    }
+
+    // The presigned URL is scoped to one object. Never send the customer token to S3.
+    const put = await fetch(presign.upload_url, {
+      method: "PUT",
+      headers: { "Content-Type": contentType },
+      body: fileBody,
+    } as any);
+    if (!put.ok) {
+      throw new Error(`Direct S3 upload failed (HTTP ${put.status}). Please retry.`);
+    }
+
+    // Confirm the stored object and register it in the album using the authenticated API.
+    return request<{ photo: any }>(`/albums/${albumId}/photos/complete`, {
+      method: "POST",
+      body: { filename, key: presign.key },
+    });
   },
   adminUploadImage: (uri: string, filename: string, webFile?: any) =>
     uploadFile(`/admin/images`, uri, filename, webFile, true),
