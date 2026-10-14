@@ -45,6 +45,15 @@ export default function UploadStep() {
     hintTimer.current = setTimeout(() => setHintVisible(true), 50000);
   }, []);
 
+  // After uploads finish, restart the idle timer so the ordering instruction is
+  // visible again even if the previous 50-second timer elapsed during a long upload.
+  useEffect(() => {
+    if (uploading) return;
+    clearTimeout(hintTimer.current);
+    hintTimer.current = setTimeout(() => setHintVisible(true), 50000);
+    return () => clearTimeout(hintTimer.current);
+  }, [uploading]);
+
   useEffect(() => {
     hintTimer.current = setTimeout(() => setHintVisible(true), 50000);
     return () => clearTimeout(hintTimer.current);
@@ -244,20 +253,25 @@ export default function UploadStep() {
           onDragStart: (event: any) => {
             if (Platform.OS !== "web" || !ready || uploading) return;
             setDraggedPhotoId(actual.id);
+            // Store the id on the native drag payload; React state is a fallback
+            // because some browsers clear custom payloads for nested image targets.
             event?.dataTransfer?.setData?.("text/plain", actual.id);
+            event?.dataTransfer?.setData?.("text", actual.id);
             if (event?.dataTransfer) event.dataTransfer.effectAllowed = "move";
             registerActivity();
           },
           onDragOver: (event: any) => {
-            if (Platform.OS === "web" && draggedPhotoId && draggedPhotoId !== actual.id) {
+            if (Platform.OS === "web" && draggedPhotoId && draggedPhotoId !== actual.id && ready && !uploading) {
               event?.preventDefault?.();
               if (event?.dataTransfer) event.dataTransfer.dropEffect = "move";
             }
           },
           onDrop: (event: any) => {
+            if (Platform.OS !== "web") return;
             event?.preventDefault?.();
-            const sourceId = event?.dataTransfer?.getData?.("text/plain") || draggedPhotoId;
-            if (sourceId && ready && sourceId !== actual.id) void movePhotoTo(sourceId, actual.id);
+            const sourceId = event?.dataTransfer?.getData?.("text/plain") ||
+              event?.dataTransfer?.getData?.("text") || draggedPhotoId;
+            if (sourceId && ready && sourceId !== actual.id && !uploading) void movePhotoTo(sourceId, actual.id);
             setDraggedPhotoId(null);
           },
           onDragEnd: () => setDraggedPhotoId(null),
@@ -366,8 +380,8 @@ export default function UploadStep() {
         }
       />
       {hintVisible && !uploading ? (
-        <View pointerEvents="none" style={styles.sequenceHint}>
-          <Text style={styles.sequenceHintText}>Move the image sequence as you want it in your album</Text>
+        <View pointerEvents="none" style={styles.sequenceHint} testID="upload-sequence-hint">
+          <Text style={styles.sequenceHintText}>Move the image sequence as you want it in your album.</Text>
         </View>
       ) : null}
       </View>
@@ -403,8 +417,8 @@ const styles = StyleSheet.create({
   qualityTooltipText: { color: "#FFF", fontSize: 9, lineHeight: 11, fontWeight: "600", textAlign: "center" },
   reorderControls: { position: "absolute", left: 3, right: 3, bottom: 3, flexDirection: "row", justifyContent: "space-between", gap: 2 },
   reorderButton: { width: 23, height: 23, borderRadius: 12, backgroundColor: "rgba(0,0,0,0.68)", alignItems: "center", justifyContent: "center" },
-  sequenceHint: { position: "absolute", top: "42%", left: spacing.xl, right: spacing.xl, alignItems: "center", justifyContent: "center" },
-  sequenceHintText: { color: "#FFF", backgroundColor: "rgba(20,20,20,0.82)", borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, textAlign: "center", fontFamily: fonts.text, fontWeight: "600" },
+  sequenceHint: { position: "absolute", top: "42%", left: spacing.xl, right: spacing.xl, alignItems: "center", justifyContent: "center", zIndex: 20, elevation: 20 },
+  sequenceHintText: { color: "#FFF", backgroundColor: "rgba(20,20,20,0.94)", borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, textAlign: "center", fontFamily: fonts.text, fontWeight: "700", overflow: "hidden" },
   thumbRemove: {
     position: "absolute", top: 4, right: 4,
     width: 24, height: 24, borderRadius: 12,
