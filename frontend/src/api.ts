@@ -140,10 +140,17 @@ export const api = {
   // Upload photos directly to S3 when configured, avoiding routing every large image
   // through the API server. Local-storage deployments retain the existing multipart path.
   uploadPhoto: async (albumId: string, uri: string, filename: string, webFile?: any) => {
-    const presign = await request<{ direct_upload: boolean; upload_url?: string; key?: string }>(
-      `/albums/${albumId}/photos/presign`,
-      { method: "POST", body: { filename } },
-    );
+    // Direct S3 is an optimization, not a single point of failure. If presigning
+    // is unavailable, retain the established API upload path.
+    let presign: { direct_upload: boolean; upload_url?: string; key?: string };
+    try {
+      presign = await request<{ direct_upload: boolean; upload_url?: string; key?: string }>(
+        `/albums/${albumId}/photos/presign`,
+        { method: "POST", body: { filename } },
+      );
+    } catch {
+      return uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false);
+    }
     if (!presign.direct_upload || !presign.upload_url || !presign.key) {
       return uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false);
     }
@@ -164,13 +171,21 @@ export const api = {
       contentType = (fileBody as any).type || contentType;
     }
 
-    const put = await fetch(presign.upload_url, {
-      method: "PUT",
-      headers: { "Content-Type": contentType },
-      body: fileBody,
-    } as any);
+    let put: Response;
+    try {
+      put = await fetch(presign.upload_url, {
+        method: "PUT",
+        headers: { "Content-Type": contentType },
+        body: fileBody,
+      } as any);
+    } catch {
+      // Browser CORS/network failures often surface as a rejected fetch with no
+      // HTTP response. Fall back to the API so uploads still work while S3 CORS
+      // or endpoint configuration is being corrected.
+      return uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false);
+    }
     if (!put.ok) {
-      throw new Error(`Direct upload failed (HTTP ${put.status}). Check the S3 bucket CORS configuration and try again.`);
+      return uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false);
     }
     return request<{ photo: any }>(`/albums/${albumId}/photos/complete`, {
       method: "POST",
