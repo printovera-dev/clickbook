@@ -194,6 +194,8 @@ export default function UploadStep() {
       : router.replace({ pathname: "/create/style", params: { albumId: String(albumId) } });
   };
 
+  const uploading = !!progress;
+
   const renderItem = useCallback(({ item: p, index }: { item: any; index: number }) => {
     const completedPhoto = p.completedPhoto;
     const actual = completedPhoto || p;
@@ -248,9 +250,9 @@ export default function UploadStep() {
         ) : null}
       </View>
     );
-  }, [cell, movePhoto, photos.length, qualityBlink, registerActivity, removePhoto, uploading]);
+  }, [cell, hoveredQualityId, movePhoto, photos.length, qualityBlink, registerActivity, removePhoto, uploading]);
 
-  const uploading = !!progress;
+
   const gridData = [...photos, ...localPreviews];
 
   return (
