@@ -136,6 +136,8 @@ export const api = {
     request<{ album: any }>(`/albums/${id}/pages`, { method: "PUT", body: { pages } }),
   deletePhoto: (albumId: string, photoId: string) =>
     request(`/albums/${albumId}/photos/${photoId}`, { method: "DELETE" }),
+  reorderPhotos: (albumId: string, photoIds: string[]) =>
+    request<{ photos: any[] }>(`/albums/${albumId}/photos/order`, { method: "PUT", body: { photo_ids: photoIds } }),
 
   // Upload photos directly to S3 when configured, avoiding routing every large image
   // through the API server. Local-storage deployments retain the existing multipart path.
