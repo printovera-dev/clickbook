@@ -25,7 +25,6 @@ export default function UploadStep() {
   const [hintVisible, setHintVisible] = useState(true);
   const [savingOrder, setSavingOrder] = useState(false);
   const [hoveredQualityId, setHoveredQualityId] = useState<string | null>(null);
-  const [draggedPhotoId, setDraggedPhotoId] = useState<string | null>(null);
   const [err, setErr] = useState("");
   const hintTimer = useRef<any>(null);
   const qualityBlink = useRef(new Animated.Value(1)).current;
@@ -44,15 +43,6 @@ export default function UploadStep() {
     clearTimeout(hintTimer.current);
     hintTimer.current = setTimeout(() => setHintVisible(true), 50000);
   }, []);
-
-  // After uploads finish, restart the idle timer so the ordering instruction is
-  // visible again even if the previous 50-second timer elapsed during a long upload.
-  useEffect(() => {
-    if (uploading) return;
-    clearTimeout(hintTimer.current);
-    hintTimer.current = setTimeout(() => setHintVisible(true), 50000);
-    return () => clearTimeout(hintTimer.current);
-  }, [uploading]);
 
   useEffect(() => {
     hintTimer.current = setTimeout(() => setHintVisible(true), 50000);
@@ -80,10 +70,25 @@ export default function UploadStep() {
         preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
       });
       if (res.canceled) return;
-      // Do not silently drop selected photos based only on matching filenames and sizes.
-      // Different wedding photos from different cameras can share both; upload every
-      // selected asset in the exact picker order.
-      const assets = res.assets;
+      // Duplicate detection: same file name + byte size (within this selection and against already-uploaded photos).
+      const seen = new Set<string>(photos.map((p: any) => `${p.filename}|${p.size_bytes}`));
+      const unique: typeof res.assets = []; let dupes = 0;
+      for (const a of res.assets) {
+        const key = `${a.fileName || ""}|${a.fileSize || 0}`;
+        if (a.fileName && a.fileSize && seen.has(key)) { dupes += 1; continue; }
+        seen.add(key); unique.push(a);
+      }
+      let assets = res.assets;
+      if (dupes > 0) {
+        const skip = await new Promise<boolean>((resolve) => {
+          if (Platform.OS === "web") return resolve(window.confirm(`Duplicate images found (${dupes}). Do you want to skip the duplicate images?`));
+          Alert.alert("Duplicate images found", `${dupes} duplicate image${dupes > 1 ? "s" : ""} found. Do you want to skip the duplicate images?`, [
+            { text: "Keep all", style: "cancel", onPress: () => resolve(false) },
+            { text: "Skip duplicates", onPress: () => resolve(true) },
+          ]);
+        });
+        if (skip) assets = unique;
+      }
       if (!assets.length) return;
       // Show the selected photos immediately, while uploads and server derivatives run.
       setLocalPreviews(assets.map((asset, i) => ({
@@ -91,20 +96,17 @@ export default function UploadStep() {
         index: i,
         localPreview: true,
         localUri: asset.uri,
-        size_bytes: asset.fileSize || 0,
         filename: asset.fileName || `photo_${i}.jpg`,
       })));
       setProgress({ done: 0, total: assets.length });
       let failed = 0;
       let lastError = "";
-      const failedNames: string[] = [];
       let nextIndex = 0;
       let completed = 0;
       const uploaded: { index: number; photo: any }[] = [];
-      // Three concurrent uploads improve throughput while keeping memory and backend
-      // image-processing load bounded. Each failed upload gets one retry for transient
-      // network interruptions; a permanent failure is reported with its filename.
-      const concurrency = Math.min(3, assets.length);
+      // Keep a small concurrency limit: several photos can transfer at once without
+      // creating one request per selected image or overwhelming mobile memory/network.
+      const concurrency = Math.min(4, assets.length);
       const worker = async () => {
         while (true) {
           const i = nextIndex++;
@@ -112,28 +114,12 @@ export default function UploadStep() {
           const asset = assets[i];
           const name = asset.fileName || `photo_${Date.now()}_${i}.jpg`;
           try {
-            let r: any;
-            let firstError: any = null;
-            try {
-              r = await api.uploadPhoto(String(albumId), asset.uri, name, (asset as any).file);
-            } catch (e: any) {
-              firstError = e;
-              // Retry once for a dropped connection / transient gateway issue.
-              // Do not retry clear client validation errors such as unsupported type or too-large files.
-              const message = String(e?.message || "").toLowerCase();
-              const status = Number(e?.status || 0);
-              const retryable = !status || status === 408 || status === 429 || status >= 500 ||
-                message.includes("failed to fetch") || message.includes("network");
-              if (!retryable) throw e;
-              await new Promise((resolve) => setTimeout(resolve, 700));
-              r = await api.uploadPhoto(String(albumId), asset.uri, name, (asset as any).file);
-            }
+            const r = await api.uploadPhoto(String(albumId), asset.uri, name, (asset as any).file);
             uploaded.push({ index: i, photo: r.photo });
             setLocalPreviews((prev) => prev.map((item) => item.index === i ? { ...item, completedPhoto: r.photo } : item));
           } catch (e: any) {
             failed += 1;
             lastError = e?.message || "upload failed";
-            failedNames.push(name);
           } finally {
             completed += 1;
             setProgress({ done: completed, total: assets.length });
@@ -161,10 +147,9 @@ export default function UploadStep() {
       await q.refetch();
       setLocalPreviews([]);
       if (failed > 0) {
-        const failedLabel = failedNames.slice(0, 3).join(", ");
         setErr(failed === assets.length
-          ? "All " + assets.length + " uploads failed: " + lastError + (failedLabel ? " (" + failedLabel + (failedNames.length > 3 ? ", …" : "") + ")" : "")
-          : failed + " of " + assets.length + " photos failed" + (failedLabel ? ": " + failedLabel + (failedNames.length > 3 ? ", …" : "") : "") + ". Error: " + lastError + ". Please retry.");
+          ? `Upload failed: ${lastError}`
+          : `${failed} of ${assets.length} photos failed to upload. Please retry.`);
       }
     } catch (e: any) {
       setErr(e.message || "Upload failed");
@@ -195,29 +180,6 @@ export default function UploadStep() {
     }
   }, [albumId, q, qc, registerActivity]);
 
-  const movePhotoTo = useCallback(async (photoId: string, targetPhotoId: string) => {
-    registerActivity();
-    if (photoId === targetPhotoId) return;
-    const current: any[] = q.data?.album?.photos || [];
-    const from = current.findIndex((p) => p.id === photoId);
-    const to = current.findIndex((p) => p.id === targetPhotoId);
-    if (from < 0 || to < 0 || from === to) return;
-    const next = [...current];
-    const [item] = next.splice(from, 1);
-    next.splice(to, 0, item);
-    qc.setQueryData(["album", albumId], (old: any) => old ? { ...old, album: { ...old.album, photos: next } } : old);
-    setSavingOrder(true);
-    try {
-      await api.reorderPhotos(String(albumId), next.map((p) => p.id));
-    } catch (e: any) {
-      setErr(e?.message || "Could not save photo order");
-      await q.refetch();
-    } finally {
-      setSavingOrder(false);
-      setDraggedPhotoId(null);
-    }
-  }, [albumId, q, qc, registerActivity]);
-
   const removePhoto = useCallback(async (pid: string) => {
     qc.setQueryData(["album", albumId], (old: any) => old ? { ...old, album: { ...old.album, photos: (old.album.photos || []).filter((p: any) => p.id !== pid) } } : old);
     await api.deletePhoto(String(albumId), pid);
@@ -228,7 +190,7 @@ export default function UploadStep() {
     registerActivity();
     if (photos.length === 0) { setErr("Please upload at least 1 photo"); return; }
     keepStyle
-      ? router.replace({ pathname: "/create/generating", params: { albumId: String(albumId), style: String(keepStyle), coverPhotoId: String(photos[0]?.id || keepCover || "") } })
+      ? router.replace({ pathname: "/create/generating", params: { albumId: String(albumId), style: String(keepStyle), coverPhotoId: String(keepCover || "") } })
       : router.replace({ pathname: "/create/style", params: { albumId: String(albumId) } });
   };
 
@@ -240,8 +202,9 @@ export default function UploadStep() {
     const ready = !!actual.id && !!actual.thumbnail_url && !p.pending;
     const localPreview = !!p.localPreview && !!p.localUri && !completedPhoto;
     const canReorder = ready && !uploading;
-    const fileSize = Number(actual.size_bytes ?? actual.fileSize ?? 0);
-    const needsReplacement = fileSize > 0 && fileSize < 100 * 1024;
+    const qualityWarnings: string[] = actual.quality_warnings || [];
+    const lowResolution = Number(actual.width) > 0 && Number(actual.height) > 0 && Math.min(Number(actual.width), Number(actual.height)) < 1800;
+    const unprintable = actual.printable === false || qualityWarnings.length > 0 || lowResolution;
     return (
       <View
         style={{ width: cell, height: cell, marginLeft: index % COLS === 0 ? 0 : GAP, marginBottom: GAP }}
@@ -249,33 +212,7 @@ export default function UploadStep() {
         pointerEvents="auto"
         onTouchStart={registerActivity}
         {...({
-          draggable: Platform.OS === "web" && ready && !uploading,
-          onDragStart: (event: any) => {
-            if (Platform.OS !== "web" || !ready || uploading) return;
-            setDraggedPhotoId(actual.id);
-            // Store the id on the native drag payload; React state is a fallback
-            // because some browsers clear custom payloads for nested image targets.
-            event?.dataTransfer?.setData?.("text/plain", actual.id);
-            event?.dataTransfer?.setData?.("text", actual.id);
-            if (event?.dataTransfer) event.dataTransfer.effectAllowed = "move";
-            registerActivity();
-          },
-          onDragOver: (event: any) => {
-            if (Platform.OS === "web" && draggedPhotoId && draggedPhotoId !== actual.id && ready && !uploading) {
-              event?.preventDefault?.();
-              if (event?.dataTransfer) event.dataTransfer.dropEffect = "move";
-            }
-          },
-          onDrop: (event: any) => {
-            if (Platform.OS !== "web") return;
-            event?.preventDefault?.();
-            const sourceId = event?.dataTransfer?.getData?.("text/plain") ||
-              event?.dataTransfer?.getData?.("text") || draggedPhotoId;
-            if (sourceId && ready && sourceId !== actual.id && !uploading) void movePhotoTo(sourceId, actual.id);
-            setDraggedPhotoId(null);
-          },
-          onDragEnd: () => setDraggedPhotoId(null),
-          onPointerEnter: () => { registerActivity(); if (needsReplacement && actual.id) setHoveredQualityId(actual.id); },
+          onPointerEnter: () => { registerActivity(); if (unprintable && actual.id) setHoveredQualityId(actual.id); },
           onPointerLeave: () => setHoveredQualityId(null),
         } as any)}
       >
@@ -287,20 +224,14 @@ export default function UploadStep() {
         ) : (
           <View style={[styles.thumb, { alignItems: "center", justifyContent: "center" }]}><ActivityIndicator color={colors.brandPrimary} /></View>
         )}
-        {index === 0 && ready ? (
-          <View style={styles.coverBadge} pointerEvents="none">
-            <Feather name="star" size={10} color="#FFF" />
-            <Text style={styles.coverBadgeText}>COVER IMAGE</Text>
-          </View>
-        ) : null}
-        {needsReplacement ? (
-          <Animated.View style={[styles.qualityBadge, { opacity: qualityBlink }]} accessibilityLabel="Replace this image: file is smaller than 100 KB">
+        {ready && unprintable ? (
+          <Animated.View style={[styles.qualityBadge, { opacity: qualityBlink }]} accessibilityLabel="Replace this image: it may not print clearly">
             <Feather name="alert-triangle" size={13} color="#FFF" />
           </Animated.View>
         ) : null}
-        {needsReplacement && hoveredQualityId === actual.id ? (
+        {ready && unprintable && hoveredQualityId === actual.id ? (
           <View pointerEvents="none" style={styles.qualityTooltip}>
-            <Text style={styles.qualityTooltipText}>Replace image — file is smaller than 100 KB</Text>
+            <Text style={styles.qualityTooltipText}>Replace image — may not print clearly</Text>
           </View>
         ) : null}
         {ready ? (
@@ -320,7 +251,7 @@ export default function UploadStep() {
         ) : null}
       </View>
     );
-  }, [cell, draggedPhotoId, hoveredQualityId, movePhoto, movePhotoTo, photos.length, qualityBlink, registerActivity, removePhoto, uploading]);
+  }, [cell, hoveredQualityId, movePhoto, photos.length, qualityBlink, registerActivity, removePhoto, uploading]);
 
 
   const gridData = [...photos, ...localPreviews];
@@ -380,8 +311,8 @@ export default function UploadStep() {
         }
       />
       {hintVisible && !uploading ? (
-        <View pointerEvents="none" style={styles.sequenceHint} testID="upload-sequence-hint">
-          <Text style={styles.sequenceHintText}>Move the image sequence as you want it in your album.</Text>
+        <View pointerEvents="none" style={styles.sequenceHint}>
+          <Text style={styles.sequenceHintText}>Move the image sequence as you want it in your album</Text>
         </View>
       ) : null}
       </View>
@@ -411,14 +342,12 @@ const styles = StyleSheet.create({
   localImage: { width: "100%", height: "100%", borderRadius: radius.sm },
   previewSpinner: { position: "absolute", right: 5, bottom: 5, width: 24, height: 24, borderRadius: 12, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" },
   qualityBadge: { position: "absolute", top: 4, left: 4, width: 25, height: 25, borderRadius: 13, backgroundColor: "#D91E18", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#FFF" },
-  coverBadge: { position: "absolute", top: 4, left: 30, right: 30, alignSelf: "center", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 3, backgroundColor: "rgba(28,25,23,0.82)", borderRadius: 4, paddingHorizontal: 5, paddingVertical: 4 },
-  coverBadgeText: { color: "#FFF", fontSize: 8, fontWeight: "700", letterSpacing: 0.5 },
   qualityTooltip: { position: "absolute", top: 31, left: 3, right: 3, zIndex: 5, backgroundColor: "#B91C1C", borderRadius: 4, paddingHorizontal: 4, paddingVertical: 3 },
   qualityTooltipText: { color: "#FFF", fontSize: 9, lineHeight: 11, fontWeight: "600", textAlign: "center" },
   reorderControls: { position: "absolute", left: 3, right: 3, bottom: 3, flexDirection: "row", justifyContent: "space-between", gap: 2 },
   reorderButton: { width: 23, height: 23, borderRadius: 12, backgroundColor: "rgba(0,0,0,0.68)", alignItems: "center", justifyContent: "center" },
-  sequenceHint: { position: "absolute", top: "42%", left: spacing.xl, right: spacing.xl, alignItems: "center", justifyContent: "center", zIndex: 20, elevation: 20 },
-  sequenceHintText: { color: "#FFF", backgroundColor: "rgba(20,20,20,0.94)", borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, textAlign: "center", fontFamily: fonts.text, fontWeight: "700", overflow: "hidden" },
+  sequenceHint: { position: "absolute", top: "42%", left: spacing.xl, right: spacing.xl, alignItems: "center", justifyContent: "center" },
+  sequenceHintText: { color: "#FFF", backgroundColor: "rgba(20,20,20,0.82)", borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, textAlign: "center", fontFamily: fonts.text, fontWeight: "600" },
   thumbRemove: {
     position: "absolute", top: 4, right: 4,
     width: 24, height: 24, borderRadius: 12,
