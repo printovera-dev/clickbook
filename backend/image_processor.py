@@ -4,7 +4,7 @@ All derivatives are EXIF-orientation corrected, converted to RGB JPEG. HEIC is d
 """
 import io
 import logging
-from PIL import Image, ImageOps, ImageFilter, ImageStat
+from PIL import Image, ImageOps, ImageFilter, ImageStat, ImageEnhance
 
 try:
     from pillow_heif import register_heif_opener
@@ -52,6 +52,13 @@ def make_derivatives(data: bytes) -> dict:
     except Exception as e:
         raise ValueError(f"Not a valid image: {e}")
     w, h = img.size
+    # Gentle non-destructive auto-enhancement for generated previews/print derivatives.
+    # The uploaded original remains untouched for the customer.
+    enhanced = ImageOps.autocontrast(img, cutoff=0.3)
+    enhanced = ImageEnhance.Color(enhanced).enhance(1.03)
+    enhanced = ImageEnhance.Contrast(enhanced).enhance(1.02)
+    enhanced = enhanced.filter(ImageFilter.UnsharpMask(radius=0.8, percent=45, threshold=4))
+
     # A lightweight sharpness heuristic on a small grayscale copy. It is only a warning
     # signal, not a promise of print quality or a replacement for human review.
     probe = img.copy()
@@ -64,9 +71,9 @@ def make_derivatives(data: bytes) -> dict:
     if sharpness < 7.0:
         warnings.append("may_be_blurry")
     return {
-        "thumbnail": _encode(img, THUMB_MAX, 80, "WEBP"),
-        "preview": _encode(img, PREVIEW_MAX, 85, "WEBP"),
-        "print": _encode(img, PRINT_MAX, 92, sharpen=True),  # gentle sharpening for print only
+        "thumbnail": _encode(enhanced, THUMB_MAX, 80, "WEBP"),
+        "preview": _encode(enhanced, PREVIEW_MAX, 85, "WEBP"),
+        "print": _encode(enhanced, PRINT_MAX, 92, sharpen=True),  # gentle sharpening for print only
         "width": w,
         "height": h,
         "sharpness_score": sharpness,
