@@ -67,18 +67,38 @@ export default function UploadStep() {
       setProgress({ done: 0, total: assets.length });
       let failed = 0;
       let lastError = "";
-      for (let i = 0; i < assets.length; i++) {
-        const asset = assets[i];
-        const name = asset.fileName || `photo_${Date.now()}_${i}.jpg`;
-        try {
-          // one file at a time: only a single upload body is ever held in memory
-          const r = await api.uploadPhoto(String(albumId), asset.uri, name, (asset as any).file);
-          qc.setQueryData(["album", albumId], (old: any) => old ? { ...old, album: { ...old.album, photos: [...(old.album.photos || []), r.photo] } } : old);
-        } catch (e: any) {
-          failed += 1;
-          lastError = e?.message || "upload failed";
+      let nextIndex = 0;
+      let completed = 0;
+      const uploaded: { index: number; photo: any }[] = [];
+      // Keep a small concurrency limit: several photos can transfer at once without
+      // creating one request per selected image or overwhelming mobile memory/network.
+      const concurrency = Math.min(4, assets.length);
+      const worker = async () => {
+        while (true) {
+          const i = nextIndex++;
+          if (i >= assets.length) return;
+          const asset = assets[i];
+          const name = asset.fileName || `photo_${Date.now()}_${i}.jpg`;
+          try {
+            const r = await api.uploadPhoto(String(albumId), asset.uri, name, (asset as any).file);
+            uploaded.push({ index: i, photo: r.photo });
+          } catch (e: any) {
+            failed += 1;
+            lastError = e?.message || "upload failed";
+          } finally {
+            completed += 1;
+            setProgress({ done: completed, total: assets.length });
+          }
         }
-        setProgress({ done: i + 1, total: assets.length });
+      };
+      await Promise.all(Array.from({ length: concurrency }, () => worker()));
+      // Insert successful uploads in the user's selected order, regardless of which
+      // network requests finished first. Keep partial successes if any files failed.
+      uploaded.sort((a, b) => a.index - b.index);
+      if (uploaded.length) {
+        qc.setQueryData(["album", albumId], (old: any) => old
+          ? { ...old, album: { ...old.album, photos: [...(old.album.photos || []), ...uploaded.map((item) => item.photo)] } }
+          : old);
       }
       await q.refetch();
       if (failed > 0) {
