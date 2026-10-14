@@ -35,7 +35,9 @@ FONT_FILES = {
 
 
 def default_transform():
-    return {"scale": 1.0, "ox": 0.0, "oy": 0.0, "fit": "fill"}
+    # Contain the complete source image in each slot by default. This preserves heads
+    # and other edge-of-frame details instead of applying an automatic edge crop.
+    return {"scale": 1.0, "ox": 0.0, "oy": 0.0, "fit": "fit"}
 
 
 def image_draw_rect(slot_w: float, slot_h: float, img_w: int, img_h: int, tr: dict):
