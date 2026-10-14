@@ -140,57 +140,10 @@ export const api = {
   // Upload photos directly to S3 when configured, avoiding routing every large image
   // through the API server. Local-storage deployments retain the existing multipart path.
   uploadPhoto: async (albumId: string, uri: string, filename: string, webFile?: any) => {
-    // Direct S3 is an optimization, not a single point of failure. If presigning
-    // is unavailable, retain the established API upload path.
-    let presign: { direct_upload: boolean; upload_url?: string; key?: string };
-    try {
-      presign = await request<{ direct_upload: boolean; upload_url?: string; key?: string }>(
-        `/albums/${albumId}/photos/presign`,
-        { method: "POST", body: { filename } },
-      );
-    } catch {
-      return uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false);
-    }
-    if (!presign.direct_upload || !presign.upload_url || !presign.key) {
-      return uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false);
-    }
-
-    let fileBody: any;
-    let contentType = "application/octet-stream";
-    if (Platform.OS === "web") {
-      fileBody = webFile;
-      if (!fileBody) {
-        const resp = await fetch(uri);
-        const blob = await resp.blob();
-        fileBody = blob;
-      }
-      contentType = fileBody.type || contentType;
-    } else {
-      const { File: ExpoFile } = await import("expo-file-system");
-      fileBody = new ExpoFile(uri);
-      contentType = (fileBody as any).type || contentType;
-    }
-
-    let put: Response;
-    try {
-      put = await fetch(presign.upload_url, {
-        method: "PUT",
-        headers: { "Content-Type": contentType },
-        body: fileBody,
-      } as any);
-    } catch {
-      // Browser CORS/network failures often surface as a rejected fetch with no
-      // HTTP response. Fall back to the API so uploads still work while S3 CORS
-      // or endpoint configuration is being corrected.
-      return uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false);
-    }
-    if (!put.ok) {
-      return uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false);
-    }
-    return request<{ photo: any }>(`/albums/${albumId}/photos/complete`, {
-      method: "POST",
-      body: { filename, key: presign.key },
-    });
+    // Temporarily use the established backend multipart upload path while the
+    // S3 bucket CORS configuration is unavailable to the frontend deployment.
+    // This avoids failing every upload on a cross-origin S3 PUT.
+    return uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false);
   },
   adminUploadImage: (uri: string, filename: string, webFile?: any) =>
     uploadFile(`/admin/images`, uri, filename, webFile, true),
