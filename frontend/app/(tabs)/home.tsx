@@ -37,7 +37,8 @@ export default function Home() {
   useFocusEffect(useCallback(() => { getToken().then((t) => setLoggedIn(!!t)); }, []));
   useEffect(() => {
     Animated.spring(pop, { toValue: 1, useNativeDriver: true, friction: 6 }).start();
-    const t = setTimeout(() => Animated.timing(fade, { toValue: 0, duration: 450, useNativeDriver: true }).start(() => setSplash(false)), 1100);
+    // Keep the branded splash brief; never impose a fixed 1.1s delay on first paint.
+    const t = setTimeout(() => Animated.timing(fade, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => setSplash(false)), 180);
     return () => clearTimeout(t);
   }, [fade, pop]);
 
