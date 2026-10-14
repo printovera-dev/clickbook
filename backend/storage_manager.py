@@ -120,11 +120,22 @@ def finalize_presigned_upload(customer_id: str, album_id: str, filename: str, ke
     if (not _use_s3() or not key.startswith(expected_prefix) or "/" in basename
             or not re.fullmatch(r"[0-9a-f]{32}", base) or key_ext.lower() != ext):
         raise ValueError("Invalid upload key")
+    try:
+        head = _get_s3().head_object(Bucket=S3_BUCKET, Key=key)
+    except Exception as exc:
+        # Avoid treating storage outages/permission errors as a valid or missing upload.
+        from botocore.exceptions import ClientError
+        if isinstance(exc, ClientError):
+            code = str(exc.response.get("Error", {}).get("Code", ""))
+            status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+            if code in {"NoSuchKey", "NotFound", "404"} or status == 404:
+                raise ValueError("Uploaded file not found in storage")
+        raise
+    if int(head.get("ContentLength", 0)) > max_bytes:
+        raise ValueError("File too large (max 20MB)")
     data = _get_bytes(key)
     if data is None:
         raise ValueError("Uploaded file not found in storage")
-    if len(data) > max_bytes:
-        raise ValueError("File too large (max 20MB)")
     try:
         derivs = make_derivatives(data)
     except ValueError:
