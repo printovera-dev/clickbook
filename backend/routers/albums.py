@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Any, Dict
 
 from core import db, now_utc, now_iso, new_id, get_current_customer, get_settings_doc
-from storage_manager import save_original, public_url
+from storage_manager import save_original, public_url, create_presigned_upload, finalize_presigned_upload
 from routers.catalog import with_thumbnails
 from design import STYLE_RHYTHMS, DEFAULT_STYLE, default_transform, default_cover_design
 
@@ -12,6 +12,15 @@ router = APIRouter(tags=["albums"])
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 ALLOWED_EXT = (".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif")
+
+
+class PresignedUploadRequest(BaseModel):
+    filename: str
+
+
+class CompleteUploadRequest(BaseModel):
+    filename: str
+    key: str
 
 
 class AlbumCreate(BaseModel):
@@ -140,6 +149,53 @@ async def update_album(album_id: str, payload: AlbumUpdate, customer: dict = Dep
                 "snapshot": {"cover_design": update["cover_design"]}, "created_at": now_iso(),
             })
     return {"album": _decorate(await db.albums.find_one({"id": album_id}, {"_id": 0}))}
+
+
+@router.post("/albums/{album_id}/photos/presign")
+async def presign_photo_upload(album_id: str, payload: PresignedUploadRequest,
+                               customer: dict = Depends(get_current_customer)):
+    _ensure_locked(await _owned_album(album_id, customer))
+    filename = (payload.filename or "photo.jpg").strip()
+    if not filename.lower().endswith(ALLOWED_EXT):
+        raise HTTPException(400, "Unsupported file type")
+    try:
+        result = await run_in_threadpool(create_presigned_upload, customer["id"], album_id, filename)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    if not result:
+        return {"direct_upload": False}
+    return {"direct_upload": True, **result}
+
+
+@router.post("/albums/{album_id}/photos/complete")
+async def complete_photo_upload(album_id: str, payload: CompleteUploadRequest,
+                                customer: dict = Depends(get_current_customer)):
+    _ensure_locked(await _owned_album(album_id, customer))
+    filename = (payload.filename or "photo.jpg").strip()
+    if not filename.lower().endswith(ALLOWED_EXT):
+        raise HTTPException(400, "Unsupported file type")
+    try:
+        meta = await run_in_threadpool(
+            finalize_presigned_upload, customer["id"], album_id, filename, payload.key, MAX_UPLOAD_BYTES
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    photo = {
+        "id": new_id(),
+        "filename": filename,
+        "uploaded_at": now_iso(),
+        **meta,
+        "thumbnail_url": public_url(meta["thumbnail_path"]),
+        "preview_url": public_url(meta["preview_path"]),
+        "original_url": public_url(meta["original_path"]),
+    }
+    await db.albums.update_one(
+        {"id": album_id, "customer_id": customer["id"]},
+        {"$push": {"photos": photo}, "$set": {"updated_at": now_iso()}},
+    )
+    return {"photo": photo}
 
 
 @router.post("/albums/{album_id}/photos")
