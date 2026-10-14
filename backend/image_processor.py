@@ -4,7 +4,7 @@ All derivatives are EXIF-orientation corrected, converted to RGB JPEG. HEIC is d
 """
 import io
 import logging
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageFilter, ImageStat
 
 try:
     from pillow_heif import register_heif_opener
@@ -19,9 +19,13 @@ PREVIEW_MAX = 1200   # 3D book preview
 PRINT_MAX = 3000     # 8x8" @ ~300dpi + bleed
 
 
-def _encode(img: Image.Image, max_side: int, quality: int, fmt: str = "JPEG") -> bytes:
+def _encode(img: Image.Image, max_side: int, quality: int, fmt: str = "JPEG", sharpen: bool = False) -> bytes:
     out = img.copy()
     out.thumbnail((max_side, max_side), Image.LANCZOS)
+    if sharpen:
+        # Gentle output sharpening improves print crispness; it cannot restore detail
+        # from a genuinely out-of-focus source, which is flagged separately below.
+        out = out.filter(ImageFilter.UnsharpMask(radius=1.2, percent=115, threshold=3))
     buf = io.BytesIO()
     if fmt == "WEBP":
         # ~30% smaller than JPEG at equal quality; decoded natively by expo-image on iOS/Android/web.
@@ -48,10 +52,24 @@ def make_derivatives(data: bytes) -> dict:
     except Exception as e:
         raise ValueError(f"Not a valid image: {e}")
     w, h = img.size
+    # A lightweight sharpness heuristic on a small grayscale copy. It is only a warning
+    # signal, not a promise of print quality or a replacement for human review.
+    probe = img.copy()
+    probe.thumbnail((512, 512), Image.Resampling.LANCZOS)
+    edges = probe.convert("L").filter(ImageFilter.FIND_EDGES)
+    sharpness = round(sum(ImageStat.Stat(edges).stddev) / max(1, len(ImageStat.Stat(edges).stddev)), 2)
+    warnings = []
+    if min(w, h) < 1800:
+        warnings.append("low_resolution")
+    if sharpness < 7.0:
+        warnings.append("may_be_blurry")
     return {
         "thumbnail": _encode(img, THUMB_MAX, 80, "WEBP"),
         "preview": _encode(img, PREVIEW_MAX, 85, "WEBP"),
-        "print": _encode(img, PRINT_MAX, 92),  # JPEG: print pipeline / PDF
+        "print": _encode(img, PRINT_MAX, 92, sharpen=True),  # gentle sharpening for print only
         "width": w,
         "height": h,
+        "sharpness_score": sharpness,
+        "quality_warnings": warnings,
+        "printable": not warnings,
     }
