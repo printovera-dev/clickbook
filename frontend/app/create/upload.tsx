@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList, useWindowDimensions, Alert, Platform, Image } from "react-native";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList, useWindowDimensions, Alert, Platform, Image, Animated, Easing } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -27,6 +27,16 @@ export default function UploadStep() {
   const [savingOrder, setSavingOrder] = useState(false);
   const [err, setErr] = useState("");
   const hintTimer = useRef<any>(null);
+  const qualityBlink = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(qualityBlink, { toValue: 0.25, duration: 550, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(qualityBlink, { toValue: 1, duration: 550, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [qualityBlink]);
 
   const registerActivity = useCallback(() => {
     setHintVisible(false);
@@ -208,9 +218,9 @@ export default function UploadStep() {
           <View style={[styles.thumb, { alignItems: "center", justifyContent: "center" }]}><ActivityIndicator color={colors.brandPrimary} /></View>
         )}
         {ready && unprintable ? (
-          <View style={styles.qualityBadge} accessibilityLabel="Replace this image: it may not print clearly">
+          <Animated.View style={[styles.qualityBadge, { opacity: qualityBlink }]} accessibilityLabel="Replace this image: it may not print clearly">
             <Feather name="alert-triangle" size={13} color="#FFF" />
-          </View>
+          </Animated.View>
         ) : null}
         {ready ? (
           <View style={styles.thumbRemove}>
@@ -229,7 +239,7 @@ export default function UploadStep() {
         ) : null}
       </View>
     );
-  }, [cell, movePhoto, photos.length, registerActivity, removePhoto, uploading]);
+  }, [cell, movePhoto, photos.length, qualityBlink, registerActivity, removePhoto, uploading]);
 
   const uploading = !!progress;
   const gridData = [...photos, ...localPreviews];
