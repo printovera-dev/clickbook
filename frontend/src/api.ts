@@ -38,7 +38,7 @@ export async function getAdminToken(): Promise<string | null> {
 
 export function fileUrl(pathOrUrl?: string | null): string | undefined {
   if (!pathOrUrl) return undefined;
-  if (pathOrUrl.startsWith("http")) return pathOrUrl;
+  if (/^(https?:|file:|blob:|data:|content:)/i.test(pathOrUrl)) return pathOrUrl;
   if (pathOrUrl.startsWith("/api/")) return `${BASE}${pathOrUrl}`;
   return `${BASE}/api/files/${pathOrUrl}`;
 }
