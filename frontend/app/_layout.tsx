@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Slot, Stack } from "expo-router";
 import { LogBox, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -37,14 +37,14 @@ export default function RootLayout() {
         <ErrorBoundary>
           <QueryClientProvider client={queryClient}>
             <StatusBar style="dark" />
-            <Stack screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: "#FAFAF8" },
-              // Expo Router / React Native Screens web transitions can hit a TDZ
-              // error in ZoomTransitionTargetContextProvider on route changes.
-              // Keep native transitions unchanged; disable them only in the web build.
-              ...(Platform.OS === "web" ? { animation: "none" as const } : {}),
-            }} />
+            {Platform.OS === "web" ? (
+              // React Native Screens' web stack transition context can throw a
+              // temporal-dead-zone ReferenceError when replacing cover -> upload.
+              // Slot preserves Expo Router routing while avoiding that web stack.
+              <Slot />
+            ) : (
+              <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#FAFAF8" } }} />
+            )}
             <InstallBanner />
           </QueryClientProvider>
         </ErrorBoundary>
