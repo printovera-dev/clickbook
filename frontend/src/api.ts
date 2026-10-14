@@ -137,9 +137,46 @@ export const api = {
   deletePhoto: (albumId: string, photoId: string) =>
     request(`/albums/${albumId}/photos/${photoId}`, { method: "DELETE" }),
 
-  // Upload
-  uploadPhoto: (albumId: string, uri: string, filename: string, webFile?: any) =>
-    uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false),
+  // Upload photos directly to S3 when configured, avoiding routing every large image
+  // through the API server. Local-storage deployments retain the existing multipart path.
+  uploadPhoto: async (albumId: string, uri: string, filename: string, webFile?: any) => {
+    const presign = await request<{ direct_upload: boolean; upload_url?: string; key?: string }>(
+      `/albums/${albumId}/photos/presign`,
+      { method: "POST", body: { filename } },
+    );
+    if (!presign.direct_upload || !presign.upload_url || !presign.key) {
+      return uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false);
+    }
+
+    let fileBody: any;
+    let contentType = "application/octet-stream";
+    if (Platform.OS === "web") {
+      fileBody = webFile;
+      if (!fileBody) {
+        const resp = await fetch(uri);
+        const blob = await resp.blob();
+        fileBody = blob;
+      }
+      contentType = fileBody.type || contentType;
+    } else {
+      const { File: ExpoFile } = await import("expo-file-system");
+      fileBody = new ExpoFile(uri);
+      contentType = (fileBody as any).type || contentType;
+    }
+
+    const put = await fetch(presign.upload_url, {
+      method: "PUT",
+      headers: { "Content-Type": contentType },
+      body: fileBody,
+    } as any);
+    if (!put.ok) {
+      throw new Error(`Direct upload failed (HTTP ${put.status}). Check the S3 bucket CORS configuration and try again.`);
+    }
+    return request<{ photo: any }>(`/albums/${albumId}/photos/complete`, {
+      method: "POST",
+      body: { filename, key: presign.key },
+    });
+  },
   adminUploadImage: (uri: string, filename: string, webFile?: any) =>
     uploadFile(`/admin/images`, uri, filename, webFile, true),
   adminUploadVideo: (uri: string, filename: string, webFile?: any) =>
