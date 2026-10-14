@@ -25,6 +25,7 @@ export default function UploadStep() {
   const [hintVisible, setHintVisible] = useState(true);
   const [activityTick, setActivityTick] = useState(0);
   const [savingOrder, setSavingOrder] = useState(false);
+  const [hoveredQualityId, setHoveredQualityId] = useState<string | null>(null);
   const [err, setErr] = useState("");
   const hintTimer = useRef<any>(null);
   const qualityBlink = useRef(new Animated.Value(1)).current;
@@ -207,7 +208,10 @@ export default function UploadStep() {
         testID={ready ? `upload-photo-${actual.id}` : localPreview ? `upload-local-preview-${index}` : `upload-pending-${index}`}
         pointerEvents="auto"
         onTouchStart={registerActivity}
-        {...({ onPointerEnter: registerActivity } as any)}
+        {...({
+          onPointerEnter: () => { registerActivity(); if (unprintable && actual.id) setHoveredQualityId(actual.id); },
+          onPointerLeave: () => setHoveredQualityId(null),
+        } as any)}
       >
         {ready ? <Thumb uri={actual.thumbnail_url} recyclingKey={actual.id} style={styles.thumb} /> : localPreview ? (
           <View style={styles.thumb}>
@@ -221,6 +225,11 @@ export default function UploadStep() {
           <Animated.View style={[styles.qualityBadge, { opacity: qualityBlink }]} accessibilityLabel="Replace this image: it may not print clearly">
             <Feather name="alert-triangle" size={13} color="#FFF" />
           </Animated.View>
+        ) : null}
+        {ready && unprintable && hoveredQualityId === actual.id ? (
+          <View pointerEvents="none" style={styles.qualityTooltip}>
+            <Text style={styles.qualityTooltipText}>Replace image — may not print clearly</Text>
+          </View>
         ) : null}
         {ready ? (
           <View style={styles.thumbRemove}>
@@ -330,6 +339,8 @@ const styles = StyleSheet.create({
   localImage: { width: "100%", height: "100%", borderRadius: radius.sm },
   previewSpinner: { position: "absolute", right: 5, bottom: 5, width: 24, height: 24, borderRadius: 12, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" },
   qualityBadge: { position: "absolute", top: 4, left: 4, width: 25, height: 25, borderRadius: 13, backgroundColor: "#D91E18", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#FFF" },
+  qualityTooltip: { position: "absolute", top: 31, left: 3, right: 3, zIndex: 5, backgroundColor: "#B91C1C", borderRadius: 4, paddingHorizontal: 4, paddingVertical: 3 },
+  qualityTooltipText: { color: "#FFF", fontSize: 9, lineHeight: 11, fontWeight: "600", textAlign: "center" },
   reorderControls: { position: "absolute", left: 3, right: 3, bottom: 3, flexDirection: "row", justifyContent: "space-between", gap: 2 },
   reorderButton: { width: 23, height: 23, borderRadius: 12, backgroundColor: "rgba(0,0,0,0.68)", alignItems: "center", justifyContent: "center" },
   sequenceHint: { position: "absolute", top: "42%", left: spacing.xl, right: spacing.xl, alignItems: "center", justifyContent: "center" },
