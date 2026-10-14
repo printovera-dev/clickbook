@@ -21,6 +21,7 @@ export default function UploadStep() {
   const { width } = useWindowDimensions();
   const cell = Math.floor((width - spacing.xl * 2 - GAP * (COLS - 1)) / COLS);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [localPreviews, setLocalPreviews] = useState<any[]>([]);
   const [err, setErr] = useState("");
 
   const q = useQuery({ queryKey: ["album", albumId], queryFn: () => api.getAlbum(String(albumId)), enabled: !!albumId });
@@ -64,6 +65,13 @@ export default function UploadStep() {
         if (skip) assets = unique;
       }
       if (!assets.length) return;
+      // Show the selected photos immediately, while uploads and server derivatives run.
+      setLocalPreviews(assets.map((asset, i) => ({
+        key: `local-preview-${Date.now()}-${i}`,
+        localPreview: true,
+        localUri: asset.uri,
+        filename: asset.fileName || `photo_${i}.jpg`,
+      })));
       setProgress({ done: 0, total: assets.length });
       let failed = 0;
       let lastError = "";
@@ -100,6 +108,7 @@ export default function UploadStep() {
           ? { ...old, album: { ...old.album, photos: [...(old.album.photos || []), ...uploaded.map((item) => item.photo)] } }
           : old);
       }
+      setLocalPreviews([]);
       await q.refetch();
       if (failed > 0) {
         setErr(failed === assets.length
@@ -110,6 +119,7 @@ export default function UploadStep() {
       setErr(e.message || "Upload failed");
     } finally {
       setProgress(null);
+      setLocalPreviews([]);
     }
   };
 
@@ -128,9 +138,15 @@ export default function UploadStep() {
 
   const renderItem = useCallback(({ item: p, index }: { item: any; index: number }) => {
     const ready = !!p.id && !!p.thumbnail_url && !p.pending;
+    const localPreview = !!p.localPreview && !!p.localUri;
     return (
-      <View style={{ width: cell, height: cell, marginLeft: index % COLS === 0 ? 0 : GAP, marginBottom: GAP }} testID={ready ? `upload-photo-${p.id}` : `upload-pending-${index}`} pointerEvents={ready ? "auto" : "none"}>
-        {ready ? <Thumb uri={p.thumbnail_url} recyclingKey={p.id} style={styles.thumb} /> : (
+      <View style={{ width: cell, height: cell, marginLeft: index % COLS === 0 ? 0 : GAP, marginBottom: GAP }} testID={ready ? `upload-photo-${p.id}` : localPreview ? `upload-local-preview-${index}` : `upload-pending-${index}`} pointerEvents={ready ? "auto" : "none"}>
+        {ready ? <Thumb uri={p.thumbnail_url} recyclingKey={p.id} style={styles.thumb} /> : localPreview ? (
+          <View style={styles.thumb}>
+            <Thumb uri={p.localUri} recyclingKey={p.key} style={styles.thumb} transition={0} />
+            <View style={styles.previewSpinner}><ActivityIndicator color="#FFF" size="small" /></View>
+          </View>
+        ) : (
           <View style={[styles.thumb, { alignItems: "center", justifyContent: "center" }]}><ActivityIndicator color={colors.brandPrimary} /></View>
         )}
         {ready ? (
@@ -144,7 +160,7 @@ export default function UploadStep() {
 
   const uploading = !!progress;
   const pendingTiles = progress ? Array.from({ length: Math.max(0, progress.total - progress.done) }, (_, i) => ({ id: "", pending: true, key: `pending-${i}` })) : [];
-  const gridData = [...photos, ...pendingTiles];
+  const gridData = [...photos, ...localPreviews, ...pendingTiles];
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface, paddingTop: insets.top }}>
@@ -222,6 +238,7 @@ const styles = StyleSheet.create({
   bar: { marginTop: spacing.md, width: "100%", height: 4, borderRadius: 2, backgroundColor: colors.surfaceTertiary, overflow: "hidden" },
   barFill: { height: 4, backgroundColor: colors.brandPrimary },
   thumb: { width: "100%", height: "100%", borderRadius: radius.sm },
+  previewSpinner: { position: "absolute", right: 5, bottom: 5, width: 24, height: 24, borderRadius: 12, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" },
   thumbRemove: {
     position: "absolute", top: 4, right: 4,
     width: 24, height: 24, borderRadius: 12,
