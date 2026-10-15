@@ -50,7 +50,7 @@ export default function AlbumPreview() {
             <Feather name="lock" size={16} color={colors.onBrandTertiary} />
             <Text style={{ color: colors.onBrandTertiary, fontFamily: fonts.text, flex: 1 }}>Payment completed — this ClickBook is locked and view only.</Text>
           </View>
-        ) : <Text style={[s.bodyMuted, { marginTop: 4 }]}>Drag or use the arrows to turn pages. Tap any page (or the cover) to edit it.</Text>}
+        ) : <Text style={[s.bodyMuted, { marginTop: 4 }]}>Double-click any page or the cover to edit it. Use the arrows to turn pages.</Text>}
         <View style={{ marginTop: spacing.xl, alignItems: "center" }}>
           {album ? (
             <BookPreview
