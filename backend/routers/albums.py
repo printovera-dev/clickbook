@@ -174,10 +174,18 @@ async def presign_photo_upload(album_id: str, payload: PresignedUploadRequest,
 @router.post("/albums/{album_id}/photos/complete")
 async def complete_photo_upload(album_id: str, payload: CompleteUploadRequest,
                                 customer: dict = Depends(get_current_customer)):
-    _ensure_locked(await _owned_album(album_id, customer))
+    album = await _owned_album(album_id, customer)
+    _ensure_locked(album)
     filename = (payload.filename or "photo.jpg").strip()
     if not filename.lower().endswith(ALLOWED_EXT):
         raise HTTPException(400, "Unsupported file type")
+
+    # S3 PUT can finish even if the client's connection drops before it receives
+    # this response. Make completion idempotent so retries do not create duplicate photos.
+    for existing in album.get("photos", []):
+        if existing.get("original_path") == payload.key:
+            return {"photo": existing}
+
     try:
         meta = await run_in_threadpool(
             finalize_presigned_upload, customer["id"], album_id, filename, payload.key, MAX_UPLOAD_BYTES
@@ -195,11 +203,22 @@ async def complete_photo_upload(album_id: str, payload: CompleteUploadRequest,
         "preview_url": public_url(meta["preview_path"]),
         "original_url": public_url(meta["original_path"]),
     }
-    await db.albums.update_one(
-        {"id": album_id, "customer_id": customer["id"]},
+    # Atomic duplicate guard for near-simultaneous retries from the same client.
+    result = await db.albums.update_one(
+        {"id": album_id, "customer_id": customer["id"], "photos.original_path": {"$ne": payload.key}},
         {"$push": {"photos": photo}, "$set": {"updated_at": now_iso()}},
     )
-    return {"photo": photo}
+    if result.modified_count:
+        return {"photo": photo}
+
+    current = await db.albums.find_one(
+        {"id": album_id, "customer_id": customer["id"]},
+        {"_id": 0, "photos": 1},
+    )
+    for existing in (current or {}).get("photos", []):
+        if existing.get("original_path") == payload.key:
+            return {"photo": existing}
+    raise HTTPException(409, "Photo could not be registered. Please retry the upload.")
 
 
 @router.post("/albums/{album_id}/photos")
