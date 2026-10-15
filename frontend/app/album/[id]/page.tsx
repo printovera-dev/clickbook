@@ -442,7 +442,7 @@ export default function PageEditor() {
                       positions,
                     }))
                 ).map((layout: any) => {
-                  const positions = layout.positions as typeof DEFAULT_POSITIONS[number][];
+                  const positions: any[] = layout.positions;
                   const selected = page.layout_id === layout.id ||
                     JSON.stringify(page.slots || []) === JSON.stringify(positions);
                   return (
