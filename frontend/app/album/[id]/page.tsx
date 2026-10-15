@@ -182,14 +182,17 @@ export default function PageEditor() {
       : DEFAULT_POSITIONS[count];
     if (!Number.isInteger(count) || count < 1 || count > 4 || !positions || positions.length !== count) return;
 
-    const unused = photos.map((p) => p.id).filter((pid) => !page.photo_ids.includes(pid));
+    // Changing a layout must not silently pull in other album photos.
+    // Preserve this page's existing images and leave any new slots empty so
+    // the customer can choose exactly which photo belongs in each new slot.
     const ids = page.photo_ids.slice(0, count);
-    while (ids.length < count && unused.length) ids.push(unused.shift()!);
-    while (ids.length < count && photos.length) ids.push(photos[ids.length % photos.length].id);
+    while (ids.length < count) ids.push("");
     const images: Record<string, any> = {};
     ids.forEach((pid, i) => {
       const prev = page.images?.[String(i)];
-      images[String(i)] = prev && prev.photo_id === pid ? prev : { ...defaultTransform(), photo_id: pid };
+      images[String(i)] = pid
+        ? (prev && prev.photo_id === pid ? prev : { ...defaultTransform(), photo_id: pid })
+        : { ...defaultTransform(), photo_id: "" };
     });
     commit({
       ...page,
@@ -284,7 +287,13 @@ export default function PageEditor() {
             page={page} photosById={photosById} size={size}
             selectedSlot={tool === "image" || tool === "replace" ? selSlot : null}
             selectedText={selText}
-            onSlotPress={(i) => { setSelSlot(i); setSelText(null); if (tool === "text") setTool("image"); }}
+            onSlotPress={(i) => {
+              setSelSlot(i);
+              setSelText(null);
+              if (!page.photo_ids?.[i]) setTool("replace");
+              else if (tool === "text") setTool("image");
+            }}
+            emptySlotLabel="Change Image"
             onTextPress={(tid) => { setSelText(tid); setSelSlot(null); setTool("text"); }}
             onImageDims={(pid, w, h) => { dims.current[pid] = { w, h }; }}
           />
