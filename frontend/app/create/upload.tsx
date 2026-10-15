@@ -222,7 +222,6 @@ export default function UploadStep() {
         element.removeEventListener("dragstart", handlers.start);
         element.removeEventListener("dragover", handlers.over);
         element.removeEventListener("drop", handlers.drop);
-        element.removeEventListener("dragend", handlers.end);
         delete element.__clickbookDragHandlers;
         element.draggable = false;
       };
@@ -255,13 +254,10 @@ export default function UploadStep() {
         const draggedId = event.dataTransfer?.getData("text/plain");
         if (draggedId && draggedId !== actual.id) void movePhotoTo(draggedId, index);
       };
-      const end = () => {};
-
       node.addEventListener("dragstart", start);
       node.addEventListener("dragover", over);
       node.addEventListener("drop", drop);
-      node.addEventListener("dragend", end);
-      node.__clickbookDragHandlers = { start, over, drop, end };
+      node.__clickbookDragHandlers = { start, over, drop };
     };
 
     return (
