@@ -264,7 +264,6 @@ export default function UploadStep() {
           fileName: file.name,
           fileSize: file.size,
           file,
-          uri: URL.createObjectURL(file),
         }));
         await uploadAssetsRef.current(assets);
       } catch (e: any) {
@@ -455,7 +454,7 @@ export default function UploadStep() {
             ) : null}
             <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>Pick from your gallery — as many as you like. We&apos;ll design the album automatically.</Text>
 
-            <Pressable testID="upload-pick-button" onPress={pickAndUpload} disabled={uploading} style={styles.dropzone}>
+            <Pressable ref={attachDropzone as any} testID="upload-pick-button" onPress={pickAndUpload} disabled={uploading} style={[styles.dropzone, isDraggingFiles && styles.dropzoneDragging]}>
               {uploading ? (
                 <>
                   <ActivityIndicator color={colors.brandPrimary} />
@@ -465,8 +464,8 @@ export default function UploadStep() {
               ) : (
                 <>
                   <Feather name="upload-cloud" size={40} color={colors.brandPrimary} />
-                  <Text style={[s.h2, { marginTop: spacing.sm }]}>Add photos</Text>
-                  <Text style={[s.bodyMuted, { marginTop: 4 }]}>Tap to select from gallery</Text>
+                  <Text style={[s.h2, { marginTop: spacing.sm }]}>{isDraggingFiles ? "Drop images to upload" : "Add photos"}</Text>
+                  <Text style={[s.bodyMuted, { marginTop: 4 }]}>Tap to select, or drag images / an entire folder here</Text>
                 </>
               )}
             </Pressable>
@@ -492,6 +491,7 @@ export default function UploadStep() {
 const styles = StyleSheet.create({
   topbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: spacing.xl },
   notice: { marginTop: spacing.md, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.brandTertiary, borderWidth: 1, borderColor: colors.brandSecondary },
+  dropzoneDragging: { borderColor: colors.brandPrimary, backgroundColor: colors.surfaceTertiary },
   dropzone: {
     marginTop: spacing.xl,
     borderWidth: 2,
