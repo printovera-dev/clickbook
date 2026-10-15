@@ -18,6 +18,16 @@ export default function AlbumPreview() {
   const router = useRouter();
   const q = useQuery({ queryKey: ["album", id], queryFn: () => api.getAlbum(String(id)), enabled: !!id });
   const album = q.data?.album;
+  const storedPages: any[] = album?.pages || [];
+  const coverPhotoId = album?.cover_design?.photo_id;
+  const firstPageIds: string[] = storedPages[0]?.photo_ids || [];
+  const firstPageSlotPhotoId = storedPages[0]?.images?.["0"]?.photo_id;
+  const duplicateCoverPage = !!coverPhotoId && !!storedPages[0] && (
+    (firstPageIds.length === 1 && firstPageIds[0] === coverPhotoId) ||
+    (firstPageIds.length === 0 && storedPages[0].layout_photo_count === 1 && firstPageSlotPhotoId === coverPhotoId)
+  );
+  const previewPageCount = Math.max(0, storedPages.length - (duplicateCoverPage ? 1 : 0));
+  const previewSheetCount = Math.max(Number(album?.min_sheets || 0), Math.ceil(previewPageCount / 2));
   const [selected, setSelected] = useState<number | "cover" | null>(null);
   const goPage = (tool?: string) => selected === "cover"
     ? router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: "cover", ...(tool ? { tool } : {}) } })
@@ -67,8 +77,8 @@ export default function AlbumPreview() {
           </View>
         ) : null}
         <View style={styles.stats}>
-          <Stat label="Pages" value={String(album?.pages?.length || 0)} />
-          <Stat label="Sheets" value={String(album?.sheets || 0)} />
+          <Stat label="Pages" value={String(previewPageCount)} />
+          <Stat label="Sheets" value={String(previewSheetCount)} />
           <Stat label="Size" value="8×8″" />
         </View>
       </ScrollView>
