@@ -240,9 +240,13 @@ export default function PageEditor() {
       const r = isCover
         ? await api.updateAlbum(String(id), { cover_design: { ...pageToCover(page, album.cover_design), style: coverKey } })
         : await api.updatePages(String(id), album.pages.map((p: Page, i: number) => (i === pageIndex ? page : p)));
+      // The editor can be opened directly from a URL, where router.back()
+      // may not return to the album preview. Navigate there explicitly after
+      // the save succeeds so Save & Preview always has a deterministic destination.
       qc.setQueryData(["album", id], r);
-      qc.invalidateQueries({ queryKey: ["albums"] });
-      router.back();
+      void qc.invalidateQueries({ queryKey: ["album", id] });
+      void qc.invalidateQueries({ queryKey: ["albums"] });
+      router.replace({ pathname: "/album/[id]/preview", params: { id: String(id) } });
     } catch (e: any) {
       Alert.alert("Could not save", e?.message || "Please try again");
     } finally { setSaving(false); }
