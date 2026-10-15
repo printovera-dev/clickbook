@@ -4,7 +4,7 @@ All derivatives are EXIF-orientation corrected, converted to RGB JPEG. HEIC is d
 """
 import io
 import logging
-from PIL import Image, ImageOps, ImageFilter, ImageStat, ImageEnhance
+from PIL import Image, ImageOps, ImageFilter, ImageEnhance
 
 try:
     from pillow_heif import register_heif_opener
@@ -59,24 +59,10 @@ def make_derivatives(data: bytes) -> dict:
     enhanced = ImageEnhance.Contrast(enhanced).enhance(1.02)
     enhanced = enhanced.filter(ImageFilter.UnsharpMask(radius=0.8, percent=45, threshold=4))
 
-    # A lightweight sharpness heuristic on a small grayscale copy. It is only a warning
-    # signal, not a promise of print quality or a replacement for human review.
-    probe = img.copy()
-    probe.thumbnail((512, 512), Image.Resampling.LANCZOS)
-    edges = probe.convert("L").filter(ImageFilter.FIND_EDGES)
-    sharpness = round(sum(ImageStat.Stat(edges).stddev) / max(1, len(ImageStat.Stat(edges).stddev)), 2)
-    warnings = []
-    if min(w, h) < 1800:
-        warnings.append("low_resolution")
-    if sharpness < 7.0:
-        warnings.append("may_be_blurry")
     return {
         "thumbnail": _encode(enhanced, THUMB_MAX, 80, "WEBP"),
         "preview": _encode(enhanced, PREVIEW_MAX, 85, "WEBP"),
         "print": _encode(enhanced, PRINT_MAX, 92, sharpen=True),  # gentle sharpening for print only
         "width": w,
         "height": h,
-        "sharpness_score": sharpness,
-        "quality_warnings": warnings,
-        "printable": not warnings,
     }
