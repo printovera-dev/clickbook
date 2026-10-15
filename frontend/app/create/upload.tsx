@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList, useWindowDimensions, Alert, Platform, Image, Animated, Easing } from "react-native";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList, useWindowDimensions, Platform, Image } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -24,19 +24,8 @@ export default function UploadStep() {
   const [localPreviews, setLocalPreviews] = useState<any[]>([]);
   const [hintVisible, setHintVisible] = useState(true);
   const [savingOrder, setSavingOrder] = useState(false);
-  const [hoveredQualityId, setHoveredQualityId] = useState<string | null>(null);
   const [err, setErr] = useState("");
   const hintTimer = useRef<any>(null);
-  const qualityBlink = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    const loop = Animated.loop(Animated.sequence([
-      Animated.timing(qualityBlink, { toValue: 0.25, duration: 550, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-      Animated.timing(qualityBlink, { toValue: 1, duration: 550, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-    ]));
-    loop.start();
-    return () => loop.stop();
-  }, [qualityBlink]);
 
   const registerActivity = useCallback(() => {
     setHintVisible(false);
@@ -210,8 +199,6 @@ export default function UploadStep() {
     const ready = !!actual.id && !!actual.thumbnail_url && !p.pending;
     const localPreview = !!p.localPreview && !!p.localUri && !completedPhoto;
     const canReorder = ready && !uploading;
-    const sizeBytes = Number(actual.size_bytes ?? actual.fileSize ?? p.size_bytes ?? 0);
-    const needsAttention = sizeBytes > 0 && sizeBytes < 70 * 1024;
     // Use native HTML drag-and-drop only (no pointer/mouse tracking for reordering).
     // Attach listeners to the DOM element emitted by React Native Web.
     let attachedNode: any = null;
@@ -268,11 +255,6 @@ export default function UploadStep() {
         pointerEvents="auto"
         onTouchStart={registerActivity}
         {...({
-          onMouseEnter: () => {
-            registerActivity();
-            if (needsAttention && actual.id) setHoveredQualityId(actual.id);
-          },
-          onMouseLeave: () => setHoveredQualityId(null),
         } as any)}
       >
         {ready ? <Thumb uri={actual.thumbnail_url} recyclingKey={actual.id} style={styles.thumb} /> : localPreview ? (
@@ -283,19 +265,9 @@ export default function UploadStep() {
         ) : (
           <View style={[styles.thumb, { alignItems: "center", justifyContent: "center" }]}><ActivityIndicator color={colors.brandPrimary} /></View>
         )}
-        {ready && needsAttention ? (
-          <Animated.View style={[styles.qualityBadge, { opacity: qualityBlink }]} accessibilityLabel="Replace this image: it may not print clearly">
-            <Feather name="alert-triangle" size={13} color="#FFF" />
-          </Animated.View>
-        ) : null}
         {index === 0 && (ready || localPreview) ? (
           <View style={styles.coverBadge} pointerEvents="none">
             <Text style={styles.coverBadgeText}>COVER IMAGE</Text>
-          </View>
-        ) : null}
-        {ready && needsAttention && hoveredQualityId === actual.id ? (
-          <View pointerEvents="none" style={styles.qualityTooltip}>
-            <Text style={styles.qualityTooltipText}>Image under 70 KB — consider replacing it</Text>
           </View>
         ) : null}
         {ready ? (
@@ -315,7 +287,7 @@ export default function UploadStep() {
         ) : null}
       </View>
     );
-  }, [cell, hoveredQualityId, movePhoto, movePhotoTo, photos.length, qualityBlink, registerActivity, removePhoto, uploading]);
+  }, [cell, movePhoto, movePhotoTo, photos.length, registerActivity, removePhoto, uploading]);
 
 
   const gridData = [...photos, ...localPreviews];
@@ -405,11 +377,8 @@ const styles = StyleSheet.create({
   thumb: { width: "100%", height: "100%", borderRadius: radius.sm },
   localImage: { width: "100%", height: "100%", borderRadius: radius.sm },
   previewSpinner: { position: "absolute", right: 5, bottom: 5, width: 24, height: 24, borderRadius: 12, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" },
-  qualityBadge: { position: "absolute", top: 4, left: 4, width: 25, height: 25, borderRadius: 13, backgroundColor: "#D91E18", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#FFF" },
   coverBadge: { position: "absolute", top: 4, left: 34, right: 34, alignItems: "center", backgroundColor: "rgba(24,24,24,0.78)", borderRadius: 4, paddingHorizontal: 6, paddingVertical: 5 },
   coverBadgeText: { color: "#FFF", fontSize: 9, lineHeight: 11, fontWeight: "700", letterSpacing: 1.1 },
-  qualityTooltip: { position: "absolute", top: 31, left: 3, right: 3, zIndex: 5, backgroundColor: "#B91C1C", borderRadius: 4, paddingHorizontal: 4, paddingVertical: 3 },
-  qualityTooltipText: { color: "#FFF", fontSize: 9, lineHeight: 11, fontWeight: "600", textAlign: "center" },
   reorderControls: { position: "absolute", left: 3, right: 3, bottom: 3, flexDirection: "row", justifyContent: "space-between", gap: 2 },
   reorderButton: { width: 23, height: 23, borderRadius: 12, backgroundColor: "rgba(0,0,0,0.68)", alignItems: "center", justifyContent: "center" },
   sequenceHint: { position: "absolute", top: "42%", left: spacing.xl, right: spacing.xl, alignItems: "center", justifyContent: "center" },
