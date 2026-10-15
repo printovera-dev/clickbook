@@ -30,6 +30,7 @@ export default function PageEditor() {
   const qc = useQueryClient();
   const albumQ = useQuery({ queryKey: ["album", id], queryFn: () => api.getAlbum(String(id)), enabled: !!id });
   const bgQ = useQuery({ queryKey: ["backgrounds"], queryFn: () => api.listBackgrounds() });
+  const layoutsQ = useQuery({ queryKey: ["layouts"], queryFn: () => api.listLayouts() });
   const album = albumQ.data?.album;
   useEffect(() => { if (album?.locked) router.replace({ pathname: "/album/[id]/preview", params: { id: String(id) } }); }, [album?.locked, id, router]);
   const photos: Photo[] = album?.photos || [];
@@ -173,15 +174,31 @@ export default function PageEditor() {
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selText, editingText, page]);
-  const changeLayout = (count: number) => {
+  const changeLayout = (layout: any) => {
     if (!page) return;
+    const count = Number(layout?.photo_count);
+    const positions = Array.isArray(layout?.positions) && layout.positions.length === count
+      ? layout.positions
+      : DEFAULT_POSITIONS[count];
+    if (!Number.isInteger(count) || count < 1 || count > 4 || !positions || positions.length !== count) return;
+
     const unused = photos.map((p) => p.id).filter((pid) => !page.photo_ids.includes(pid));
     const ids = page.photo_ids.slice(0, count);
     while (ids.length < count && unused.length) ids.push(unused.shift()!);
     while (ids.length < count && photos.length) ids.push(photos[ids.length % photos.length].id);
     const images: Record<string, any> = {};
-    ids.forEach((pid, i) => { const prev = page.images?.[String(i)]; images[String(i)] = prev && prev.photo_id === pid ? prev : { ...defaultTransform(), photo_id: pid }; });
-    commit({ ...page, photo_ids: ids, layout_photo_count: count, slots: DEFAULT_POSITIONS[count], images });
+    ids.forEach((pid, i) => {
+      const prev = page.images?.[String(i)];
+      images[String(i)] = prev && prev.photo_id === pid ? prev : { ...defaultTransform(), photo_id: pid };
+    });
+    commit({
+      ...page,
+      layout_id: layout.id,
+      photo_ids: ids,
+      layout_photo_count: count,
+      slots: positions,
+      images,
+    });
     setSelSlot(0);
   };
   const replaceImage = (pid: string) => {
@@ -399,16 +416,82 @@ export default function PageEditor() {
           ) : null}
 
           {tool === "layout" ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-              {[1, 2, 3, 4].map((n) => (
-                <Pressable key={n} testID={`layout-${n}`} onPress={() => changeLayout(n)} style={[styles.layoutCard, page.photo_ids.length === n && { borderColor: colors.brandPrimary, backgroundColor: colors.brandTertiary }]}>
-                  <View style={{ width: 44, height: 44, backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border }}>
-                    {DEFAULT_POSITIONS[n].map((r, i) => <View key={i} style={{ position: "absolute", left: r.x * 44, top: r.y * 44, width: r.w * 44, height: r.h * 44, backgroundColor: colors.borderStrong }} />)}
-                  </View>
-                  <Text style={{ fontFamily: fonts.text, fontSize: 12, color: colors.onSurface, marginTop: 4 }}>{LAYOUT_NAMES[n]}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
+            <View>
+              <Text style={{ fontFamily: fonts.text, fontSize: 12, color: colors.onSurfaceMuted, paddingHorizontal: spacing.md, paddingBottom: spacing.xs }}>
+                {layoutsQ.data?.total ?? layoutsQ.data?.layouts?.length ?? 4} available layouts
+              </Text>
+              <ScrollView
+                style={{ maxHeight: 196 }}
+                showsVerticalScrollIndicator
+                contentContainerStyle={styles.layoutGrid}
+                testID="page-editor-layout-list"
+              >
+                {(layoutsQ.data?.layouts?.length
+                  ? layoutsQ.data.layouts.filter((layout: any) =>
+                      layout.active !== false &&
+                      Number.isInteger(Number(layout.photo_count)) &&
+                      Number(layout.photo_count) >= 1 &&
+                      Number(layout.photo_count) <= 4 &&
+                      Array.isArray(layout.positions) &&
+                      layout.positions.length === Number(layout.photo_count)
+                    )
+                  : Object.entries(DEFAULT_POSITIONS).map(([count, positions]) => ({
+                      id: `fallback-${count}`,
+                      name: LAYOUT_NAMES[Number(count)],
+                      photo_count: Number(count),
+                      positions,
+                    }))
+                ).map((layout: any) => {
+                  const positions = layout.positions as typeof DEFAULT_POSITIONS[number][];
+                  const selected = page.layout_id === layout.id ||
+                    JSON.stringify(page.slots || []) === JSON.stringify(positions);
+                  return (
+                    <Pressable
+                      key={layout.id}
+                      testID={`layout-${layout.id}`}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Apply layout ${layout.name}, ${layout.photo_count} photos`}
+                      onPress={() => changeLayout(layout)}
+                      style={[
+                        styles.layoutCard,
+                        styles.availableLayoutCard,
+                        selected && { borderColor: colors.brandPrimary, backgroundColor: colors.brandTertiary },
+                      ]}
+                    >
+                      <View style={{ width: 44, height: 44, backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border }}>
+                        {positions.map((slot: any, i: number) => (
+                          <View
+                            key={i}
+                            style={{
+                              position: "absolute",
+                              left: slot.x * 44,
+                              top: slot.y * 44,
+                              width: slot.w * 44,
+                              height: slot.h * 44,
+                              backgroundColor: colors.borderStrong,
+                            }}
+                          />
+                        ))}
+                      </View>
+                      <Text
+                        numberOfLines={2}
+                        style={{ fontFamily: fonts.text, fontSize: 11, color: colors.onSurface, marginTop: 4, textAlign: "center" }}
+                      >
+                        {layout.name}
+                      </Text>
+                      <Text style={{ fontFamily: fonts.text, fontSize: 10, color: colors.onSurfaceMuted }}>
+                        {layout.photo_count} photo{layout.photo_count === 1 ? "" : "s"}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              {layoutsQ.isError ? (
+                <Text style={{ fontFamily: fonts.text, fontSize: 11, color: colors.error, paddingHorizontal: spacing.md }}>
+                  Could not load the full layout catalogue. Showing basic layouts instead.
+                </Text>
+              ) : null}
+            </View>
           ) : null}
 
           {tool === "coverstyle" ? (
@@ -472,5 +555,7 @@ const styles = StyleSheet.create({
   swatch: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: colors.borderStrong },
   thumb: { width: 64, height: 64, borderRadius: radius.sm, overflow: "hidden", borderWidth: 1, borderColor: colors.border },
   layoutCard: { alignItems: "center", padding: spacing.sm, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary, minWidth: 72 },
+  availableLayoutCard: { width: 108, minWidth: 108, minHeight: 94, justifyContent: "flex-start" },
+  layoutGrid: { flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", gap: spacing.sm, paddingHorizontal: spacing.md, paddingBottom: spacing.sm },
   input: { marginHorizontal: spacing.md, minHeight: 44, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: colors.surfaceSecondary, color: colors.onSurface, fontFamily: fonts.text },
 });
