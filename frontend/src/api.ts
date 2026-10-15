@@ -45,7 +45,7 @@ export function fileUrl(pathOrUrl?: string | null): string | undefined {
 
 async function request<T = any>(
   path: string,
-  opts: { method?: string; body?: any; admin?: boolean; auth?: boolean; raw?: boolean } = {},
+  opts: { method?: string; body?: any; admin?: boolean; auth?: boolean; raw?: boolean; timeoutMs?: number } = {},
 ): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (opts.admin) {
@@ -55,11 +55,28 @@ async function request<T = any>(
     const t = await getToken();
     if (t) headers["Authorization"] = `Bearer ${t}`;
   }
-  const res = await fetch(`${BASE}/api${path}`, {
-    method: opts.method || "GET",
-    headers,
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
-  });
+  const controller = opts.timeoutMs ? new AbortController() : undefined;
+  const timeout = opts.timeoutMs && controller
+    ? setTimeout(() => controller.abort(), opts.timeoutMs)
+    : undefined;
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/api${path}`, {
+      method: opts.method || "GET",
+      headers,
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+      ...(controller ? { signal: controller.signal } : {}),
+    });
+  } catch (cause: any) {
+    if (cause?.name === "AbortError") {
+      const err: any = new Error(`Request timed out after ${Math.round((opts.timeoutMs || 0) / 1000)} seconds`);
+      err.retryable = true;
+      throw err;
+    }
+    throw cause;
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
   if (!res.ok) {
     const text = await res.text();
     let msg = text;
@@ -145,26 +162,24 @@ export const api = {
   // the cross-origin S3 transfer, keep uploads working through the existing API path.
   uploadPhoto: async (albumId: string, uri: string, filename: string, webFile?: any) => {
     const fallback = () => uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false);
+    const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
     let presign: { direct_upload: boolean; upload_url?: string; key?: string };
     try {
       presign = await request<{ direct_upload: boolean; upload_url?: string; key?: string }>(
         `/albums/${albumId}/photos/presign`,
-        { method: "POST", body: { filename } },
+        { method: "POST", body: { filename }, timeoutMs: 30000 },
       );
     } catch (e: any) {
-      // Only network/server errors fall back. Keep validation/auth errors visible.
       const status = Number(e?.status || 0);
-      if (!status || status >= 500) {
+      if (!status || status >= 500 || status === 408 || status === 429) {
         console.warn("S3 presign unavailable; using backend upload fallback.", e);
         return fallback();
       }
       throw e;
     }
 
-    if (!presign.direct_upload || !presign.upload_url || !presign.key) {
-      return fallback();
-    }
+    if (!presign.direct_upload || !presign.upload_url || !presign.key) return fallback();
 
     let fileBody: any;
     let contentType = "application/octet-stream";
@@ -189,30 +204,58 @@ export const api = {
       contentType = (fileBody as any).type || "image/jpeg";
     }
 
-    // Presigned URL is scoped to one object. Never send the customer token to S3.
-    let put: Response;
-    try {
-      put = await fetch(presign.upload_url, {
-        method: "PUT",
-        headers: { "Content-Type": contentType },
-        body: fileBody,
-      } as any);
-    } catch (e) {
-      // Browser CORS/network errors often surface as only "Failed to fetch".
-      console.warn("Direct S3 transfer failed; retrying via backend upload.", e);
-      return fallback();
+    // Retry the same signed object URL; a lost response after a successful PUT is safe
+    // because PUT to the same key simply overwrites that object.
+    let put: Response | null = null;
+    let putError: any = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 180000);
+      try {
+        put = await fetch(presign.upload_url, {
+          method: "PUT",
+          headers: { "Content-Type": contentType },
+          body: fileBody,
+          signal: controller.signal,
+        } as any);
+        if (put.ok) break;
+        const retryable = [408, 429, 500, 502, 503, 504].includes(put.status);
+        if (!retryable) {
+          console.warn(`Direct S3 upload returned HTTP ${put.status}; using backend fallback.`);
+          return fallback();
+        }
+        putError = new Error(`S3 upload returned HTTP ${put.status}`);
+      } catch (e: any) {
+        putError = e;
+      } finally {
+        clearTimeout(timeout);
+      }
+      if (attempt < 2) await delay(700 * (attempt + 1));
     }
-    if (!put.ok) {
-      console.warn(`Direct S3 transfer returned HTTP ${put.status}; retrying via backend upload.`);
+    if (!put?.ok) {
+      console.warn("Direct S3 upload did not complete after retries; using backend fallback.", putError);
       return fallback();
     }
 
-    // Only register the S3 object after its PUT succeeds. If registration fails,
-    // surface that error rather than uploading a duplicate via multipart.
-    return request<{ photo: any }>(`/albums/${albumId}/photos/complete`, {
-      method: "POST",
-      body: { filename, key: presign.key },
-    });
+    // Completion is idempotent by S3 key on the backend. Retry transient failures so
+    // a temporary connection drop cannot leave an uploaded object missing from the album.
+    let completionError: any;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await request<{ photo: any }>(`/albums/${albumId}/photos/complete`, {
+          method: "POST",
+          body: { filename, key: presign.key },
+          timeoutMs: 110000,
+        });
+      } catch (e: any) {
+        completionError = e;
+        const status = Number(e?.status || 0);
+        const retryable = !status || status >= 500 || status === 408 || status === 429;
+        if (!retryable || attempt === 2) throw e;
+        await delay(900 * (attempt + 1));
+      }
+    }
+    throw completionError || new Error("Could not register uploaded photo");
   },
   adminUploadImage: (uri: string, filename: string, webFile?: any) =>
     uploadFile(`/admin/images`, uri, filename, webFile, true),
