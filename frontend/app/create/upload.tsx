@@ -12,6 +12,47 @@ import Feather from "@react-native-vector-icons/feather";
 
 const COLS = 3;
 const GAP = spacing.sm;
+const SUPPORTED_IMAGE_EXTENSION = /\\.(jpe?g|png|webp|heic|heif)$/i;
+
+async function filesFromDroppedEntry(entry: any): Promise<any[]> {
+  if (!entry) return [];
+  if (entry.isFile) {
+    const file = await new Promise<any>((resolve, reject) => entry.file(resolve, reject));
+    return file ? [file] : [];
+  }
+  if (!entry.isDirectory || typeof entry.createReader !== "function") return [];
+  const reader = entry.createReader();
+  const children: any[] = [];
+  while (true) {
+    const batch = await new Promise<any[]>((resolve, reject) => reader.readEntries(resolve, reject));
+    if (!batch.length) break;
+    children.push(...batch);
+  }
+  const groups = await Promise.all(children.map((child) => filesFromDroppedEntry(child)));
+  return groups.flat();
+}
+
+async function getDroppedImageFiles(dataTransfer: any): Promise<any[]> {
+  const files: any[] = [];
+  const items = Array.from(dataTransfer?.items || []) as any[];
+  for (const item of items) {
+    if (item.kind !== "file") continue;
+    const entry = typeof item.webkitGetAsEntry === "function" ? item.webkitGetAsEntry() : null;
+    if (entry) {
+      files.push(...await filesFromDroppedEntry(entry));
+    } else {
+      const file = item.getAsFile?.();
+      if (file) files.push(file);
+    }
+  }
+  if (!files.length) files.push(...Array.from(dataTransfer?.files || []) as any[]);
+  const seen = new Set<any>();
+  return files.filter((file) => {
+    if (!file || seen.has(file)) return false;
+    seen.add(file);
+    return SUPPORTED_IMAGE_EXTENSION.test(String(file.name || ""));
+  });
+}
 
 export default function UploadStep() {
   const { albumId, notice, style: keepStyle, coverPhotoId: keepCover } = useLocalSearchParams<{ albumId: string; notice?: string; style?: string; coverPhotoId?: string }>();
@@ -24,8 +65,14 @@ export default function UploadStep() {
   const [localPreviews, setLocalPreviews] = useState<any[]>([]);
   const [hintVisible, setHintVisible] = useState(true);
   const [savingOrder, setSavingOrder] = useState(false);
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const [err, setErr] = useState("");
   const hintTimer = useRef<any>(null);
+  const dragDepth = useRef(0);
+  const uploadInProgress = useRef(false);
+  const dropzoneNode = useRef<any>(null);
+  const dropzoneHandlers = useRef<any>(null);
+  const uploadAssetsRef = useRef<(assets: any[]) => Promise<void>>(async () => {});
 
   const registerActivity = useCallback(() => {
     setHintVisible(false);
@@ -41,93 +88,82 @@ export default function UploadStep() {
   const q = useQuery({ queryKey: ["album", albumId], queryFn: () => api.getAlbum(String(albumId)), enabled: !!albumId });
   const photos: any[] = q.data?.album?.photos || [];
 
-  const pickAndUpload = async () => {
+  const uploadAssets = useCallback(async (selectedAssets: any[]) => {
+    if (!selectedAssets || selectedAssets.length === 0 || uploadInProgress.current) return;
+    uploadInProgress.current = true;
     setErr("");
-    try {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) { setErr("Photo permission required"); return; }
-      const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
-        allowsMultipleSelection: true,
-        orderedSelection: true,
-        // quality < 1 makes the picker decode + re-encode EVERY selected photo in memory at once
-        // (≈48 MB per 12 MP frame) — that is what killed Expo Go at ~30 photos. The server makes
-        // all derivatives, so we hand the files through untouched.
-        quality: 1,
-        exif: false,
-        base64: false,
-        preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
-      });
-      if (res.canceled) return;
-      // Duplicate detection: same file name + byte size (within this selection and against already-uploaded photos).
-      const seen = new Set<string>(photos.map((p: any) => `${p.filename}|${p.size_bytes}`));
-      const unique: typeof res.assets = []; let dupes = 0;
-      for (const a of res.assets) {
-        const key = `${a.fileName || ""}|${a.fileSize || 0}`;
-        if (a.fileName && a.fileSize && seen.has(key)) { dupes += 1; continue; }
-        seen.add(key); unique.push(a);
+    const ownedObjectUrls: string[] = [];
+    const assets = selectedAssets.map((asset: any, i: number) => {
+      const file = asset.file || (Platform.OS === "web" && asset.name && typeof asset.size === "number" ? asset : undefined);
+      let uri = asset.uri;
+      if (!uri && file && typeof URL !== "undefined" && typeof URL.createObjectURL === "function") {
+        uri = URL.createObjectURL(file);
+        ownedObjectUrls.push(uri);
       }
-      let assets = res.assets;
-      if (dupes > 0) {
-        const skip = await new Promise<boolean>((resolve) => {
-          if (Platform.OS === "web") return resolve(window.confirm(`Duplicate images found (${dupes}). Do you want to skip the duplicate images?`));
-          Alert.alert("Duplicate images found", `${dupes} duplicate image${dupes > 1 ? "s" : ""} found. Do you want to skip the duplicate images?`, [
-            { text: "Keep all", style: "cancel", onPress: () => resolve(false) },
-            { text: "Skip duplicates", onPress: () => resolve(true) },
-          ]);
-        });
-        if (skip) assets = unique;
-      }
-      if (!assets.length) return;
-      // Show the selected photos immediately, while uploads and server derivatives run.
-      setLocalPreviews(assets.map((asset, i) => ({
-        key: `local-preview-${Date.now()}-${i}`,
-        index: i,
-        localPreview: true,
-        localUri: asset.uri,
-        filename: asset.fileName || `photo_${i}.jpg`,
-      })));
-      setProgress({ done: 0, total: assets.length });
-      let failed = 0;
-      let lastError = "";
-      let nextIndex = 0;
-      let completed = 0;
-      const uploaded: { index: number; photo: any }[] = [];
-      // Keep a small concurrency limit: several photos can transfer at once without
-      // creating one request per selected image or overwhelming mobile memory/network.
-      const concurrency = Math.min(4, assets.length);
-      const worker = async () => {
-        while (true) {
-          const i = nextIndex++;
-          if (i >= assets.length) return;
-          const asset = assets[i];
-          const name = asset.fileName || `photo_${Date.now()}_${i}.jpg`;
-          try {
-            const r = await api.uploadPhoto(String(albumId), asset.uri, name, (asset as any).file);
-            uploaded.push({ index: i, photo: r.photo });
-            setLocalPreviews((prev) => prev.map((item) => item.index === i ? { ...item, completedPhoto: r.photo } : item));
-          } catch (e: any) {
-            failed += 1;
-            lastError = e?.message || "upload failed";
-          } finally {
-            completed += 1;
-            setProgress({ done: completed, total: assets.length });
-          }
-        }
+      return {
+        ...asset,
+        uri,
+        file,
+        fileName: asset.fileName || asset.name || ("photo_" + Date.now() + "_" + i + ".jpg"),
       };
+    }).filter((asset: any) => !!asset.uri);
+
+    if (!assets.length) {
+      setErr("No readable images were selected. Please choose JPG, PNG, WebP, HEIC or HEIF images.");
+      ownedObjectUrls.forEach((uri) => URL.revokeObjectURL(uri));
+      uploadInProgress.current = false;
+      return;
+    }
+
+    setLocalPreviews(assets.map((asset: any, i: number) => ({
+      key: "local-preview-" + Date.now() + "-" + i,
+      index: i,
+      localPreview: true,
+      localUri: asset.uri,
+      filename: asset.fileName,
+    })));
+    setProgress({ done: 0, total: assets.length });
+    let failed = 0;
+    const failedFiles: string[] = [];
+    let nextIndex = 0;
+    let completed = 0;
+    const uploaded: { index: number; photo: any }[] = [];
+
+    // Completion creates print derivatives server-side; two parallel requests avoid
+    // overwhelming the small backend while keeping direct S3 PUTs concurrent.
+    const concurrency = Math.min(2, assets.length);
+    const worker = async () => {
+      while (true) {
+        const i = nextIndex++;
+        if (i >= assets.length) return;
+        const asset = assets[i];
+        try {
+          const r = await api.uploadPhoto(String(albumId), asset.uri, asset.fileName, asset.file);
+          uploaded.push({ index: i, photo: r.photo });
+          setLocalPreviews((prev) => prev.map((item) => item.index === i ? { ...item, completedPhoto: r.photo } : item));
+        } catch (e: any) {
+          failed += 1;
+          failedFiles.push(asset.fileName);
+          console.warn("ClickBook upload failed for " + asset.fileName + ":", e);
+        } finally {
+          completed += 1;
+          setProgress({ done: completed, total: assets.length });
+        }
+      }
+    };
+
+    try {
       await Promise.all(Array.from({ length: concurrency }, () => worker()));
-      // Insert successful uploads in the user's selected order, regardless of which
-      // network requests finished first. Keep partial successes if any files failed.
       uploaded.sort((a, b) => a.index - b.index);
       if (uploaded.length) {
         const existing: any[] = q.data?.album?.photos || [];
-        const orderedUploaded = uploaded.sort((a, b) => a.index - b.index).map((item) => item.photo);
+        const orderedUploaded = uploaded.map((item) => item.photo);
         const finalPhotos = [...existing, ...orderedUploaded];
-        // Persist the selected order after parallel uploads finish; API insert order can differ.
         try {
           await api.reorderPhotos(String(albumId), finalPhotos.map((p) => p.id));
-        } catch {
-          // Keep the local sequence visible; a refresh can retry if the order endpoint is unavailable.
+        } catch (e) {
+          console.warn("Uploads succeeded but saving the selected order failed.", e);
+          setErr("Photos uploaded, but the order could not be saved. Refresh and check the sequence.");
         }
         qc.setQueryData(["album", albumId], (old: any) => old
           ? { ...old, album: { ...old.album, photos: finalPhotos } }
@@ -136,17 +172,111 @@ export default function UploadStep() {
       await q.refetch();
       setLocalPreviews([]);
       if (failed > 0) {
-        setErr(failed === assets.length
-          ? `Upload failed: ${lastError}`
-          : `${failed} of ${assets.length} photos failed to upload. Please retry.`);
+        const examples = failedFiles.slice(0, 3).join(", ");
+        setErr(failed + " of " + assets.length + " photos failed after retries"
+          + (examples ? ": " + examples : "") + ". Re-select only those photos to retry.");
       }
     } catch (e: any) {
-      setErr(e.message || "Upload failed");
+      setErr(e?.message || "Upload failed. Please retry.");
     } finally {
       setProgress(null);
       setLocalPreviews([]);
+      ownedObjectUrls.forEach((uri) => {
+        try { URL.revokeObjectURL(uri); } catch {}
+      });
+      uploadInProgress.current = false;
+    }
+  }, [albumId, q, qc]);
+
+  useEffect(() => {
+    uploadAssetsRef.current = uploadAssets;
+  }, [uploadAssets]);
+
+  const pickAndUpload = async () => {
+    setErr("");
+    try {
+      if (Platform.OS !== "web") {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) { setErr("Photo permission required"); return; }
+      }
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsMultipleSelection: true,
+        orderedSelection: true,
+        quality: 1,
+        exif: false,
+        base64: false,
+        preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
+      });
+      if (res.canceled) return;
+      await uploadAssets(res.assets);
+    } catch (e: any) {
+      setErr(e?.message || "Upload failed");
     }
   };
+
+  const attachDropzone = useCallback((node: any) => {
+    const previous = dropzoneNode.current;
+    const old = dropzoneHandlers.current;
+    if (previous && old) {
+      previous.removeEventListener("dragenter", old.enter);
+      previous.removeEventListener("dragover", old.over);
+      previous.removeEventListener("dragleave", old.leave);
+      previous.removeEventListener("drop", old.drop);
+    }
+    dropzoneNode.current = node;
+    dropzoneHandlers.current = null;
+    if (Platform.OS !== "web" || !node || typeof node.addEventListener !== "function") return;
+
+    const enter = (event: any) => {
+      if (!Array.from(event.dataTransfer?.types || []).includes("Files")) return;
+      event.preventDefault();
+      dragDepth.current += 1;
+      setIsDraggingFiles(true);
+    };
+    const over = (event: any) => {
+      if (!Array.from(event.dataTransfer?.types || []).includes("Files")) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    };
+    const leave = (event: any) => {
+      event.preventDefault?.();
+      dragDepth.current = Math.max(0, dragDepth.current - 1);
+      if (!dragDepth.current) setIsDraggingFiles(false);
+    };
+    const drop = async (event: any) => {
+      event.preventDefault();
+      event.stopPropagation?.();
+      dragDepth.current = 0;
+      setIsDraggingFiles(false);
+      if (uploadInProgress.current) {
+        setErr("Please wait for the current upload batch to finish before adding more photos.");
+        return;
+      }
+      try {
+        const files = await getDroppedImageFiles(event.dataTransfer);
+        if (!files.length) {
+          setErr("No supported images found. Drop JPG, JPEG, PNG, WebP, HEIC or HEIF files, or a folder containing them.");
+          return;
+        }
+        const assets = files.map((file: any) => ({
+          name: file.name,
+          fileName: file.name,
+          fileSize: file.size,
+          file,
+          uri: URL.createObjectURL(file),
+        }));
+        await uploadAssetsRef.current(assets);
+      } catch (e: any) {
+        setErr(e?.message || "Could not read the dropped files");
+      }
+    };
+    node.addEventListener("dragenter", enter);
+    node.addEventListener("dragover", over);
+    node.addEventListener("dragleave", leave);
+    node.addEventListener("drop", drop);
+    dropzoneHandlers.current = { enter, over, leave, drop };
+  }, []);
 
   const movePhotoTo = useCallback(async (photoId: string, targetIndex: number) => {
     registerActivity();
