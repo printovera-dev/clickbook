@@ -15,6 +15,13 @@ export default function AdminLayouts() {
   const [count, setCount] = useState(2);
   const [err, setErr] = useState("");
   const layouts = q.data?.layouts || [];
+  const layoutCounts = Array.from(new Set([1, 2, 3, 4, ...layouts.map((l: any) => Number(l.photo_count))]))
+    .filter((count) => Number.isFinite(count) && count > 0)
+    .sort((a, b) => a - b);
+  const layoutGroups = layoutCounts.map((photoCount) => ({
+    photoCount,
+    items: layouts.filter((l: any) => Number(l.photo_count) === photoCount),
+  }));
 
   const toggle = async (l: any) => { await api.adminUpdateLayout(l.id, { name: l.name, photo_count: l.photo_count, positions: l.positions, active: !l.active }); q.refetch(); };
   const remove = (l: any) => {
@@ -31,18 +38,29 @@ export default function AdminLayouts() {
 
   return (
     <AdminPage title="Layouts" testID="admin-layouts" refreshing={q.isFetching} onRefresh={q.refetch}>
-      <View style={styles.grid}>
-        {layouts.map((l: any) => (
-          <View key={l.id} style={[styles.card, !l.active && { opacity: 0.55 }]} testID={`layout-card-${l.id}`}>
-            <View style={styles.preview}>
-              {(l.positions || []).map((r: any, i: number) => <View key={i} style={{ position: "absolute", left: r.x * 96, top: r.y * 96, width: r.w * 96, height: r.h * 96, backgroundColor: colors.borderStrong }} />)}
-            </View>
-            <Text style={[s.h2, { marginTop: spacing.sm }]}>{l.name}</Text>
-            <Text style={s.bodyMuted}>{l.photo_count} photo{l.photo_count > 1 ? "s" : ""}</Text>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: spacing.sm }}>
-              <Switch value={!!l.active} onValueChange={() => toggle(l)} trackColor={{ true: colors.brandPrimary }} testID={`layout-active-${l.id}`} />
-              <Pressable onPress={() => remove(l)} hitSlop={8} testID={`layout-delete-${l.id}`}><Feather name="trash-2" size={16} color={colors.error} /></Pressable>
-            </View>
+      <View style={{ gap: spacing.xl }}>
+        {layoutGroups.map((group) => (
+          <View key={group.photoCount} testID={`layout-category-${group.photoCount}`}>
+            <Text style={[s.label, { marginBottom: spacing.sm }]}>{group.photoCount}-PHOTO CATEGORY</Text>
+            {group.items.length ? (
+              <View style={styles.grid}>
+                {group.items.map((l: any) => (
+                  <View key={l.id} style={[styles.card, !l.active && { opacity: 0.55 }]} testID={`layout-card-${l.id}`}>
+                    <View style={styles.preview}>
+                      {(l.positions || []).map((r: any, i: number) => <View key={i} style={{ position: "absolute", left: r.x * 96, top: r.y * 96, width: r.w * 96, height: r.h * 96, backgroundColor: colors.borderStrong }} />)}
+                    </View>
+                    <Text style={[s.h2, { marginTop: spacing.sm }]}>{l.name}</Text>
+                    <Text style={s.bodyMuted}>{l.photo_count} photo{l.photo_count > 1 ? "s" : ""}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: spacing.sm }}>
+                      <Switch value={!!l.active} onValueChange={() => toggle(l)} trackColor={{ true: colors.brandPrimary }} testID={`layout-active-${l.id}`} />
+                      <Pressable onPress={() => remove(l)} hitSlop={8} testID={`layout-delete-${l.id}`}><Feather name="trash-2" size={16} color={colors.error} /></Pressable>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={[s.bodyMuted, { marginBottom: spacing.sm }]}>No layouts in this category yet.</Text>
+            )}
           </View>
         ))}
       </View>
