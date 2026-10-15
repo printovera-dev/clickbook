@@ -289,6 +289,20 @@ async def auto_generate(album_id: str, payload: Optional[GenerateRequest] = None
     photos = album.get("photos", [])
     if not photos:
         raise HTTPException(400, "No photos uploaded")
+
+    # The selected cover is not an interior photo. Resolve the cover consistently
+    # with the existing design/default before creating interior pages.
+    requested_cover_pid = payload.cover_photo_id if payload and payload.cover_photo_id else None
+    if requested_cover_pid and not any(photo["id"] == requested_cover_pid for photo in photos):
+        raise HTTPException(400, "Cover photo not in this album")
+    existing_cover_pid = (album.get("cover_design") or {}).get("photo_id")
+    effective_cover_pid = (
+        requested_cover_pid
+        or (existing_cover_pid if any(photo["id"] == existing_cover_pid for photo in photos) else None)
+        or photos[0]["id"]
+    )
+    interior_photos = [photo for photo in photos if photo["id"] != effective_cover_pid]
+
     layouts = await db.layouts.find({"active": True}, {"_id": 0}).to_list(100)
     # Keep every layout variant inside its 1/2/3/4-photo category; a single dict entry
     # per photo_count would silently discard all but one of the newly seeded mock designs.
@@ -309,12 +323,12 @@ async def auto_generate(album_id: str, payload: Optional[GenerateRequest] = None
     i = 0
     idx = 0
     rhythm = STYLE_RHYTHMS[style]
-    while i < len(photos):
+    while i < len(interior_photos):
         want = rhythm[idx % len(rhythm)]
         chosen = None
         for count in dict.fromkeys((want, 2, 1)):
             variants = layouts_by_count.get(count, [])
-            if count <= (len(photos) - i) and variants:
+            if count <= (len(interior_photos) - i) and variants:
                 cursor = layout_cursor_by_count.get(count, 0)
                 chosen = variants[cursor % len(variants)]
                 layout_cursor_by_count[count] = cursor + 1
@@ -335,8 +349,8 @@ async def auto_generate(album_id: str, payload: Optional[GenerateRequest] = None
             # Freeze the exact slot geometry into the page: frontend preview/editor and
             # production PDF must use the same mock-layout coordinates.
             "slots": chosen.get("positions") if chosen else None,
-            "photo_ids": [photos[i + k]["id"] for k in range(count)],
-            "images": {str(k): {"photo_id": photos[i + k]["id"], **default_transform()} for k in range(count)},
+            "photo_ids": [interior_photos[i + k]["id"] for k in range(count)],
+            "images": {str(k): {"photo_id": interior_photos[i + k]["id"], **default_transform()} for k in range(count)},
             "texts": [],
             "background": default_bg,
             "text": "",
@@ -346,14 +360,11 @@ async def auto_generate(album_id: str, payload: Optional[GenerateRequest] = None
         idx += 1
 
     extra = {"design_style": style}
-    cover_pid = payload.cover_photo_id if payload and payload.cover_photo_id else None
-    if cover_pid and not any(p["id"] == cover_pid for p in photos):
-        raise HTTPException(400, "Cover photo not in this album")
     if not album.get("cover_design"):
         cover_style = (album.get("cover_snapshot") or {}).get("style") or "signature"
-        extra["cover_design"] = default_cover_design(cover_style, cover_pid or photos[0]["id"], album.get("name", "My Album"))
-    elif cover_pid:
-        extra["cover_design"] = {**album["cover_design"], "photo_id": cover_pid, "image": default_transform()}
+        extra["cover_design"] = default_cover_design(cover_style, effective_cover_pid, album.get("name", "My Album"))
+    elif requested_cover_pid:
+        extra["cover_design"] = {**album["cover_design"], "photo_id": requested_cover_pid, "image": default_transform()}
     # Minimum-sheet rule (2 pages per sheet): never present an under-filled design as ready.
     settings = await get_settings_doc()
     min_sheets = int(settings.get("min_sheets", 20))
@@ -364,10 +375,10 @@ async def auto_generate(album_id: str, payload: Optional[GenerateRequest] = None
         raise HTTPException(status_code=422, detail={
             "code": "insufficient_photos",
             "message": f"A ClickBook needs at least {min_sheets} sheets ({required_pages} pages). "
-                       f"Your {len(photos)} photos fill {len(pages)} pages in the {style.title()} style — "
+                       f"Your {len(interior_photos)} interior photos fill {len(pages)} pages in the {style.title()} style — "
                        f"please add about {need_more} more photos.",
             "pages": len(pages), "required_pages": required_pages, "min_sheets": min_sheets,
-            "photos": len(photos), "need_more": need_more, "style": style,
+            "photos": len(interior_photos), "uploaded_photos": len(photos), "cover_photo_id": effective_cover_pid, "need_more": need_more, "style": style,
         })
     return {"album": await _save_design(album, pages, "auto", extra)}
 
