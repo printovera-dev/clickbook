@@ -2,6 +2,7 @@
 import os
 from core import db, now_iso, new_id, hash_password
 from design import COVER_STYLES
+from mock_layouts import MOCK_LAYOUTS
 
 
 async def seed():
@@ -37,6 +38,28 @@ async def seed():
               for n, (name, pos) in layouts.items() if n not in existing]
     if to_add:
         await db.layouts.insert_many(to_add)
+
+    # Seed the supplied 8x8 mock layouts by name so this runs safely on existing databases.
+    # Existing one-photo layouts remain category 1; these mock references add 2-, 3- and 4-photo variants.
+    existing_layout_names = {
+        item["name"] for item in await db.layouts.find({}, {"_id": 0, "name": 1}).to_list(500)
+        if item.get("name")
+    }
+    mock_layouts_to_add = [
+        {
+            "id": new_id(),
+            "name": layout["name"],
+            "photo_count": layout["photo_count"],
+            "positions": layout["positions"],
+            "active": layout.get("active", True),
+            "created_at": now_iso(),
+            "source": "mock_design_v1",
+        }
+        for layout in MOCK_LAYOUTS
+        if layout["name"] not in existing_layout_names
+    ]
+    if mock_layouts_to_add:
+        await db.layouts.insert_many(mock_layouts_to_add)
     if await db.backgrounds.count_documents({}) == 0:
         await db.backgrounds.insert_many([
             {"id": new_id(), "name": "Ivory", "color": "#FAFAF8", "active": True},
