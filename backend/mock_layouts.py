@@ -1,4 +1,4 @@
-"""Built-in 8x8 album photo-slot layouts traced from the supplied mock pages.
+"""Built-in 8x8 album photo-slot layouts approximated from supplied mock pages.
 
 Coordinates are normalized to the full square page. These are geometry templates,
 not fixed-image backgrounds, so customer photos remain the images rendered/printed.
