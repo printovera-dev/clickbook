@@ -26,6 +26,8 @@ export default function UploadStep() {
   const [savingOrder, setSavingOrder] = useState(false);
   const [hoveredQualityId, setHoveredQualityId] = useState<string | null>(null);
   const [draggedPhotoId, setDraggedPhotoId] = useState<string | null>(null);
+  const draggedPhotoIdRef = useRef<string | null>(null);
+  const dropIndexRef = useRef<number | null>(null);
   const [err, setErr] = useState("");
   const hintTimer = useRef<any>(null);
   const qualityBlink = useRef(new Animated.Value(1)).current;
@@ -180,6 +182,31 @@ export default function UploadStep() {
     }
   }, [albumId, q, qc, registerActivity]);
 
+  // Use pointer events instead of HTML5 drag-and-drop: React Native Web doesn't
+  // consistently forward native draggable/drop events from a View.
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+    const finishPointerDrag = () => {
+      const photoId = draggedPhotoIdRef.current;
+      const targetIndex = dropIndexRef.current;
+      draggedPhotoIdRef.current = null;
+      dropIndexRef.current = null;
+      setDraggedPhotoId(null);
+      if (photoId && targetIndex !== null) void movePhotoTo(photoId, targetIndex);
+    };
+    const cancelPointerDrag = () => {
+      draggedPhotoIdRef.current = null;
+      dropIndexRef.current = null;
+      setDraggedPhotoId(null);
+    };
+    window.addEventListener("pointerup", finishPointerDrag);
+    window.addEventListener("pointercancel", cancelPointerDrag);
+    return () => {
+      window.removeEventListener("pointerup", finishPointerDrag);
+      window.removeEventListener("pointercancel", cancelPointerDrag);
+    };
+  }, [movePhotoTo]);
+
   const movePhoto = useCallback(async (photoId: string, delta: number) => {
     const current: any[] = q.data?.album?.photos || [];
     const from = current.findIndex((p) => p.id === photoId);
@@ -218,29 +245,21 @@ export default function UploadStep() {
         pointerEvents="auto"
         onTouchStart={registerActivity}
         {...({
-          onPointerEnter: () => { registerActivity(); if (needsAttention && actual.id) setHoveredQualityId(actual.id); },
+          onPointerEnter: () => {
+            registerActivity();
+            if (needsAttention && actual.id) setHoveredQualityId(actual.id);
+            if (draggedPhotoIdRef.current && canReorder) dropIndexRef.current = index;
+          },
           onPointerLeave: () => setHoveredQualityId(null),
           ...(Platform.OS === "web" && canReorder ? {
-            draggable: true,
-            onDragStart: (event: any) => {
+            onPointerDown: (event: any) => {
+              if (event.button !== undefined && event.button !== 0) return;
               registerActivity();
+              draggedPhotoIdRef.current = actual.id;
+              dropIndexRef.current = index;
               setDraggedPhotoId(actual.id);
-              try {
-                event.dataTransfer?.setData("text/plain", actual.id);
-                if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
-              } catch {}
-            },
-            onDragOver: (event: any) => {
               event.preventDefault?.();
-              if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
             },
-            onDrop: (event: any) => {
-              event.preventDefault?.();
-              const draggedId = draggedPhotoId || event.dataTransfer?.getData("text/plain");
-              if (draggedId && draggedId !== actual.id) void movePhotoTo(draggedId, index);
-              setDraggedPhotoId(null);
-            },
-            onDragEnd: () => setDraggedPhotoId(null),
           } : {}),
         } as any)}
       >
