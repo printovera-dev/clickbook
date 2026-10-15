@@ -98,7 +98,7 @@ def render_page(page: dict, photos_by_id: dict, layouts_by_id: dict, size_px: in
     canvas = Image.new("RGB", (size_px, size_px), _color(page.get("background"), "#FFFFFF"))
     photo_ids = page.get("photo_ids", [])
     layout = layouts_by_id.get(page.get("layout_id"))
-    positions = (layout or {}).get("positions") or DEFAULT_POSITIONS.get(len(photo_ids)) or DEFAULT_POSITIONS[1]
+    positions = page.get("slots") or (layout or {}).get("positions") or DEFAULT_POSITIONS.get(len(photo_ids)) or DEFAULT_POSITIONS[1]
     images = page.get("images") or {}
     for i, pid in enumerate(photo_ids[: len(positions)]):
         photo = photos_by_id.get(pid)
