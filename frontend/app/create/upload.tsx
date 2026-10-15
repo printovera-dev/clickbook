@@ -12,7 +12,7 @@ import Feather from "@react-native-vector-icons/feather";
 
 const COLS = 3;
 const GAP = spacing.sm;
-const SUPPORTED_IMAGE_EXTENSION = /\\.(jpe?g|png|webp|heic|heif)$/i;
+const SUPPORTED_IMAGE_EXTENSION = /\.(jpe?g|png|webp|heic|heif)$/i;
 
 async function filesFromDroppedEntry(entry: any): Promise<any[]> {
   if (!entry) return [];
