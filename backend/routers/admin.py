@@ -418,7 +418,17 @@ async def create_cover(payload: CoverIn, admin: dict = Depends(get_current_admin
 
 @router.put("/covers/{cover_id}")
 async def update_cover(cover_id: str, payload: CoverIn, admin: dict = Depends(get_current_admin)):
-    await db.covers.update_one({"id": cover_id}, {"$set": payload.dict()})
+    existing = await db.covers.find_one({"id": cover_id}, {"_id": 0, "id": 1})
+    if not existing:
+        raise HTTPException(404, "Cover not found")
+
+    # The admin form does not edit the built-in style key. Exclude omitted
+    # fields so editing a cover's title/image/order cannot clear its style to
+    # null and cause the startup seeder to recreate it as a duplicate.
+    update = payload.dict(exclude_unset=True)
+    if not update:
+        return {"success": True}
+    await db.covers.update_one({"id": cover_id}, {"$set": update})
     return {"success": True}
 
 
