@@ -50,6 +50,28 @@ export default function Home() {
   const pricing = home.data?.pricing;
   const t = c?.texts || {};
   const hero = (key: string) => c?.heroes?.find((h: any) => h.key === key)?.image_url;
+
+  // Warm the next home-page media in the disk cache after the initial view has had
+  // time to paint. Slider 2 and the privacy/final hero artwork appear below the video
+  // cards, where waiting until each section mounts makes scroll-down feel stalled.
+  useEffect(() => {
+    if (!c) return;
+    const slider2Images = (c.sliders?.slider2?.slides || []).map((slide: any) => slide.image_url);
+    const belowVideoHeroes = (c.heroes || [])
+      .filter((item: any) => item.key === "privacy" || item.key === "final")
+      .map((item: any) => item.image_url);
+    const urls = [...new Set([...slider2Images, ...belowVideoHeroes]
+      .filter((url): url is string => typeof url === "string" && url.length > 0)
+      .map((url) => fileUrl(url))
+      .filter((url): url is string => typeof url === "string" && url.length > 0))];
+    if (!urls.length) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      void Image.prefetch(urls, "disk").catch(() => false);
+    }, 1100);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [c]);
   const drafts = (albums.data?.albums || []).filter((a: any) => a.state === "draft" && a.is_complete);
   const activeOrder = (orders.data?.orders || []).find((o: any) => ["processing", "printing", "packaging", "out_for_delivery"].includes(o.production_status));
   const unread = notifs.data?.unread_count || 0;
@@ -224,8 +246,9 @@ export default function Home() {
         keyExtractor={(s) => s.key}
         renderItem={({ item }) => <View style={{ marginTop: spacing.xl }}>{item.render()}</View>}
         initialNumToRender={3}
-        maxToRenderPerBatch={2}
-        windowSize={3}
+        maxToRenderPerBatch={3}
+        updateCellsBatchingPeriod={50}
+        windowSize={5}
         onScrollToIndexFailed={() => {}}
         contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xxl, width: "100%", maxWidth: MAX_CONTENT_W, alignSelf: "center" }}
         refreshControl={<RefreshControl refreshing={home.isFetching} onRefresh={() => { home.refetch(); albums.refetch(); orders.refetch(); }} tintColor={colors.homePink} />}
