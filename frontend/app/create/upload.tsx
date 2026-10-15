@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList, useWindowDimensions, Platform, Image } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -10,7 +10,6 @@ import { Button, s } from "@/src/ui";
 import { colors, spacing, radius, fonts } from "@/src/theme";
 import Feather from "@react-native-vector-icons/feather";
 
-const COLS = 3;
 const GAP = spacing.sm;
 const SUPPORTED_IMAGE_EXTENSION = /\.(jpe?g|png|webp|heic|heif)$/i;
 
@@ -60,7 +59,18 @@ export default function UploadStep() {
   const router = useRouter();
   const qc = useQueryClient();
   const { width } = useWindowDimensions();
-  const cell = Math.floor((width - spacing.xl * 2 - GAP * (COLS - 1)) / COLS);
+  const maxColumns = width >= 1450 ? 12 : width >= 1250 ? 10 : width >= 1000 ? 8 : 6;
+  const minColumns = 2;
+  const initialColumns = width >= 1400 ? 7 : width >= 1100 ? 6 : width >= 760 ? 5 : 3;
+  const [gridColumns, setGridColumns] = useState(initialColumns);
+  const columns = Math.max(minColumns, Math.min(gridColumns, maxColumns));
+  const cell = Math.floor((width - spacing.xl * 2 - GAP * (columns - 1)) / columns);
+  const [zoomTrackWidth, setZoomTrackWidth] = useState(160);
+  const setZoomFromEvent = useCallback((event: any) => {
+    const locationX = Number(event?.nativeEvent?.locationX ?? 0);
+    const ratio = Math.max(0, Math.min(1, locationX / Math.max(1, zoomTrackWidth)));
+    setGridColumns(minColumns + Math.round(ratio * (maxColumns - minColumns)));
+  }, [maxColumns, zoomTrackWidth]);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [localPreviews, setLocalPreviews] = useState<any[]>([]);
   const [hintVisible, setHintVisible] = useState(true);
@@ -73,6 +83,16 @@ export default function UploadStep() {
   const dropzoneNode = useRef<any>(null);
   const dropzoneHandlers = useRef<any>(null);
   const uploadAssetsRef = useRef<(assets: any[]) => Promise<void>>(async () => {});
+  const gridListRef = useRef<any>(null);
+  const gridScrollOffset = useRef(0);
+  const previousColumns = useRef(columns);
+  const restoreGridScroll = useRef(false);
+  useEffect(() => {
+    if (previousColumns.current !== columns) {
+      previousColumns.current = columns;
+      restoreGridScroll.current = true;
+    }
+  }, [columns]);
 
   const registerActivity = useCallback(() => {
     setHintVisible(false);
@@ -322,7 +342,7 @@ export default function UploadStep() {
 
   const uploading = !!progress;
 
-  const renderItem = useCallback(({ item: p, index }: { item: any; index: number }) => {
+  const renderPhoto = useCallback((p: any, index: number) => {
     const completedPhoto = p.completedPhoto;
     const actual = completedPhoto || p;
     const ready = !!actual.id && !!actual.thumbnail_url && !p.pending;
@@ -379,7 +399,7 @@ export default function UploadStep() {
     return (
       <View
         ref={attachNativeDrag}
-        style={{ width: cell, height: cell, marginLeft: index % COLS === 0 ? 0 : GAP, marginBottom: GAP, cursor: canReorder && Platform.OS === "web" ? "grab" as any : "default" as any }}
+        style={{ width: cell, height: cell, marginLeft: index % columns === 0 ? 0 : GAP, marginBottom: GAP, cursor: canReorder && Platform.OS === "web" ? "grab" as any : "default" as any }}
         testID={ready ? `upload-photo-${actual.id}` : localPreview ? `upload-local-preview-${index}` : `upload-pending-${index}`}
         pointerEvents="auto"
         onTouchStart={registerActivity}
@@ -408,18 +428,37 @@ export default function UploadStep() {
         ) : null}
         {canReorder ? (
           <View style={styles.reorderControls}>
-            <Pressable disabled={index < COLS} onPress={() => movePhoto(actual.id, -COLS)} style={styles.reorderButton} accessibilityLabel="Move photo up"><Feather name="chevron-up" size={14} color="#FFF" /></Pressable>
-            <Pressable disabled={index % COLS === 0} onPress={() => movePhoto(actual.id, -1)} style={styles.reorderButton} accessibilityLabel="Move photo left"><Feather name="chevron-left" size={14} color="#FFF" /></Pressable>
-            <Pressable disabled={index % COLS === COLS - 1 || index === photos.length - 1} onPress={() => movePhoto(actual.id, 1)} style={styles.reorderButton} accessibilityLabel="Move photo right"><Feather name="chevron-right" size={14} color="#FFF" /></Pressable>
-            <Pressable disabled={index + COLS >= photos.length} onPress={() => movePhoto(actual.id, COLS)} style={styles.reorderButton} accessibilityLabel="Move photo down"><Feather name="chevron-down" size={14} color="#FFF" /></Pressable>
+            <Pressable disabled={index < columns} onPress={() => movePhoto(actual.id, -columns)} style={styles.reorderButton} accessibilityLabel="Move photo up"><Feather name="chevron-up" size={14} color="#FFF" /></Pressable>
+            <Pressable disabled={index % columns === 0} onPress={() => movePhoto(actual.id, -1)} style={styles.reorderButton} accessibilityLabel="Move photo left"><Feather name="chevron-left" size={14} color="#FFF" /></Pressable>
+            <Pressable disabled={index % columns === columns - 1 || index === photos.length - 1} onPress={() => movePhoto(actual.id, 1)} style={styles.reorderButton} accessibilityLabel="Move photo right"><Feather name="chevron-right" size={14} color="#FFF" /></Pressable>
+            <Pressable disabled={index + columns >= photos.length} onPress={() => movePhoto(actual.id, columns)} style={styles.reorderButton} accessibilityLabel="Move photo down"><Feather name="chevron-down" size={14} color="#FFF" /></Pressable>
           </View>
         ) : null}
       </View>
     );
-  }, [cell, movePhoto, movePhotoTo, photos.length, registerActivity, removePhoto, uploading]);
+  }, [cell, columns, movePhoto, movePhotoTo, photos.length, registerActivity, removePhoto, uploading]);
 
 
   const gridData = [...photos, ...localPreviews];
+  const gridRows = Array.from({ length: Math.ceil(gridData.length / columns) }, (_, rowIndex) => {
+    const startIndex = rowIndex * columns;
+    const items = gridData.slice(startIndex, startIndex + columns).map((item, offset) => ({
+      item, index: startIndex + offset,
+    }));
+    return {
+      key: items.map(({ item, index }) => String(item.id || item.key || index)).join("|"),
+      items,
+    };
+  });
+  const renderRow = useCallback(({ item: row }: { item: any }) => (
+    <View style={{ flexDirection: "row" }}>
+      {row.items.map(({ item, index }: any) => (
+        <Fragment key={String(item.id || item.key || index)}>
+          {renderPhoto(item, index)}
+        </Fragment>
+      ))}
+    </View>
+  ), [renderPhoto]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface, paddingTop: insets.top }}>
@@ -430,17 +469,26 @@ export default function UploadStep() {
       </View>
       <View style={{ flex: 1 }} {...({ onPointerMove: registerActivity } as any)}>
       <FlatList
+        ref={gridListRef as any}
         testID="upload-photo-grid"
-        data={gridData}
-        keyExtractor={(p: any) => p.id || p.key}
-        numColumns={COLS}
-        renderItem={renderItem}
-        // virtualization: only ~2 screens of thumbnails are mounted; off-screen rows are released
-        initialNumToRender={12}
-        maxToRenderPerBatch={9}
-        windowSize={3}
+        data={gridRows}
+        keyExtractor={(row: any) => row.key}
+        numColumns={1}
+        renderItem={renderRow}
+        initialNumToRender={5}
+        maxToRenderPerBatch={4}
+        windowSize={5}
         removeClippedSubviews
-        getItemLayout={(_, index) => ({ length: cell + GAP, offset: (cell + GAP) * Math.floor(index / COLS), index })}
+        getItemLayout={(_, index) => ({ length: cell + GAP, offset: (cell + GAP) * index, index })}
+        onScroll={(event: any) => { gridScrollOffset.current = event.nativeEvent.contentOffset.y; }}
+        scrollEventThrottle={100}
+        onContentSizeChange={() => {
+          if (restoreGridScroll.current) {
+            restoreGridScroll.current = false;
+            const offset = gridScrollOffset.current;
+            requestAnimationFrame(() => gridListRef.current?.scrollToOffset({ offset, animated: false }));
+          }
+        }}
         contentContainerStyle={{ padding: spacing.xl, paddingBottom: 140 }}
         ListHeaderComponent={
           <View>
@@ -471,7 +519,34 @@ export default function UploadStep() {
             </Pressable>
 
             {err ? <Text style={{ color: colors.error, marginTop: spacing.sm }} testID="upload-error">{err}</Text> : null}
-            {photos.length > 0 ? <Text style={[s.label, { marginTop: spacing.xl, marginBottom: spacing.md }]} testID="upload-count">{photos.length} photos</Text> : null}
+            {photos.length > 0 ? (
+              <View style={styles.gridToolbar} testID="upload-grid-toolbar">
+                <Text style={s.label} testID="upload-count">{photos.length} photos</Text>
+                <View style={styles.zoomControls}>
+                  <Text style={styles.zoomLabel}>Grid size</Text>
+                  <Pressable testID="upload-grid-zoom-out" accessibilityLabel="Show fewer, larger thumbnails"
+                    disabled={columns <= minColumns} onPress={() => setGridColumns(Math.max(minColumns, columns - 1))}
+                    style={[styles.zoomStepButton, columns <= minColumns && styles.zoomStepButtonDisabled]}>
+                    <Feather name="minus" size={16} color={colors.onSurface} />
+                  </Pressable>
+                  <View testID="upload-grid-zoom-slider" accessibilityLabel={"Grid size, " + columns + " columns"}
+                    onLayout={(event: any) => setZoomTrackWidth(Math.max(1, event.nativeEvent.layout.width))}
+                    onStartShouldSetResponder={() => true} onMoveShouldSetResponder={() => true}
+                    onResponderGrant={setZoomFromEvent} onResponderMove={setZoomFromEvent}
+                    onResponderRelease={setZoomFromEvent} style={styles.zoomSlider}>
+                    <View pointerEvents="none" style={styles.zoomTrack} />
+                    <View pointerEvents="none" style={[styles.zoomTrackActive, { width: (columns - minColumns) / Math.max(1, maxColumns - minColumns) * 100 + "%" }]} />
+                    <View pointerEvents="none" style={[styles.zoomThumb, { left: (columns - minColumns) / Math.max(1, maxColumns - minColumns) * 100 + "%" }]} />
+                  </View>
+                  <Pressable testID="upload-grid-zoom-in" accessibilityLabel="Show more, smaller thumbnails"
+                    disabled={columns >= maxColumns} onPress={() => setGridColumns(Math.min(maxColumns, columns + 1))}
+                    style={[styles.zoomStepButton, columns >= maxColumns && styles.zoomStepButtonDisabled]}>
+                    <Feather name="plus" size={16} color={colors.onSurface} />
+                  </Pressable>
+                  <Text style={styles.zoomValue}>{columns} columns</Text>
+                </View>
+              </View>
+            ) : null}
           </View>
         }
       />
@@ -491,6 +566,16 @@ export default function UploadStep() {
 const styles = StyleSheet.create({
   topbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: spacing.xl },
   notice: { marginTop: spacing.md, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.brandTertiary, borderWidth: 1, borderColor: colors.brandSecondary },
+  gridToolbar: { marginTop: spacing.xl, marginBottom: spacing.md, gap: spacing.sm },
+  zoomControls: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" },
+  zoomLabel: { fontFamily: fonts.text, fontSize: 12, color: colors.onSurfaceMuted },
+  zoomStepButton: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border },
+  zoomStepButtonDisabled: { opacity: 0.35 },
+  zoomSlider: { width: 160, height: 30, justifyContent: "center" },
+  zoomTrack: { position: "absolute", left: 0, right: 0, top: 13, height: 4, borderRadius: 2, backgroundColor: colors.borderStrong },
+  zoomTrackActive: { position: "absolute", left: 0, top: 13, height: 4, borderRadius: 2, backgroundColor: colors.brandPrimary },
+  zoomThumb: { position: "absolute", top: 7, width: 16, height: 16, marginLeft: -8, borderRadius: 8, borderWidth: 2, borderColor: colors.brandPrimary, backgroundColor: colors.surface },
+  zoomValue: { minWidth: 62, fontFamily: fonts.text, fontSize: 12, color: colors.onSurfaceMuted },
   dropzoneDragging: { borderColor: colors.brandPrimary, backgroundColor: colors.surfaceTertiary },
   dropzone: {
     marginTop: spacing.xl,
