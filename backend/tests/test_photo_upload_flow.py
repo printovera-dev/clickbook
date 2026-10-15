@@ -116,7 +116,10 @@ class TestPhotoUploadFlow:
         album = r.json()["album"]
         assert len(album["pages"]) > 0, "pages empty after auto-generate"
         all_ids = {pid for page in album["pages"] for pid in page.get("photo_ids", [])}
-        assert all(pid in all_ids for pid in self.state["photo_ids"]), "not all uploaded photos placed on pages"
+        cover_photo_id = (album.get("cover_design") or {}).get("photo_id") or self.state["photo_ids"][0]
+        expected_interior_ids = set(self.state["photo_ids"]) - {cover_photo_id}
+        assert expected_interior_ids <= all_ids, "an interior photo was omitted from generated pages"
+        assert cover_photo_id not in all_ids, "the cover photo must not be repeated in the interior pages"
         self.state["album_final"] = album
 
     def test_09_get_album_after_generate_still_has_three_photos(self):
