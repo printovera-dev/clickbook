@@ -26,8 +26,6 @@ export default function UploadStep() {
   const [savingOrder, setSavingOrder] = useState(false);
   const [hoveredQualityId, setHoveredQualityId] = useState<string | null>(null);
   const [draggedPhotoId, setDraggedPhotoId] = useState<string | null>(null);
-  const draggedPhotoIdRef = useRef<string | null>(null);
-  const dropIndexRef = useRef<number | null>(null);
   const [err, setErr] = useState("");
   const hintTimer = useRef<any>(null);
   const qualityBlink = useRef(new Animated.Value(1)).current;
@@ -182,30 +180,7 @@ export default function UploadStep() {
     }
   }, [albumId, q, qc, registerActivity]);
 
-  // Use pointer events instead of HTML5 drag-and-drop: React Native Web doesn't
-  // consistently forward native draggable/drop events from a View.
-  useEffect(() => {
-    if (Platform.OS !== "web" || typeof window === "undefined") return;
-    const finishPointerDrag = () => {
-      const photoId = draggedPhotoIdRef.current;
-      const targetIndex = dropIndexRef.current;
-      draggedPhotoIdRef.current = null;
-      dropIndexRef.current = null;
-      setDraggedPhotoId(null);
-      if (photoId && targetIndex !== null) void movePhotoTo(photoId, targetIndex);
-    };
-    const cancelPointerDrag = () => {
-      draggedPhotoIdRef.current = null;
-      dropIndexRef.current = null;
-      setDraggedPhotoId(null);
-    };
-    window.addEventListener("pointerup", finishPointerDrag);
-    window.addEventListener("pointercancel", cancelPointerDrag);
-    return () => {
-      window.removeEventListener("pointerup", finishPointerDrag);
-      window.removeEventListener("pointercancel", cancelPointerDrag);
-    };
-  }, [movePhotoTo]);
+
 
   const movePhoto = useCallback(async (photoId: string, delta: number) => {
     const current: any[] = q.data?.album?.photos || [];
@@ -238,31 +213,72 @@ export default function UploadStep() {
     const canReorder = ready && !uploading;
     const sizeBytes = Number(actual.size_bytes ?? actual.fileSize ?? p.size_bytes ?? 0);
     const needsAttention = sizeBytes > 0 && sizeBytes < 70 * 1024;
+    // Use native HTML drag-and-drop only (no pointer/mouse tracking for reordering).
+    // Attach listeners to the DOM element emitted by React Native Web.
+    let attachedNode: any = null;
+    const attachNativeDrag = (node: any) => {
+      const cleanup = (element: any) => {
+        const handlers = element?.__clickbookDragHandlers;
+        if (!handlers) return;
+        element.removeEventListener("dragstart", handlers.start);
+        element.removeEventListener("dragover", handlers.over);
+        element.removeEventListener("drop", handlers.drop);
+        element.removeEventListener("dragend", handlers.end);
+        delete element.__clickbookDragHandlers;
+        element.draggable = false;
+      };
+      if (attachedNode) cleanup(attachedNode);
+      attachedNode = node;
+      if (Platform.OS !== "web" || !node || !canReorder || !actual.id || typeof node.addEventListener !== "function") return;
+
+      node.draggable = true;
+      node.setAttribute("data-photo-id", actual.id);
+      node.setAttribute("data-photo-index", String(index));
+      node.style.cursor = "grab";
+
+      const start = (event: any) => {
+        if ((event.target as any)?.closest?.('button, [role="button"]')) {
+          event.preventDefault();
+          return;
+        }
+        registerActivity();
+        setDraggedPhotoId(actual.id);
+        try {
+          event.dataTransfer?.setData("text/plain", actual.id);
+          if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+        } catch {}
+      };
+      const over = (event: any) => {
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+      };
+      const drop = (event: any) => {
+        event.preventDefault();
+        const draggedId = event.dataTransfer?.getData("text/plain");
+        if (draggedId && draggedId !== actual.id) void movePhotoTo(draggedId, index);
+      };
+      const end = () => setDraggedPhotoId(null);
+
+      node.addEventListener("dragstart", start);
+      node.addEventListener("dragover", over);
+      node.addEventListener("drop", drop);
+      node.addEventListener("dragend", end);
+      node.__clickbookDragHandlers = { start, over, drop, end };
+    };
+
     return (
       <View
-        style={{ width: cell, height: cell, marginLeft: index % COLS === 0 ? 0 : GAP, marginBottom: GAP, opacity: draggedPhotoId === actual.id ? 0.55 : 1 }}
+        ref={attachNativeDrag}
+        style={{ width: cell, height: cell, marginLeft: index % COLS === 0 ? 0 : GAP, marginBottom: GAP, opacity: draggedPhotoId === actual.id ? 0.55 : 1, cursor: canReorder && Platform.OS === "web" ? "grab" as any : "default" as any }}
         testID={ready ? `upload-photo-${actual.id}` : localPreview ? `upload-local-preview-${index}` : `upload-pending-${index}`}
         pointerEvents="auto"
         onTouchStart={registerActivity}
         {...({
-          onPointerEnter: () => {
+          onMouseEnter: () => {
             registerActivity();
             if (needsAttention && actual.id) setHoveredQualityId(actual.id);
-            if (draggedPhotoIdRef.current && canReorder) dropIndexRef.current = index;
           },
-          onPointerLeave: () => setHoveredQualityId(null),
-          ...(Platform.OS === "web" && canReorder ? {
-            onPointerDown: (event: any) => {
-              if (event.button !== undefined && event.button !== 0) return;
-              // Keep the existing remove and arrow buttons clickable, not drag handles.
-              if (event.target?.closest?.('button, [role="button"]')) return;
-              registerActivity();
-              draggedPhotoIdRef.current = actual.id;
-              dropIndexRef.current = index;
-              setDraggedPhotoId(actual.id);
-              event.preventDefault?.();
-            },
-          } : {}),
+          onMouseLeave: () => setHoveredQualityId(null),
         } as any)}
       >
         {ready ? <Thumb uri={actual.thumbnail_url} recyclingKey={actual.id} style={styles.thumb} /> : localPreview ? (
