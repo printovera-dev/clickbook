@@ -24,7 +24,7 @@ def _encode(img: Image.Image, max_side: int, quality: int, fmt: str = "JPEG", sh
     out.thumbnail((max_side, max_side), Image.LANCZOS)
     if sharpen:
         # Gentle output sharpening improves print crispness; it cannot restore detail
-        # from a genuinely out-of-focus source, which is flagged separately below.
+        # from a genuinely out-of-focus source.
         out = out.filter(ImageFilter.UnsharpMask(radius=1.2, percent=115, threshold=3))
     buf = io.BytesIO()
     if fmt == "WEBP":
@@ -52,6 +52,12 @@ def make_derivatives(data: bytes) -> dict:
     except Exception as e:
         raise ValueError(f"Not a valid image: {e}")
     w, h = img.size
+    # Every generated derivative is capped at PRINT_MAX (3000px). Downsample the
+    # working copy once before enhancement so full-resolution camera files do not
+    # create several huge in-memory copies during each upload. The untouched original
+    # is already stored separately in S3 and remains available for future reprocessing.
+    img.thumbnail((PRINT_MAX, PRINT_MAX), Image.Resampling.LANCZOS)
+
     # Gentle non-destructive auto-enhancement for generated previews/print derivatives.
     # The uploaded original remains untouched for the customer.
     enhanced = ImageOps.autocontrast(img, cutoff=0.3)
