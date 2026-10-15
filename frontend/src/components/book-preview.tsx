@@ -30,9 +30,14 @@ export function BookPreview({
   const home = useQuery({ queryKey: ["home"], queryFn: () => api.homeContent(), staleTime: 5 * 60 * 1000 });
   const lastPageUrl = fileUrl(home.data?.content?.last_page_url || "/api/files/home/last-page.webp");
 
-  // Faces in reading order: cover, p1..pn, (blank filler), back cover (fixed ClickBook artwork). Leaf i = faces[2i] (front) + faces[2i+1] (back).
+  // Faces in reading order: front cover, blank inside-front-cover, interior pages,
+  // optional blank filler, and fixed ClickBook back cover. Leaf i = faces[2i] + faces[2i+1].
   const faces = useMemo<Face[]>(() => {
-    const f: Face[] = [{ kind: "cover" }, ...pages.map((p, i) => ({ kind: "page" as const, page: p, number: i + 1 }))];
+    const f: Face[] = [
+      { kind: "cover" },
+      { kind: "blank" },
+      ...pages.map((p, i) => ({ kind: "page" as const, page: p, number: i + 1 })),
+    ];
     if (f.length % 2 === 0) f.push({ kind: "blank" }); // keep back cover as the back face of the last leaf
     f.push({ kind: "back" });
     return f;
@@ -49,7 +54,7 @@ export function BookPreview({
   // Live-preview sync: when the editor's active page changes, open the book at that spread (no reset to the cover).
   useEffect(() => {
     if (focusPage == null) return;
-    const faceIdx = focusPage === "cover" ? 0 : focusPage + 1;
+    const faceIdx = focusPage === "cover" ? 0 : focusPage + 2;
     const target = faceIdx % 2 === 0 ? faceIdx / 2 : (faceIdx + 1) / 2; // even = right face of leaf f/2, odd = left face
     setFlip(null); activeDir.value = 0; progress.value = 0;
     setTurned(Math.max(0, Math.min(leaves, target)));
