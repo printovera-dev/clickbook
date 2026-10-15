@@ -27,7 +27,11 @@ export default function AlbumPreview() {
     (firstPageIds.length === 0 && storedPages[0].layout_photo_count === 1 && firstPageSlotPhotoId === coverPhotoId)
   );
   const previewPageCount = Math.max(0, storedPages.length - (duplicateCoverPage ? 1 : 0));
-  const previewSheetCount = Math.max(Number(album?.min_sheets || 0), Math.ceil(previewPageCount / 2));
+  // Preserve any minimum-sheet reserve already present on this album while adjusting
+  // the actual interior sheets for the duplicate cover-only page removed from preview.
+  const storedSheetCount = Number(album?.sheets || Math.ceil(storedPages.length / 2));
+  const reservedSheets = Math.max(0, storedSheetCount - Math.ceil(storedPages.length / 2));
+  const previewSheetCount = reservedSheets + Math.ceil(previewPageCount / 2);
   const [selected, setSelected] = useState<number | "cover" | null>(null);
   const goPage = (tool?: string) => selected === "cover"
     ? router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: "cover", ...(tool ? { tool } : {}) } })
