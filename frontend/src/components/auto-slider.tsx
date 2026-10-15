@@ -50,16 +50,17 @@ export function AutoSlider({ slides, intervalMs = 4500, testID, sidePadding = sp
     indexRef.current = n; setIndex(n);
   }, [slides.length, pageW]);
 
-  // Auto-advance only through images; a visible/playing video holds the slider.
+  // Auto-advance across both image and video slides. An idle video slide must
+  // not stall the carousel; pause only while the user is swiping or a video is
+  // actively playing.
   useEffect(() => {
     if (slides.length < 2) return;
     const t = setInterval(() => {
       if (pausedRef.current || videoPlayingRef.current) return;
-      if (slides[indexRef.current]?.type === "video") return;
       go(indexRef.current + 1);
     }, intervalMs);
     return () => clearInterval(t);
-  }, [slides, intervalMs, go]);
+  }, [slides.length, intervalMs, go]);
 
   // Keep the current page aligned after rotation / resize.
   useEffect(() => { scrollRef.current?.scrollTo({ x: indexRef.current * pageW, animated: false }); }, [pageW]);
