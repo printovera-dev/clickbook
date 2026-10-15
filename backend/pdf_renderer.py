@@ -149,29 +149,31 @@ def render_cover(album: dict, photos_by_id: dict, size_px: int = PAGE_PX) -> Ima
     return canvas
 
 
+def _interior_pages_without_duplicate_cover(album: dict) -> list:
+    """Sort interior pages and drop a legacy first page that only repeats the cover."""
+    pages_sorted = sorted(album.get("pages", []), key=lambda p: p.get("order", 0))
+    cover_photo_id = (album.get("cover_design") or {}).get("photo_id")
+    if not pages_sorted or not cover_photo_id:
+        return pages_sorted
+
+    first_page = pages_sorted[0]
+    first_ids = [pid for pid in (first_page.get("photo_ids") or []) if pid]
+    first_slot_photo_id = (first_page.get("images") or {}).get("0", {}).get("photo_id")
+    duplicate_cover_only_page = (
+        len(first_ids) == 1 and first_ids[0] == cover_photo_id
+    ) or (
+        len(first_ids) == 0
+        and int(first_page.get("layout_photo_count") or 0) == 1
+        and first_slot_photo_id == cover_photo_id
+    )
+    return pages_sorted[1:] if duplicate_cover_only_page else pages_sorted
+
+
 def render_frames(album: dict, layouts_by_id: dict, back_cover_bytes: Optional[bytes] = None):
     """Returns (cover_image, [page_images], back_cover_image) at 8x8 in @ 300 dpi.
     The back cover is the fixed ClickBook branding artwork (admin-replaceable)."""
     photos_by_id = {p["id"]: p for p in album.get("photos", [])}
-    pages_sorted = sorted(album.get("pages", []), key=lambda p: p.get("order", 0))
-
-    # Older saved albums may contain the selected cover image again as their first
-    # interior page. Do not print that duplicate. Only skip a single-photo page that
-    # contains exactly the cover image; layouts with multiple photos are untouched.
-    cover_photo_id = (album.get("cover_design") or {}).get("photo_id")
-    if pages_sorted and cover_photo_id:
-        first_page = pages_sorted[0]
-        first_ids = [pid for pid in (first_page.get("photo_ids") or []) if pid]
-        first_slot_photo_id = (first_page.get("images") or {}).get("0", {}).get("photo_id")
-        duplicate_cover_only_page = (
-            len(first_ids) == 1 and first_ids[0] == cover_photo_id
-        ) or (
-            len(first_ids) == 0
-            and int(first_page.get("layout_photo_count") or 0) == 1
-            and first_slot_photo_id == cover_photo_id
-        )
-        if duplicate_cover_only_page:
-            pages_sorted = pages_sorted[1:]
+    pages_sorted = _interior_pages_without_duplicate_cover(album)
 
     cover = render_cover(album, photos_by_id)
     pages = [render_page(p, photos_by_id, layouts_by_id) for p in pages_sorted]
@@ -246,7 +248,7 @@ def render_production_package(album: dict, layouts_by_id: dict, back_cover_bytes
     (Cover/cover.jpg + Cover/back_cover.jpg) + sequential inner page JPEGs.
     Streams page by page: each frame is encoded to JPEG and released before the next one is rendered."""
     photos_by_id = {p["id"]: p for p in album.get("photos", [])}
-    pages_sorted = sorted(album.get("pages", []), key=lambda p: p.get("order", 0))
+    pages_sorted = _interior_pages_without_duplicate_cover(album)
 
     cover_jpg = frame_to_jpeg(render_cover(album, photos_by_id))
     page_jpgs = []
