@@ -18,6 +18,7 @@ type Props = {
   selectedSlot?: number | null;
   selectedText?: string | null;
   onSlotPress?: (slot: number) => void;
+  emptySlotLabel?: string;
   onTextPress?: (id: string) => void;
   hideText?: string | null; // text id being edited inline elsewhere
   onImageDims?: (photoId: string, w: number, h: number) => void;
@@ -25,7 +26,7 @@ type Props = {
 
 export const PageCanvas = memo(PageCanvasImpl);
 
-function PageCanvasImpl({ page, photosById, size, pageNumber, numberSide = "right", selectedSlot, selectedText, onSlotPress, onTextPress, hideText, onImageDims }: Props) {
+function PageCanvasImpl({ page, photosById, size, pageNumber, numberSide = "right", selectedSlot, selectedText, onSlotPress, onTextPress, hideText, onImageDims, emptySlotLabel }: Props) {
   const rects = slotRects(page);
   const [dims, setDims] = useState<Record<string, { w: number; h: number }>>({});
   return (
@@ -65,6 +66,13 @@ function PageCanvasImpl({ page, photosById, size, pageNumber, numberSide = "righ
                 }}
               />
             ) : null}
+            {!pid || !photo ? (
+              emptySlotLabel ? (
+                <View pointerEvents="none" style={styles.emptySlot}>
+                  <Text style={styles.emptySlotText}>{emptySlotLabel}</Text>
+                </View>
+              ) : null
+            ) : null}
             {selected ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.selected]} /> : null}
           </Pressable>
         );
@@ -94,6 +102,8 @@ export function TextBox({ t, size, selected, onPress }: { t: TextObject; size: n
 }
 
 const styles = StyleSheet.create({
+  emptySlot: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border, borderStyle: "dashed", backgroundColor: "#F8F7F4", padding: 4 },
+  emptySlotText: { color: colors.brandPrimary, fontFamily: "Inter-Medium", fontSize: 12, textAlign: "center" },
   pageNum: { position: "absolute", color: colors.muted, fontFamily: "Inter-Regular" },
   selected: { borderWidth: 2, borderColor: colors.brandPrimary },
   selectedText: { borderWidth: 1, borderColor: colors.brandPrimary, borderStyle: "dashed" },
