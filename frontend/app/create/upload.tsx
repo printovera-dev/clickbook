@@ -254,6 +254,8 @@ export default function UploadStep() {
           ...(Platform.OS === "web" && canReorder ? {
             onPointerDown: (event: any) => {
               if (event.button !== undefined && event.button !== 0) return;
+              // Keep the existing remove and arrow buttons clickable, not drag handles.
+              if (event.target?.closest?.('button, [role="button"]')) return;
               registerActivity();
               draggedPhotoIdRef.current = actual.id;
               dropIndexRef.current = index;
