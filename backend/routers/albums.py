@@ -270,8 +270,18 @@ async def auto_generate(album_id: str, payload: Optional[GenerateRequest] = None
     photos = album.get("photos", [])
     if not photos:
         raise HTTPException(400, "No photos uploaded")
-    layouts = await db.layouts.find({"active": True}, {"_id": 0}).to_list(50)
-    layouts_by_count = {l["photo_count"]: l for l in layouts}
+    layouts = await db.layouts.find({"active": True}, {"_id": 0}).to_list(100)
+    # Keep every layout variant inside its 1/2/3/4-photo category; a single dict entry
+    # per photo_count would silently discard all but one of the newly seeded mock designs.
+    layouts_by_count: dict[int, list[dict]] = {}
+    for layout in layouts:
+        count = int(layout.get("photo_count") or 0)
+        if count > 0:
+            layouts_by_count.setdefault(count, []).append(layout)
+    for variants in layouts_by_count.values():
+        variants.sort(key=lambda item: str(item.get("name") or "").casefold())
+    layout_cursor_by_count: dict[int, int] = {}
+
     bgs = await db.backgrounds.find({"active": True}, {"_id": 0}).to_list(100)
     default_bg = bgs[0]["color"] if bgs else "#FFFFFF"
 
@@ -283,15 +293,22 @@ async def auto_generate(album_id: str, payload: Optional[GenerateRequest] = None
     while i < len(photos):
         want = rhythm[idx % len(rhythm)]
         chosen = None
-        for count in (want, 2, 1):
-            if count <= (len(photos) - i) and layouts_by_count.get(count):
-                chosen = layouts_by_count[count]
+        for count in dict.fromkeys((want, 2, 1)):
+            variants = layouts_by_count.get(count, [])
+            if count <= (len(photos) - i) and variants:
+                cursor = layout_cursor_by_count.get(count, 0)
+                chosen = variants[cursor % len(variants)]
+                layout_cursor_by_count[count] = cursor + 1
                 break
         if not chosen:
-            chosen = layouts_by_count.get(1)
+            variants = layouts_by_count.get(1, [])
             count = 1
+            if variants:
+                cursor = layout_cursor_by_count.get(1, 0)
+                chosen = variants[cursor % len(variants)]
+                layout_cursor_by_count[1] = cursor + 1
         else:
-            count = chosen["photo_count"]
+            count = int(chosen["photo_count"])
         pages.append({
             "id": new_id(),
             "layout_id": chosen["id"] if chosen else "",
