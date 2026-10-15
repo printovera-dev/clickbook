@@ -154,6 +154,25 @@ def render_frames(album: dict, layouts_by_id: dict, back_cover_bytes: Optional[b
     The back cover is the fixed ClickBook branding artwork (admin-replaceable)."""
     photos_by_id = {p["id"]: p for p in album.get("photos", [])}
     pages_sorted = sorted(album.get("pages", []), key=lambda p: p.get("order", 0))
+
+    # Older saved albums may contain the selected cover image again as their first
+    # interior page. Do not print that duplicate. Only skip a single-photo page that
+    # contains exactly the cover image; layouts with multiple photos are untouched.
+    cover_photo_id = (album.get("cover_design") or {}).get("photo_id")
+    if pages_sorted and cover_photo_id:
+        first_page = pages_sorted[0]
+        first_ids = [pid for pid in (first_page.get("photo_ids") or []) if pid]
+        first_slot_photo_id = (first_page.get("images") or {}).get("0", {}).get("photo_id")
+        duplicate_cover_only_page = (
+            len(first_ids) == 1 and first_ids[0] == cover_photo_id
+        ) or (
+            len(first_ids) == 0
+            and int(first_page.get("layout_photo_count") or 0) == 1
+            and first_slot_photo_id == cover_photo_id
+        )
+        if duplicate_cover_only_page:
+            pages_sorted = pages_sorted[1:]
+
     cover = render_cover(album, photos_by_id)
     pages = [render_page(p, photos_by_id, layouts_by_id) for p in pages_sorted]
     back = _load_last_page(PAGE_PX, back_cover_bytes)
