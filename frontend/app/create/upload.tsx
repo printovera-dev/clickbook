@@ -25,7 +25,6 @@ export default function UploadStep() {
   const [hintVisible, setHintVisible] = useState(true);
   const [savingOrder, setSavingOrder] = useState(false);
   const [hoveredQualityId, setHoveredQualityId] = useState<string | null>(null);
-  const [draggedPhotoId, setDraggedPhotoId] = useState<string | null>(null);
   const [err, setErr] = useState("");
   const hintTimer = useRef<any>(null);
   const qualityBlink = useRef(new Animated.Value(1)).current;
@@ -242,7 +241,6 @@ export default function UploadStep() {
           return;
         }
         registerActivity();
-        setDraggedPhotoId(actual.id);
         try {
           event.dataTransfer?.setData("text/plain", actual.id);
           if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
@@ -257,7 +255,7 @@ export default function UploadStep() {
         const draggedId = event.dataTransfer?.getData("text/plain");
         if (draggedId && draggedId !== actual.id) void movePhotoTo(draggedId, index);
       };
-      const end = () => setDraggedPhotoId(null);
+      const end = () => {};
 
       node.addEventListener("dragstart", start);
       node.addEventListener("dragover", over);
@@ -269,7 +267,7 @@ export default function UploadStep() {
     return (
       <View
         ref={attachNativeDrag}
-        style={{ width: cell, height: cell, marginLeft: index % COLS === 0 ? 0 : GAP, marginBottom: GAP, opacity: draggedPhotoId === actual.id ? 0.55 : 1, cursor: canReorder && Platform.OS === "web" ? "grab" as any : "default" as any }}
+        style={{ width: cell, height: cell, marginLeft: index % COLS === 0 ? 0 : GAP, marginBottom: GAP, cursor: canReorder && Platform.OS === "web" ? "grab" as any : "default" as any }}
         testID={ready ? `upload-photo-${actual.id}` : localPreview ? `upload-local-preview-${index}` : `upload-pending-${index}`}
         pointerEvents="auto"
         onTouchStart={registerActivity}
@@ -321,7 +319,7 @@ export default function UploadStep() {
         ) : null}
       </View>
     );
-  }, [cell, draggedPhotoId, hoveredQualityId, movePhoto, movePhotoTo, photos.length, qualityBlink, registerActivity, removePhoto, uploading]);
+  }, [cell, hoveredQualityId, movePhoto, movePhotoTo, photos.length, qualityBlink, registerActivity, removePhoto, uploading]);
 
 
   const gridData = [...photos, ...localPreviews];
