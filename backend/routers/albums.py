@@ -313,6 +313,9 @@ async def auto_generate(album_id: str, payload: Optional[GenerateRequest] = None
             "id": new_id(),
             "layout_id": chosen["id"] if chosen else "",
             "layout_photo_count": count,
+            # Freeze the exact slot geometry into the page: frontend preview/editor and
+            # production PDF must use the same mock-layout coordinates.
+            "slots": chosen.get("positions") if chosen else None,
             "photo_ids": [photos[i + k]["id"] for k in range(count)],
             "images": {str(k): {"photo_id": photos[i + k]["id"], **default_transform()} for k in range(count)},
             "texts": [],
