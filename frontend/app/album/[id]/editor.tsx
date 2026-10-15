@@ -11,32 +11,25 @@ import { Button, s } from "@/src/ui";
 import { colors, spacing, radius, fonts } from "@/src/theme";
 import Feather from "@react-native-vector-icons/feather";
 
-type Tool = "background" | "layout" | "pages" | "text" | "photos";
+type Tool = "pages" | "photos";
 
 export default function Editor() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [pageIdx, setPageIdx] = useState(0);
-  const [tool, setTool] = useState<Tool>("background");
+  const [tool, setTool] = useState<Tool>("pages");
   const [history, setHistory] = useState<any[]>([]);
   const [redoStack, setRedoStack] = useState<any[]>([]);
   const [sel, setSel] = useState<{ pi: number; slot: number } | null>(null);
 
   const q = useQuery({ queryKey: ["album", id], queryFn: () => api.getAlbum(String(id)), enabled: !!id });
-  const bgsQ = useQuery({ queryKey: ["backgrounds"], queryFn: () => api.listBackgrounds() });
-  const layoutsQ = useQuery({ queryKey: ["layouts"], queryFn: () => api.listLayouts() });
-
   // Live preview follows the selected row; the book is never reset to the cover while editing.
   const album = q.data?.album;
   const pages: any[] = useMemo(() => album?.pages || [], [album?.pages]);
   // Paid albums are view-only: the server rejects edits (409), so never show the editor for them.
   useEffect(() => { if (album?.locked) router.replace({ pathname: "/album/[id]/preview", params: { id: String(id) } }); }, [album?.locked, id, router]);
-  const backgrounds = bgsQ.data?.backgrounds || [];
-  const layouts = layoutsQ.data?.layouts || [];
   const photosById: Record<string, any> = useMemo(() => Object.fromEntries((album?.photos || []).map((p: any) => [p.id, p])), [album?.photos]);
-
-  const currentPage = pages[pageIdx];
 
   const commit = async (nextPages: any[]) => {
     setHistory((h) => [...h, pages]);
@@ -62,24 +55,6 @@ export default function Editor() {
     q.refetch();
   };
 
-  const setBg = (color: string) => {
-    if (!currentPage) return;
-    const next = pages.map((p, i) => (i === pageIdx ? { ...p, background: color } : p));
-    commit(next);
-  };
-  const setLayout = (layout: any) => {
-    if (!currentPage) return;
-    let photoIds = currentPage.photo_ids.slice(0, layout.photo_count);
-    // pad from available photos if needed
-    const avail = (album?.photos || []).map((p: any) => p.id);
-    while (photoIds.length < layout.photo_count && avail.length) {
-      const unused = avail.find((pid: string) => !photoIds.includes(pid));
-      if (!unused) break;
-      photoIds.push(unused);
-    }
-    const next = pages.map((p, i) => (i === pageIdx ? { ...p, layout_id: layout.id, layout_photo_count: layout.photo_count, photo_ids: photoIds } : p));
-    commit(next);
-  };
   const deletePage = (idx: number) => {
     const next = pages.filter((_, i) => i !== idx);
     setPageIdx(Math.max(0, Math.min(idx, next.length - 1)));
@@ -143,10 +118,15 @@ export default function Editor() {
 
   const toolTabs = (
     <View style={styles.toolTabs}>
-      {(["background", "layout", "pages", "photos", "text"] as Tool[]).map((t) => (
-        <Pressable key={t} testID={`editor-tool-${t}`} onPress={() => setTool(t)} style={[styles.toolTab, tool === t && styles.toolTabActive]}>
-          <Feather name={t === "background" ? "droplet" : t === "layout" ? "grid" : t === "pages" ? "layers" : t === "photos" ? "image" : "type"} size={16} color={tool === t ? colors.onBrandPrimary : colors.onSurface} />
-          <Text style={{ marginLeft: 6, color: tool === t ? colors.onBrandPrimary : colors.onSurface, fontFamily: fonts.text, fontSize: 12, textTransform: "capitalize" }}>{t === "photos" ? "Swap Images" : t}</Text>
+      {(["pages", "photos"] as Tool[]).map((t) => (
+        <Pressable key={t} testID={`editor-tool-${t}`} accessibilityRole="button"
+          onPress={() => setTool(t)} style={[styles.toolTab, tool === t && styles.toolTabActive]}>
+          <Feather name={t === "pages" ? "layers" : "image"} size={16}
+            color={tool === t ? colors.onBrandPrimary : colors.onSurface} />
+          <Text style={{ marginLeft: 6, color: tool === t ? colors.onBrandPrimary : colors.onSurface,
+            fontFamily: fonts.text, fontSize: 12 }}>
+            {t === "pages" ? "Page Sequence" : "Swap Images"}
+          </Text>
         </Pressable>
       ))}
     </View>
@@ -216,79 +196,22 @@ export default function Editor() {
       {toolTabs}
 
       <ScrollView style={styles.sheet} contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + 120 }}>
-        {tool === "background" && (
-          <>
-            <Text style={s.label}>Choose background</Text>
-            <View style={styles.bgGrid}>
-              {backgrounds.map((b: any) => (
-                <Pressable key={b.id} testID={`bg-${b.id}`} onPress={() => setBg(b.color)} style={[styles.bgSwatch, { backgroundColor: b.color, borderColor: currentPage?.background === b.color ? colors.brandPrimary : colors.border, borderWidth: currentPage?.background === b.color ? 3 : 1 }]}>
-                </Pressable>
-              ))}
-            </View>
-          </>
-        )}
-        {tool === "layout" && (
-          <>
-            <Text style={s.label}>Choose layout</Text>
-            <View style={{ gap: spacing.md, marginTop: spacing.md }}>
-              {layouts.map((l: any) => (
-                <Pressable key={l.id} testID={`layout-${l.id}`} onPress={() => setLayout(l)} style={[styles.layoutRow, currentPage?.layout_id === l.id && { borderColor: colors.brandPrimary, borderWidth: 2 }]}>
-                  <View style={styles.layoutIcon}>
-                    {l.photo_count === 1 ? (
-                      <View style={styles.layoutBox} />
-                    ) : l.photo_count === 2 ? (
-                      <><View style={[styles.layoutBox, { flex: 1, marginBottom: 3 }]} /><View style={[styles.layoutBox, { flex: 1 }]} /></>
-                    ) : l.photo_count === 3 ? (
-                      <>
-                        <View style={[styles.layoutBox, { flex: 1.3, marginBottom: 3 }]} />
-                        <View style={{ flex: 1, flexDirection: "row", gap: 3 }}>
-                          <View style={[styles.layoutBox, { flex: 1 }]} />
-                          <View style={[styles.layoutBox, { flex: 1 }]} />
-                        </View>
-                      </>
-                    ) : (
-                      <>
-                        <View style={{ flex: 1, flexDirection: "row", gap: 3, marginBottom: 3 }}>
-                          <View style={[styles.layoutBox, { flex: 1 }]} />
-                          <View style={[styles.layoutBox, { flex: 1 }]} />
-                        </View>
-                        <View style={{ flex: 1, flexDirection: "row", gap: 3 }}>
-                          <View style={[styles.layoutBox, { flex: 1 }]} />
-                          <View style={[styles.layoutBox, { flex: 1 }]} />
-                        </View>
-                      </>
-                    )}
-                  </View>
-                  <View style={{ marginLeft: spacing.md, flex: 1 }}>
-                    <Text style={s.h2}>{l.name}</Text>
-                    <Text style={s.bodyMuted}>{l.photo_count} photo{l.photo_count > 1 ? "s" : ""}</Text>
-                  </View>
-                </Pressable>
-              ))}
-            </View>
-          </>
-        )}
-        {tool === "pages" && (
-          <>
-            <Text style={s.label}>Page order</Text>
-            <PageOrderList
-              pages={pages} photosById={photosById} selected={pageIdx}
-              onSelect={setPageIdx}
-              onReorder={(from, to) => { const next = [...pages]; const [it] = next.splice(from, 1); next.splice(to, 0, it); setPageIdx(to); commit(next); }}
-              onDelete={deletePage}
-            />
-          </>
-        )}
-        {tool === "text" && (
-          <>
-            <Text style={s.label}>Text on page {pageIdx + 1}</Text>
-            <Text style={[s.bodyMuted, { marginTop: 4 }]}>
-              {currentPage?.texts?.length ? `${currentPage.texts.length} text object${currentPage.texts.length > 1 ? "s" : ""} on this page.` : "No text yet."} Text is added and styled in the page editor, where you can drag, resize and change fonts.
-            </Text>
-            <Button testID="editor-add-text-button" label="+ Add Text" variant="outline" style={{ marginTop: spacing.md }}
-              onPress={() => router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: String(pageIdx), tool: "text" } })} />
-          </>
-        )}
+        <Text style={s.label}>Page Sequence</Text>
+        <Text style={[s.bodyMuted, { marginTop: 4, marginBottom: spacing.md }]} >
+          Drag pages to change their order, or select a page to edit it.
+        </Text>
+        <PageOrderList
+          pages={pages} photosById={photosById} selected={pageIdx}
+          onSelect={setPageIdx}
+          onReorder={(from, to) => {
+            const next = [...pages];
+            const [item] = next.splice(from, 1);
+            next.splice(to, 0, item);
+            setPageIdx(to);
+            commit(next);
+          }}
+          onDelete={deletePage}
+        />
       </ScrollView>
 
       {footer}
@@ -303,17 +226,11 @@ const styles = StyleSheet.create({
   toolTab: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 10, borderRadius: radius.pill, backgroundColor: colors.surfaceTertiary },
   toolTabActive: { backgroundColor: colors.brandPrimary },
   sheet: { flex: 1, backgroundColor: colors.surface },
-  bgGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md, marginTop: spacing.md },
-  bgSwatch: { width: 60, height: 60, borderRadius: radius.md },
-  layoutRow: { flexDirection: "row", alignItems: "center", padding: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surfaceSecondary },
-  layoutIcon: { width: 48, height: 48, backgroundColor: colors.surfaceTertiary, borderRadius: radius.sm, padding: 4, justifyContent: "center" },
-  layoutBox: { flex: 1, backgroundColor: colors.borderStrong, borderRadius: 2 },
   pageRow: { flexDirection: "row", alignItems: "center", padding: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surfaceSecondary, gap: spacing.sm },
   pageChip: { width: 36, height: 36, borderRadius: radius.sm, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   slotThumb: { width: 64, height: 64, borderRadius: radius.sm, overflow: "hidden", backgroundColor: colors.surfaceTertiary, borderWidth: 1, borderColor: colors.border },
   slotThumbSelected: { borderColor: colors.brandPrimary, borderWidth: 3 },
   slotSelBadge: { position: "absolute", top: 2, right: 2, width: 18, height: 18, borderRadius: 9, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
   iconBtn: { padding: 6, borderRadius: radius.sm, backgroundColor: colors.surfaceTertiary },
-  textInput: { marginTop: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, minHeight: 90, fontFamily: fonts.text, color: colors.onSurface, backgroundColor: colors.surfaceSecondary, textAlignVertical: "top" },
   footer: { position: "absolute", left: 0, right: 0, bottom: 0, padding: spacing.md, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
 });
