@@ -25,6 +25,7 @@ export default function UploadStep() {
   const [hintVisible, setHintVisible] = useState(true);
   const [savingOrder, setSavingOrder] = useState(false);
   const [hoveredQualityId, setHoveredQualityId] = useState<string | null>(null);
+  const [draggedPhotoId, setDraggedPhotoId] = useState<string | null>(null);
   const [err, setErr] = useState("");
   const hintTimer = useRef<any>(null);
   const qualityBlink = useRef(new Animated.Value(1)).current;
@@ -159,15 +160,14 @@ export default function UploadStep() {
     }
   };
 
-  const movePhoto = useCallback(async (photoId: string, delta: number) => {
+  const movePhotoTo = useCallback(async (photoId: string, targetIndex: number) => {
     registerActivity();
     const current: any[] = q.data?.album?.photos || [];
     const from = current.findIndex((p) => p.id === photoId);
-    const to = from + delta;
-    if (from < 0 || to < 0 || to >= current.length) return;
+    if (from < 0 || targetIndex < 0 || targetIndex >= current.length || from === targetIndex) return;
     const next = [...current];
     const [item] = next.splice(from, 1);
-    next.splice(to, 0, item);
+    next.splice(Math.min(targetIndex, next.length), 0, item);
     qc.setQueryData(["album", albumId], (old: any) => old ? { ...old, album: { ...old.album, photos: next } } : old);
     setSavingOrder(true);
     try {
@@ -179,6 +179,13 @@ export default function UploadStep() {
       setSavingOrder(false);
     }
   }, [albumId, q, qc, registerActivity]);
+
+  const movePhoto = useCallback(async (photoId: string, delta: number) => {
+    const current: any[] = q.data?.album?.photos || [];
+    const from = current.findIndex((p) => p.id === photoId);
+    if (from < 0) return;
+    await movePhotoTo(photoId, from + delta);
+  }, [movePhotoTo, q]);
 
   const removePhoto = useCallback(async (pid: string) => {
     qc.setQueryData(["album", albumId], (old: any) => old ? { ...old, album: { ...old.album, photos: (old.album.photos || []).filter((p: any) => p.id !== pid) } } : old);
@@ -202,18 +209,39 @@ export default function UploadStep() {
     const ready = !!actual.id && !!actual.thumbnail_url && !p.pending;
     const localPreview = !!p.localPreview && !!p.localUri && !completedPhoto;
     const canReorder = ready && !uploading;
-    const qualityWarnings: string[] = actual.quality_warnings || [];
-    const lowResolution = Number(actual.width) > 0 && Number(actual.height) > 0 && Math.min(Number(actual.width), Number(actual.height)) < 1800;
-    const unprintable = actual.printable === false || qualityWarnings.length > 0 || lowResolution;
+    const sizeBytes = Number(actual.size_bytes ?? actual.fileSize ?? p.size_bytes ?? 0);
+    const needsAttention = sizeBytes > 0 && sizeBytes < 70 * 1024;
     return (
       <View
-        style={{ width: cell, height: cell, marginLeft: index % COLS === 0 ? 0 : GAP, marginBottom: GAP }}
+        style={{ width: cell, height: cell, marginLeft: index % COLS === 0 ? 0 : GAP, marginBottom: GAP, opacity: draggedPhotoId === actual.id ? 0.55 : 1 }}
         testID={ready ? `upload-photo-${actual.id}` : localPreview ? `upload-local-preview-${index}` : `upload-pending-${index}`}
         pointerEvents="auto"
         onTouchStart={registerActivity}
         {...({
-          onPointerEnter: () => { registerActivity(); if (unprintable && actual.id) setHoveredQualityId(actual.id); },
+          onPointerEnter: () => { registerActivity(); if (needsAttention && actual.id) setHoveredQualityId(actual.id); },
           onPointerLeave: () => setHoveredQualityId(null),
+          ...(Platform.OS === "web" && canReorder ? {
+            draggable: true,
+            onDragStart: (event: any) => {
+              registerActivity();
+              setDraggedPhotoId(actual.id);
+              try {
+                event.dataTransfer?.setData("text/plain", actual.id);
+                if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+              } catch {}
+            },
+            onDragOver: (event: any) => {
+              event.preventDefault?.();
+              if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+            },
+            onDrop: (event: any) => {
+              event.preventDefault?.();
+              const draggedId = draggedPhotoId || event.dataTransfer?.getData("text/plain");
+              if (draggedId && draggedId !== actual.id) void movePhotoTo(draggedId, index);
+              setDraggedPhotoId(null);
+            },
+            onDragEnd: () => setDraggedPhotoId(null),
+          } : {}),
         } as any)}
       >
         {ready ? <Thumb uri={actual.thumbnail_url} recyclingKey={actual.id} style={styles.thumb} /> : localPreview ? (
@@ -224,14 +252,19 @@ export default function UploadStep() {
         ) : (
           <View style={[styles.thumb, { alignItems: "center", justifyContent: "center" }]}><ActivityIndicator color={colors.brandPrimary} /></View>
         )}
-        {ready && unprintable ? (
+        {ready && needsAttention ? (
           <Animated.View style={[styles.qualityBadge, { opacity: qualityBlink }]} accessibilityLabel="Replace this image: it may not print clearly">
             <Feather name="alert-triangle" size={13} color="#FFF" />
           </Animated.View>
         ) : null}
-        {ready && unprintable && hoveredQualityId === actual.id ? (
+        {index === 0 && (ready || localPreview) ? (
+          <View style={styles.coverBadge} pointerEvents="none">
+            <Text style={styles.coverBadgeText}>COVER IMAGE</Text>
+          </View>
+        ) : null}
+        {ready && needsAttention && hoveredQualityId === actual.id ? (
           <View pointerEvents="none" style={styles.qualityTooltip}>
-            <Text style={styles.qualityTooltipText}>Replace image — may not print clearly</Text>
+            <Text style={styles.qualityTooltipText}>Image under 70 KB — consider replacing it</Text>
           </View>
         ) : null}
         {ready ? (
@@ -251,7 +284,7 @@ export default function UploadStep() {
         ) : null}
       </View>
     );
-  }, [cell, hoveredQualityId, movePhoto, photos.length, qualityBlink, registerActivity, removePhoto, uploading]);
+  }, [cell, draggedPhotoId, hoveredQualityId, movePhoto, movePhotoTo, photos.length, qualityBlink, registerActivity, removePhoto, uploading]);
 
 
   const gridData = [...photos, ...localPreviews];
@@ -342,6 +375,8 @@ const styles = StyleSheet.create({
   localImage: { width: "100%", height: "100%", borderRadius: radius.sm },
   previewSpinner: { position: "absolute", right: 5, bottom: 5, width: 24, height: 24, borderRadius: 12, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" },
   qualityBadge: { position: "absolute", top: 4, left: 4, width: 25, height: 25, borderRadius: 13, backgroundColor: "#D91E18", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#FFF" },
+  coverBadge: { position: "absolute", top: 4, left: 34, right: 34, alignItems: "center", backgroundColor: "rgba(24,24,24,0.78)", borderRadius: 4, paddingHorizontal: 6, paddingVertical: 5 },
+  coverBadgeText: { color: "#FFF", fontSize: 9, lineHeight: 11, fontWeight: "700", letterSpacing: 1.1 },
   qualityTooltip: { position: "absolute", top: 31, left: 3, right: 3, zIndex: 5, backgroundColor: "#B91C1C", borderRadius: 4, paddingHorizontal: 4, paddingVertical: 3 },
   qualityTooltipText: { color: "#FFF", fontSize: 9, lineHeight: 11, fontWeight: "600", textAlign: "center" },
   reorderControls: { position: "absolute", left: 3, right: 3, bottom: 3, flexDirection: "row", justifyContent: "space-between", gap: 2 },
