@@ -11,19 +11,33 @@ async def seed():
             "id": "default", "price_per_sheet": 90, "gst_percent": 18,
             "min_sheets": 20, "max_sheets": 75, "size": "8x8", "gift_wrap_fee": 150,
         })
-    # Cover styles (editable image + text model). Legacy covers without a style are retired.
-    style_images = {
-        "signature": "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800&auto=format&fit=crop",
-        "classic": "https://images.unsplash.com/photo-1544816155-12df9643f363?w=800&auto=format&fit=crop",
-        "editorial": "https://images.unsplash.com/photo-1519791883288-dc8bd696e667?w=800&auto=format&fit=crop",
-    }
-    for i, (key, st) in enumerate(COVER_STYLES.items()):
-        await db.covers.update_one(
-            {"style": key},
-            {"$setOnInsert": {"id": new_id(), "style": key, "image_url": style_images[key], "created_at": now_iso()},
-             "$set": {"name": st["name"], "description": st["description"], "active": True, "display_order": i + 1}},
-            upsert=True,
+    # Bootstrap default cover styles only once. Previously this upsert ran on every
+    # backend startup, so deleting a seeded cover caused it to be recreated; it also
+    # forced seeded covers back to Active and reset their order. If the catalogue
+    # already has entries, preserve it exactly and mark the one-time bootstrap complete.
+    settings_doc = await db.settings.find_one({"id": "default"}, {"_id": 0, "covers_seeded_v1": 1})
+    if not (settings_doc or {}).get("covers_seeded_v1"):
+        if await db.covers.count_documents({}) == 0:
+            style_images = {
+                "signature": "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800&auto=format&fit=crop",
+                "classic": "https://images.unsplash.com/photo-1544816155-12df9643f363?w=800&auto=format&fit=crop",
+                "editorial": "https://images.unsplash.com/photo-1519791883288-dc8bd696e667?w=800&auto=format&fit=crop",
+            }
+            for i, (key, st) in enumerate(COVER_STYLES.items()):
+                await db.covers.update_one(
+                    {"style": key},
+                    {"$setOnInsert": {
+                        "id": new_id(), "style": key, "image_url": style_images[key],
+                        "name": st["name"], "description": st["description"],
+                        "active": True, "display_order": i + 1, "created_at": now_iso(),
+                    }},
+                    upsert=True,
+                )
+        await db.settings.update_one(
+            {"id": "default"},
+            {"$set": {"covers_seeded_v1": True}},
         )
+    # Retire only legacy records where the style field is absent; do not recreate deleted styles.
     await db.covers.update_many({"style": {"$exists": False}}, {"$set": {"active": False}})
     existing = {l["photo_count"] for l in await db.layouts.find({}, {"_id": 0, "photo_count": 1}).to_list(50)}
     layouts = {
