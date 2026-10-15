@@ -36,13 +36,30 @@ def _get_s3():
     global _s3_client
     if _s3_client is None:
         import boto3
+        from botocore.config import Config
+
         kwargs = {
             "aws_access_key_id": S3_ACCESS_KEY,
             "aws_secret_access_key": S3_SECRET_KEY,
             "region_name": S3_REGION,
         }
         if S3_ENDPOINT:
+            # Keep the configured addressing behavior for explicitly configured
+            # S3-compatible providers/endpoints.
             kwargs["endpoint_url"] = S3_ENDPOINT
+            s3_config = Config(
+                signature_version="s3v4",
+                s3={"addressing_style": "auto"},
+            )
+        else:
+            # AWS requires the bucket's regional virtual-hosted endpoint for
+            # presigned uploads. Without this, Boto3 may emit bucket.s3.amazonaws.com,
+            # which redirects (307) for buckets outside us-east-1 and breaks browser CORS.
+            s3_config = Config(
+                signature_version="s3v4",
+                s3={"addressing_style": "virtual"},
+            )
+        kwargs["config"] = s3_config
         _s3_client = boto3.client("s3", **kwargs)
     return _s3_client
 
