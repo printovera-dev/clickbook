@@ -93,7 +93,7 @@ async function request<T = any>(
   return res.json();
 }
 
-async function uploadFile(path: string, uri: string, filename: string, webFile: any, admin: boolean) {
+async function uploadFile(path: string, uri: string, filename: string, webFile: any, admin: boolean, timeoutMs?: number) {
   {
     const token = admin ? await getAdminToken() : await getToken();
     const form = new FormData();
@@ -111,11 +111,24 @@ async function uploadFile(path: string, uri: string, filename: string, webFile: 
       const { File: ExpoFile } = await import("expo-file-system");
       form.append("file", new ExpoFile(uri) as any, filename);
     }
-    const res = await fetch(`${BASE}/api${path}`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      body: form as any,
-    });
+    const controller = timeoutMs ? new AbortController() : undefined;
+    const timeout = timeoutMs && controller ? setTimeout(() => controller.abort(), timeoutMs) : undefined;
+    let res: Response;
+    try {
+      res = await fetch(`${BASE}/api${path}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form as any,
+        ...(controller ? { signal: controller.signal } : {}),
+      });
+    } catch (cause: any) {
+      if (cause?.name === "AbortError") {
+        throw new Error(`Upload request timed out after ${Math.round((timeoutMs || 0) / 1000)} seconds`);
+      }
+      throw cause;
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
     if (!res.ok) {
       let msg = `HTTP ${res.status}`;
       try { msg = JSON.parse(await res.text()).detail || msg; } catch {}
@@ -161,7 +174,7 @@ export const api = {
   // Direct-to-S3 is the primary path for speed. If the browser cannot complete
   // the cross-origin S3 transfer, keep uploads working through the existing API path.
   uploadPhoto: async (albumId: string, uri: string, filename: string, webFile?: any) => {
-    const fallback = () => uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false);
+    const fallback = () => uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false, 180000);
     const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
     let presign: { direct_upload: boolean; upload_url?: string; key?: string };
