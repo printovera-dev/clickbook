@@ -141,11 +141,78 @@ export const api = {
 
   // Upload photos directly to S3 when configured, avoiding routing every large image
   // through the API server. Local-storage deployments retain the existing multipart path.
+  // Direct-to-S3 is the primary path for speed. If the browser cannot complete
+  // the cross-origin S3 transfer, keep uploads working through the existing API path.
   uploadPhoto: async (albumId: string, uri: string, filename: string, webFile?: any) => {
-    // Temporarily use the established backend multipart upload path while the
-    // S3 bucket CORS configuration is unavailable to the frontend deployment.
-    // This avoids failing every upload on a cross-origin S3 PUT.
-    return uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false);
+    const fallback = () => uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false);
+
+    let presign: { direct_upload: boolean; upload_url?: string; key?: string };
+    try {
+      presign = await request<{ direct_upload: boolean; upload_url?: string; key?: string }>(
+        `/albums/${albumId}/photos/presign`,
+        { method: "POST", body: { filename } },
+      );
+    } catch (e: any) {
+      // Only network/server errors fall back. Keep validation/auth errors visible.
+      const status = Number(e?.status || 0);
+      if (!status || status >= 500) {
+        console.warn("S3 presign unavailable; using backend upload fallback.", e);
+        return fallback();
+      }
+      throw e;
+    }
+
+    if (!presign.direct_upload || !presign.upload_url || !presign.key) {
+      return fallback();
+    }
+
+    let fileBody: any;
+    let contentType = "application/octet-stream";
+    if (Platform.OS === "web") {
+      let file: any = webFile;
+      if (!file) {
+        const resp = await fetch(uri);
+        if (!resp.ok) throw new Error("Could not read selected photo");
+        const blob = await resp.blob();
+        file = new File([blob], filename, { type: blob.type || "image/jpeg" });
+      }
+      if (typeof file.size === "number" && file.size > 20 * 1024 * 1024) {
+        throw new Error("File too large (max 20MB)");
+      }
+      fileBody = file;
+      contentType = file.type || "image/jpeg";
+    } else {
+      const { File: ExpoFile } = await import("expo-file-system");
+      fileBody = new ExpoFile(uri);
+      const size = Number((fileBody as any).size || 0);
+      if (size > 20 * 1024 * 1024) throw new Error("File too large (max 20MB)");
+      contentType = (fileBody as any).type || "image/jpeg";
+    }
+
+    // Presigned URL is scoped to one object. Never send the customer token to S3.
+    let put: Response;
+    try {
+      put = await fetch(presign.upload_url, {
+        method: "PUT",
+        headers: { "Content-Type": contentType },
+        body: fileBody,
+      } as any);
+    } catch (e) {
+      // Browser CORS/network errors often surface as only "Failed to fetch".
+      console.warn("Direct S3 transfer failed; retrying via backend upload.", e);
+      return fallback();
+    }
+    if (!put.ok) {
+      console.warn(`Direct S3 transfer returned HTTP ${put.status}; retrying via backend upload.`);
+      return fallback();
+    }
+
+    // Only register the S3 object after its PUT succeeds. If registration fails,
+    // surface that error rather than uploading a duplicate via multipart.
+    return request<{ photo: any }>(`/albums/${albumId}/photos/complete`, {
+      method: "POST",
+      body: { filename, key: presign.key },
+    });
   },
   adminUploadImage: (uri: string, filename: string, webFile?: any) =>
     uploadFile(`/admin/images`, uri, filename, webFile, true),
