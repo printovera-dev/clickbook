@@ -13,6 +13,12 @@ export default function Root({ children }: PropsWithChildren) {
     logo: "https://clickbook.world/icons/icon-512.png",
     description:
       "Create beautifully printed photo albums and personalised photo books with ClickBook, a product of Printovera LLP.",
+    sameAs: [
+      "https://x.com/clickbookworld",
+      "https://www.youtube.com/@clickbookworld",
+      "https://in.pinterest.com/clickbookworld/",
+      "https://www.instagram.com/clickbookworld/",
+    ],
     parentOrganization: {
       "@type": "Organization",
       name: "Printovera LLP",
