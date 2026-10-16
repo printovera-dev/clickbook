@@ -1,0 +1,15 @@
+User-agent: *
+Allow: /
+
+# API endpoints and account-specific application screens are not public search landing pages.
+Disallow: /api/
+Disallow: /admin
+Disallow: /login
+Disallow: /album/
+Disallow: /order/
+Disallow: /orders
+Disallow: /chat
+Disallow: /profile
+Disallow: /notifications
+
+Sitemap: https://clickbook.world/sitemap.xml
