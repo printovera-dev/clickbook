@@ -7,6 +7,7 @@ from core import db, now_utc, now_iso, new_id, get_current_customer
 from routers.catalog import compute_price
 from routers.notifications import notify
 from production import schedule_production_package
+from otp_provider import send_payment_confirmation
 import razorpay_provider as rzp
 
 router = APIRouter(tags=["orders"])
@@ -38,6 +39,8 @@ async def mark_order_paid(order: dict, payment_id: str, method: str, extra: Opti
         await notify(order["customer_id"], f"Order {order['order_no']} confirmed",
                      f"Payment received. Your {order.get('sheets', '')}-sheet ClickBook is now in production.",
                      "order", order["id"])
+        # WhatsApp is best-effort: provider failure must not affect the verified payment.
+        await send_payment_confirmation(order)
         schedule_production_package(order["id"])
 
 
