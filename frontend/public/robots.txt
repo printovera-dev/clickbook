@@ -1,8 +1,11 @@
 User-agent: *
 Allow: /
+Allow: /policy/
+Allow: /assets/
+Allow: /_expo/
 
-# Keep public pages and static assets crawlable. These rules are not access control.
-# Private account and application routes should not be search landing pages.
+# These rules guide crawlers; they do not secure private data.
+# Keep API and account-specific routes out of search crawling.
 Disallow: /api
 Disallow: /admin
 Disallow: /login
