@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <title>ClickBook</title>
+  <g fill="none" stroke="#38AAE8" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M190 300V690H380M834 300V690H644"/>
+    <path d="M226 275C340 265 430 300 512 388C594 300 684 265 798 275"/>
+    <path d="M226 275C220 390 220 520 226 650C350 650 438 685 512 740C586 685 674 650 798 650C804 520 804 390 798 275"/>
+    <path d="M190 715H390C448 715 480 740 512 760C544 740 576 715 634 715H834"/>
+  </g>
+  <g fill="none" stroke="#E53935" stroke-width="20" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="512" cy="510" r="120"/>
+    <path d="M486 425L554 425L586 467L555 520L536 541L576 575L512 595L470 542L444 483L486 425Z" stroke-width="16"/>
+    <path d="M486 425L512 478L554 425M444 483H501L470 542M501 483L536 541L512 595M536 541H597L576 575M536 541L586 467" stroke-width="16"/>
+  </g>
+</svg>
