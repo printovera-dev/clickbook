@@ -40,6 +40,11 @@ export default function Root({ children }: PropsWithChildren) {
           content="Create beautiful wedding photo albums, family photo books and premium personalised albums online with ClickBook. Design, preview and order your memories across India."
         />
         <meta name="robots" content="index, follow, max-image-preview:large" />
+        {/* Keyword metadata is included for compatibility; Google does not use meta keywords for ranking. */}
+        <meta
+          name="keywords"
+          content="online photo album maker, photo album online India, personalised photo book, custom photo album, wedding photo album, wedding album design online, printed photo albums, family photo book, photo book creator, ClickBook"
+        />
         <link rel="canonical" href="https://clickbook.world/" />
 
         <meta property="og:type" content="website" />
