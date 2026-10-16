@@ -358,6 +358,12 @@ export default function UploadStep() {
         element.removeEventListener("dragstart", handlers.start);
         element.removeEventListener("dragover", handlers.over);
         element.removeEventListener("drop", handlers.drop);
+        element.removeEventListener("contextmenu", handlers.contextMenu);
+        element.removeEventListener("touchstart", handlers.touchStart);
+        document.removeEventListener("touchmove", handlers.touchMove);
+        document.removeEventListener("touchend", handlers.touchEnd);
+        document.removeEventListener("touchcancel", handlers.touchEnd);
+        clearTimeout(handlers.longPressTimer);
         delete element.__clickbookDragHandlers;
         element.draggable = false;
       };
@@ -369,6 +375,10 @@ export default function UploadStep() {
       node.setAttribute("data-photo-id", actual.id);
       node.setAttribute("data-photo-index", String(index));
       node.style.cursor = "grab";
+      // Mobile browsers otherwise open the image context menu instead of starting a reorder.
+      node.style.webkitTouchCallout = "none";
+      node.style.webkitUserSelect = "none";
+      const touchState: any = { dragging: false, targetIndex: index, longPressTimer: null as any };
 
       const start = (event: any) => {
         if ((event.target as any)?.closest?.('button, [role="button"]')) {
@@ -390,10 +400,64 @@ export default function UploadStep() {
         const draggedId = event.dataTransfer?.getData("text/plain");
         if (draggedId && draggedId !== actual.id) void movePhotoTo(draggedId, index);
       };
+      const contextMenu = (event: any) => {
+        event.preventDefault();
+      };
+      const touchStart = (event: any) => {
+        const target = event.target as any;
+        if (target?.closest?.('button, [role="button"]')) return;
+        const touch = event.touches?.[0];
+        if (!touch) return;
+        touchState.targetIndex = index;
+        touchState.dragging = false;
+        clearTimeout(touchState.longPressTimer);
+        // A short hold starts the drag; ordinary swipes remain available for scrolling.
+        touchState.longPressTimer = setTimeout(() => {
+          touchState.dragging = true;
+          registerActivity();
+          node.style.opacity = "0.65";
+        }, 280);
+      };
+      const touchMove = (event: any) => {
+        if (!touchState.dragging) {
+          const touch = event.touches?.[0];
+          if (touch && Math.abs(touch.clientY - (touchState.startY || touch.clientY)) > 10) {
+            clearTimeout(touchState.longPressTimer);
+          }
+          return;
+        }
+        if (event.cancelable) event.preventDefault();
+        const touch = event.touches?.[0];
+        if (!touch) return;
+        const target = document.elementFromPoint(touch.clientX, touch.clientY) as any;
+        const tile = target?.closest?.("[data-photo-id][data-photo-index]");
+        if (tile) touchState.targetIndex = Number(tile.getAttribute("data-photo-index"));
+      };
+      const touchEnd = () => {
+        clearTimeout(touchState.longPressTimer);
+        const wasDragging = touchState.dragging;
+        touchState.dragging = false;
+        node.style.opacity = "";
+        if (wasDragging && Number.isFinite(touchState.targetIndex)) {
+          const target = document.querySelector('[data-photo-id][data-photo-index="' + touchState.targetIndex + '"]') as any;
+          const targetId = target?.getAttribute("data-photo-id");
+          if (targetId && targetId !== actual.id) void movePhotoTo(actual.id, touchState.targetIndex);
+        }
+      };
+      const contextStart = (event: any) => {
+        const touch = event.touches?.[0];
+        touchState.startY = touch?.clientY ?? 0;
+        touchStart(event);
+      };
       node.addEventListener("dragstart", start);
       node.addEventListener("dragover", over);
       node.addEventListener("drop", drop);
-      node.__clickbookDragHandlers = { start, over, drop };
+      node.addEventListener("contextmenu", contextMenu);
+      node.addEventListener("touchstart", contextStart, { passive: true });
+      document.addEventListener("touchmove", touchMove, { passive: false });
+      document.addEventListener("touchend", touchEnd);
+      document.addEventListener("touchcancel", touchEnd);
+      node.__clickbookDragHandlers = { start, over, drop, contextMenu, touchStart: contextStart, touchMove, touchEnd, get longPressTimer() { return touchState.longPressTimer; } };
     };
 
     return (
@@ -403,6 +467,7 @@ export default function UploadStep() {
         testID={ready ? `upload-photo-${actual.id}` : localPreview ? `upload-local-preview-${index}` : `upload-pending-${index}`}
         pointerEvents="auto"
         onTouchStart={registerActivity}
+        {...({ onContextMenu: (event: any) => event.preventDefault() } as any)}
         {...({
         } as any)}
       >
