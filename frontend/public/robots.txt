@@ -1,8 +1,9 @@
 User-agent: *
 Allow: /
 
-# API endpoints and account-specific application screens are not public search landing pages.
-Disallow: /api/
+# Keep public pages and static assets crawlable. These rules are not access control.
+# Private account and application routes should not be search landing pages.
+Disallow: /api
 Disallow: /admin
 Disallow: /login
 Disallow: /album/
