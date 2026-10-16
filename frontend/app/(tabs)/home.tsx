@@ -1,7 +1,7 @@
 // ClickBook Home — CMS-driven landing page (GET /home). Sections are rendered through a FlatList so lower
 // sections mount lazily as the user scrolls; sliders/videos/heroes are all editable from Admin → Home Page.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, FlatList, Pressable, StyleSheet, Animated, RefreshControl, ScrollView } from "react-native";
+import { View, Text, FlatList, Pressable, StyleSheet, Animated, RefreshControl, ScrollView, Linking } from "react-native";
 import { Image } from "expo-image";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -216,6 +216,27 @@ export default function Home() {
               <Pressable key={k} onPress={() => router.push({ pathname: "/policy/[key]", params: { key: k } })} testID={`footer-${k}`} hitSlop={8}><Text style={styles.footerLink}>{l}</Text></Pressable>
             ))}
           </View>
+          <View style={styles.socialSection} testID="home-social-links">
+            <Text style={styles.socialHeading}>Follow ClickBook</Text>
+            <View style={styles.socialRow}>
+              <Pressable accessibilityRole="link" accessibilityLabel="ClickBook on X" testID="footer-social-x" onPress={() => { void Linking.openURL("https://x.com/clickbookworld"); }} style={styles.socialButton}>
+                <Text style={styles.socialX}>𝕏</Text>
+                <Text style={styles.socialLabel}>X</Text>
+              </Pressable>
+              <Pressable accessibilityRole="link" accessibilityLabel="ClickBook on YouTube" testID="footer-social-youtube" onPress={() => { void Linking.openURL("https://www.youtube.com/@clickbookworld"); }} style={styles.socialButton}>
+                <Feather name="youtube" size={22} color="#FF0033" />
+                <Text style={styles.socialLabel}>YouTube</Text>
+              </Pressable>
+              <Pressable accessibilityRole="link" accessibilityLabel="ClickBook on Pinterest" testID="footer-social-pinterest" onPress={() => { void Linking.openURL("https://in.pinterest.com/clickbookworld/"); }} style={styles.socialButton}>
+                <View style={styles.pinterestIcon}><Text style={styles.pinterestLetter}>P</Text></View>
+                <Text style={styles.socialLabel}>Pinterest</Text>
+              </Pressable>
+              <Pressable accessibilityRole="link" accessibilityLabel="ClickBook on Instagram" testID="footer-social-instagram" onPress={() => { void Linking.openURL("https://www.instagram.com/clickbookworld/"); }} style={styles.socialButton}>
+                <Feather name="instagram" size={22} color="#C13584" />
+                <Text style={styles.socialLabel}>Instagram</Text>
+              </Pressable>
+            </View>
+          </View>
           <Text style={[styles.muted, { marginTop: spacing.md }]}>© {new Date().getFullYear()} Printovera LLP | Clickbook is a product of Printovera LLP</Text>
         </View>
       ) },
@@ -308,5 +329,13 @@ const styles = StyleSheet.create({
   footer: { marginHorizontal: spacing.lg, padding: spacing.xl, alignItems: "center", backgroundColor: colors.homeCard, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border },
   footerLinks: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: spacing.lg, marginTop: spacing.lg },
   footerLink: { fontFamily: fonts.text, fontSize: 13, color: colors.homeBlue },
+  socialSection: { alignItems: "center", width: "100%", marginTop: spacing.xl },
+  socialHeading: { fontFamily: fonts.text, fontSize: 13, fontWeight: "700", color: colors.homeCharcoal, marginBottom: spacing.md },
+  socialRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: spacing.lg },
+  socialButton: { minWidth: 58, minHeight: 48, alignItems: "center", justifyContent: "center", gap: 4, paddingHorizontal: spacing.xs },
+  socialLabel: { fontFamily: fonts.text, fontSize: 11, color: colors.muted },
+  socialX: { fontSize: 22, lineHeight: 24, fontWeight: "700", color: colors.homeCharcoal },
+  pinterestIcon: { width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: "#BD081C" },
+  pinterestLetter: { fontFamily: fonts.text, fontSize: 16, lineHeight: 19, fontWeight: "800", color: "#FFFFFF" },
   splash: { position: "absolute", inset: 0 as any, backgroundColor: colors.homeBg, alignItems: "center", justifyContent: "center", zIndex: 100 },
 });
