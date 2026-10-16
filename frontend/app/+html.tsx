@@ -1,12 +1,26 @@
 // @ts-nocheck
-// Web-only HTML shell (never used by iOS/Android builds). Carries the PWA manifest, iOS standalone meta tags and
-// the service-worker registration so the web app can be installed via "Add to Home Screen".
+// Web-only HTML shell (never used by iOS/Android builds). Carries SEO metadata alongside
+// the existing PWA manifest, iOS standalone tags and service-worker registration.
 import { ScrollViewStyleReset } from "expo-router/html";
 import type { PropsWithChildren } from "react";
 
 export default function Root({ children }: PropsWithChildren) {
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "ClickBook",
+    url: "https://clickbook.world/",
+    logo: "https://clickbook.world/icons/icon-512.png",
+    description:
+      "Create beautifully printed photo albums and personalised photo books with ClickBook, a product of Printovera LLP.",
+    parentOrganization: {
+      "@type": "Organization",
+      name: "Printovera LLP",
+    },
+  };
+
   return (
-    <html lang="en" style={{ height: "100%" }}>
+    <html lang="en-IN" style={{ height: "100%" }}>
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
@@ -14,8 +28,41 @@ export default function Root({ children }: PropsWithChildren) {
           name="viewport"
           content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"
         />
-        <title>ClickBook — Preserving Memories</title>
-        <meta name="description" content="Create beautifully printed 8×8 inch photobooks in 60 seconds." />
+        <title>Online Photo Album Maker &amp; Premium Photo Books | ClickBook</title>
+        <meta
+          name="description"
+          content="Create beautiful wedding photo albums, family photo books and premium personalised albums online with ClickBook. Design, preview and order your memories across India."
+        />
+        <meta name="robots" content="index, follow, max-image-preview:large" />
+        <link rel="canonical" href="https://clickbook.world/" />
+
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="ClickBook" />
+        <meta property="og:locale" content="en_IN" />
+        <meta
+          property="og:title"
+          content="Online Photo Album Maker &amp; Premium Photo Books | ClickBook"
+        />
+        <meta
+          property="og:description"
+          content="Turn your favourite photos into beautiful printed albums with ClickBook. Design, preview and order personalised photo books."
+        />
+        <meta property="og:url" content="https://clickbook.world/" />
+        <meta property="og:image" content="https://clickbook.world/icons/icon-512.png" />
+        <meta property="og:image:alt" content="ClickBook — personalised photo albums" />
+
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta
+          name="twitter:title"
+          content="Online Photo Album Maker &amp; Premium Photo Books | ClickBook"
+        />
+        <meta
+          name="twitter:description"
+          content="Design, preview and order beautiful personalised photo albums with ClickBook."
+        />
+        <meta name="twitter:image" content="https://clickbook.world/icons/icon-512.png" />
+        <script type="application/ld+json">{JSON.stringify(structuredData)}</script>
+
         {/* PWA */}
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#2B2B2E" />
@@ -29,8 +76,8 @@ export default function Root({ children }: PropsWithChildren) {
         <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
         {/*
           Disable body scrolling on web to make ScrollView components work correctly.
-          If you want to enable scrolling, remove `ScrollViewStyleReset` and
-          set `overflow: auto` on the body style below.
+          If you want to enable scrolling, remove ScrollViewStyleReset and
+          set overflow: auto on the body style below.
         */}
         <ScrollViewStyleReset />
         <style
