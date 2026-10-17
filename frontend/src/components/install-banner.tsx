@@ -64,43 +64,31 @@ export function InstallBanner() {
     if (choice?.outcome === "accepted") setMode("hidden"); else dismiss();
   };
 
-  const ios = mode === "ios-safari" || mode === "ios-other";
   return (
     <View style={styles.wrap} pointerEvents="box-none" testID="pwa-install-banner">
-      <View style={styles.card} testID={`pwa-install-${mode}`}>
-        <View style={styles.row}>
+      <View style={styles.card} pointerEvents="box-none" testID={`pwa-install-${mode}`}>
+        <View style={styles.row} pointerEvents="box-none">
           <Image source={{ uri: "/icons/icon-192.png" }} style={styles.icon} contentFit="cover" />
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1 }} pointerEvents="none">
             <Text style={styles.title}>Install ClickBook</Text>
-            {mode === "prompt" ? <Text style={styles.sub}>Add to your Home Screen for a faster, full-screen experience.</Text> : null}
-            {mode === "ios-safari" ? <Text style={styles.sub}>Tap the <Feather name="share" size={13} color={colors.homeBlue} /> Share button in Safari, then choose “Add to Home Screen”.</Text> : null}
-            {mode === "ios-other" ? <Text style={styles.sub}>Open clickbook.world in Safari, tap <Feather name="share" size={13} color={colors.homeBlue} /> Share, then “Add to Home Screen”.</Text> : null}
-            {mode === "mac-safari" ? <Text style={styles.sub}>In Safari choose File → “Add to Dock” to use ClickBook as an app.</Text> : null}
+            {mode === "prompt" ? <Text style={styles.sub}>Add ClickBook to your Home Screen for a full-screen experience.</Text> : null}
+            {mode === "ios-safari" ? <Text style={styles.sub}>Tap Share in Safari, then choose “Add to Home Screen”.</Text> : null}
+            {mode === "ios-other" ? <Text style={styles.sub}>To install, open this page in Safari and choose Share → “Add to Home Screen”.</Text> : null}
+            {mode === "mac-safari" ? <Text style={styles.sub}>In Safari choose File → “Add to Dock”.</Text> : null}
           </View>
           {mode === "prompt" ? (
             <Pressable onPress={install} style={styles.btn} testID="pwa-install-button"><Text style={styles.btnTxt}>Install</Text></Pressable>
           ) : null}
           <Pressable onPress={dismiss} hitSlop={10} style={styles.close} testID="pwa-install-dismiss"><Feather name="x" size={18} color={colors.muted} /></Pressable>
         </View>
-        {ios ? (
-          <View style={styles.steps} testID="pwa-ios-steps">
-            {[["compass", "Safari"], ["share", "Share"], ["plus-square", "Add to Home Screen"], ["check", "Add"]].map(([ic, lb], i, arr) => (
-              <View key={lb} style={styles.step}>
-                <Feather name={ic as any} size={14} color={colors.homePink} />
-                <Text style={styles.stepTxt}>{lb}</Text>
-                {i < arr.length - 1 ? <Feather name="chevron-right" size={12} color={colors.muted} /> : null}
-              </View>
-            ))}
-          </View>
-        ) : null}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { position: "absolute", left: 0, right: 0, bottom: 72, alignItems: "center", paddingHorizontal: spacing.lg, zIndex: 200 },
-  card: { width: "100%", maxWidth: 520, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.homeCard, borderWidth: 1, borderColor: colors.border, boxShadow: "0 8px 24px rgba(0,0,0,0.18)" } as any,
+  wrap: { position: "absolute", left: 0, right: 0, bottom: 76, alignItems: "center", paddingHorizontal: spacing.lg, zIndex: 200 },
+  card: { width: "100%", maxWidth: 520, padding: spacing.sm, borderRadius: radius.lg, backgroundColor: colors.homeCard, borderWidth: 1, borderColor: colors.border, boxShadow: "0 8px 24px rgba(0,0,0,0.18)" } as any,
   row: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   icon: { width: 44, height: 44, borderRadius: 10 },
   title: { fontFamily: fonts.text, fontWeight: "700", fontSize: 14, color: colors.homeCharcoal },
