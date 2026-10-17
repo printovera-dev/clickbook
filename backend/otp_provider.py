@@ -14,6 +14,7 @@ TEMPLATE = os.environ.get("WHATSAPP_TEMPLATE", "authentication").strip()
 CAMPAIGN = os.environ.get("WHATSAPP_CAMPAIGN", "clickbook-otp").strip()
 PAYMENT_TEMPLATE = os.environ.get("WHATSAPP_PAYMENT_TEMPLATE", "sucessful_payment").strip()
 PAYMENT_CAMPAIGN = os.environ.get("WHATSAPP_PAYMENT_CAMPAIGN", "clickbook-payment-confirmation").strip()
+PAYMENT_LANGUAGE = os.environ.get("WHATSAPP_PAYMENT_LANGUAGE", "en_US").strip()
 
 
 def generate_otp(length: int = 6) -> str:
@@ -115,14 +116,15 @@ async def send_payment_confirmation(order: dict) -> dict:
     try:
         total = float(((order.get("price") or {}).get("total")) or 0)
         amount_text = f"INR {total:,.2f}"
-        order_label = (order.get("album_name") or order.get("cover_title") or order.get("order_no") or "ClickBook order").strip()
+        order_label = str(order.get("album_name") or order.get("cover_title") or order.get("order_no") or "ClickBook order").strip()
         payload = {
-            "from": FROM,
-            "campaignName": PAYMENT_CAMPAIGN,
+            "from": FROM.strip(),
+            "campaignName": PAYMENT_CAMPAIGN.strip(),
             "to": _format_to(mobile),
-            "templateName": PAYMENT_TEMPLATE,
-            "components": {"body": {"params": [amount_text, order_label]}},
+            "templateName": PAYMENT_TEMPLATE.strip(),
+            "components": {"body": {"params": [amount_text.strip(), order_label]}},
             "type": "template",
+            "language": {"code": PAYMENT_LANGUAGE},
         }
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.post(API_URL, headers=_aoc_headers(), json=payload)
@@ -130,8 +132,8 @@ async def send_payment_confirmation(order: dict) -> dict:
         if ok:
             logger.info("WhatsApp payment confirmation accepted by provider for order %s", order.get("order_no", "unknown"))
         else:
-            logger.warning("WhatsApp payment confirmation rejected for order %s (HTTP %s)",
-                           order.get("order_no", "unknown"), response.status_code)
+            logger.warning("WhatsApp payment confirmation rejected for order %s (HTTP %s); provider response: %s",
+                           order.get("order_no", "unknown"), response.status_code, response.text[:500])
         return {"success": ok, "raw_status": response.status_code}
     except Exception as exc:
         logger.warning("WhatsApp payment confirmation failed for order %s (%s)",
