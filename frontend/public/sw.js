@@ -1,7 +1,7 @@
 /* ClickBook service worker — WEB TARGET ONLY.
  * Caches same-origin static assets (icons, manifest, fonts, bundled images) cache-first and serves the app shell
  * network-first with an offline fallback to the last cached copy. API calls (/api/*) are never cached. */
-const VERSION = "clickbook-v5";
+const VERSION = "clickbook-v6";
 const STATIC = `${VERSION}-static`;
 const SHELL = `${VERSION}-shell`;
 const PRECACHE = ["/manifest.json", "/favicon.svg?v=5", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png"];
