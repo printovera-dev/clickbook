@@ -63,7 +63,6 @@ export default function UploadStep() {
     const index = orderedPhotoIds.indexOf(photoId);
     await reorderPhotoTo(index, index + direction);
   };
-  const setZoomFromX = (x: number) => setPreviewZoom(Math.max(70, Math.min(160, Math.round(70 + (Math.max(0, Math.min(zoomTrackWidth, x)) / Math.max(1, zoomTrackWidth)) * 90))));
   const zoomPanResponder = PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
@@ -200,6 +199,7 @@ export default function UploadStep() {
       </View>
       <FlatList
         testID="upload-photo-grid"
+        key={`upload-grid-${gridCols}`}
         data={gridData}
         keyExtractor={(p: any) => p.id || p.key}
         numColumns={gridCols}
