@@ -25,7 +25,7 @@ async def docs():
 
 @api.get("/health")
 async def health():
-    return {"ok": True, "service": "printovera", "time": now_iso()}
+    return {"ok": True, "service": "clickbook", "time": now_iso()}
 
 
 for r in (auth.router, catalog.router, albums.router, orders.router, payments.router, admin.router, files.router,
