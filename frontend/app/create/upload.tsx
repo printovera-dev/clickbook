@@ -52,9 +52,6 @@ export default function UploadStep() {
     if (index < 0 || nextIndex < 0 || nextIndex >= orderedPhotoIds.length) return;
     const next = [...orderedPhotoIds];
     [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
-    const byId = new Map(visiblePhotos.map((p: any) => [p.id, p]));
-    const reordered = next.map((id) => byId.get(id));
-    qc.setQueryData(["album", albumId], (old: any) => old ? { ...old, album: { ...old.album, photos: isWedding ? (old.album.photos || []).map((p: any) => p.segment === segment ? reordered.shift() : p) : next.map((id) => byId.get(id)) } } : old);
     try { await api.reorderPhotos(String(albumId), next, isWedding ? segment : undefined); await q.refetch(); }
     catch (e: any) { setErr(e?.message || "Could not save photo sequence"); await q.refetch(); }
   };
@@ -184,7 +181,7 @@ export default function UploadStep() {
         maxToRenderPerBatch={9}
         windowSize={3}
         removeClippedSubviews
-        getItemLayout={(_, index) => ({ length: cell + GAP, offset: (cell + GAP) * Math.floor(index / COLS), index })}
+        getItemLayout={(_, index) => { const itemSize = Math.min(cell * previewZoom / 100, cell * 1.6); return { length: itemSize + GAP, offset: (itemSize + GAP) * Math.floor(index / COLS), index }; }}
         contentContainerStyle={{ padding: spacing.xl, paddingBottom: 140 }}
         ListHeaderComponent={
           <View>
