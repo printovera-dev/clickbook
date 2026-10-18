@@ -59,7 +59,7 @@ Keep the bucket private unless public access is an intentional, reviewed require
 ### Payments
 - Confirm Razorpay live key ID, secret and webhook secret are configured only in the hosting dashboard.
 - Test order creation, checkout, signature verification, webhook idempotency, failed/cancelled payment and paid-order locking in Razorpay test mode first.
-- WhatsApp is a messaging channel, not the payment processor. Sending a payment link over WhatsApp requires an approved provider template and a payment-link flow; do not treat an OTP template as a payment template.
+- The checkout screen now offers a WhatsApp share action for the hosted Razorpay checkout URL. WhatsApp is the messaging channel, not the payment processor. Automated outbound payment reminders require a separate approved provider template; do not reuse the OTP template as a payment template.
 
 ### Build and data safety
 - Run frontend lint/type checks and backend tests/build in CI.
