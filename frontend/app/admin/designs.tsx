@@ -52,7 +52,7 @@ export default function AdminDesigns() {
         {pageDesigns.map((d) => (
           <View key={d.id} style={styles.card} testID={"admin-page-design-" + d.id}>
             <View style={{ width: 112, height: 90, alignSelf: "center", backgroundColor: d.background || "#FFFFFF", borderWidth: 1, borderColor: colors.border, overflow: "hidden" }}>
-              {d.mock_file_url ? <Image source={{ uri: fileUrl(d.mock_file_url) }} resizeMode="cover" style={StyleSheet.absoluteFillObject} /> : (d.positions_by_count?.["4"] || []).map((r: any, i: number) => <View key={i} style={{ position: "absolute", left: r.x * 112, top: r.y * 90, width: r.w * 112, height: r.h * 90, backgroundColor: d.preset_key === "cinematic" ? "#D6D3D1" : colors.borderStrong }} />)}
+              {d.mock_file_url ? <Image source={{ uri: fileUrl(d.mock_file_url) || d.mock_file_url }} resizeMode="cover" style={StyleSheet.absoluteFillObject} /> : (d.positions_by_count?.["4"] || []).map((r: any, i: number) => <View key={i} style={{ position: "absolute", left: r.x * 112, top: r.y * 90, width: r.w * 112, height: r.h * 90, backgroundColor: d.preset_key === "cinematic" ? "#D6D3D1" : colors.borderStrong }} />)}
             </View>
             <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>{d.segment && d.segment !== "All" ? "Photo section: " + d.segment : "General page design"}</Text>
             <Text style={[s.label, { marginTop: spacing.sm }]}>Design name</Text>
