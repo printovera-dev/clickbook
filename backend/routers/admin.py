@@ -486,6 +486,7 @@ class PageDesignIn(BaseModel):
     background: str
     positions_by_count: Dict[str, List[Dict[str, Any]]]
     segment: Optional[str] = "All"
+    mock_file_url: Optional[str] = None
     active: bool = True
     display_order: int = 1
 
