@@ -142,8 +142,18 @@ export const api = {
     request(`/albums/${albumId}/photos/order`, { method: "PUT", body: { photo_ids, ...(segment ? { segment } : {}) } }),
 
   // Upload
-  uploadPhoto: (albumId: string, uri: string, filename: string, webFile?: any, segment?: string) =>
-    uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false, segment),
+  uploadPhoto: async (albumId: string, uri: string, filename: string, webFile?: any, segment?: string, sizeBytes?: number, contentType?: string) => {
+    const inferredType = contentType || (filename.toLowerCase().endsWith(".png") ? "image/png" : filename.toLowerCase().endsWith(".webp") ? "image/webp" : filename.toLowerCase().endsWith(".heic") ? "image/heic" : filename.toLowerCase().endsWith(".heif") ? "image/heif" : "image/jpeg");
+    let file: any = webFile;
+    if (Platform.OS === "web" && !file) { const response = await fetch(uri); file = await response.blob(); }
+    if (Platform.OS !== "web" && !file) { const { File: ExpoFile } = await import("expo-file-system"); file = new ExpoFile(uri); }
+    const actualSize = sizeBytes || file?.size || 0;
+    const presigned = await request<any>(`/albums/${albumId}/photos/presign`, { method: "POST", body: { filename, content_type: inferredType, size_bytes: actualSize, segment: segment || "Unassigned" } });
+    if (!presigned.enabled) return uploadFile(`/albums/${albumId}/photos`, uri, filename, webFile, false, segment);
+    const put = await fetch(presigned.put_url, { method: "PUT", headers: { "Content-Type": presigned.content_type || inferredType }, body: file });
+    if (!put.ok) throw new Error(`Direct S3 upload failed (HTTP ${put.status}). Check S3 CORS and bucket region.`);
+    return request<any>(`/albums/${albumId}/photos/finalize`, { method: "POST", body: { key: presigned.key, filename, segment: segment || "Unassigned" } });
+  },
   adminUploadImage: (uri: string, filename: string, webFile?: any) =>
     uploadFile(`/admin/images`, uri, filename, webFile, true),
   adminUploadVideo: (uri: string, filename: string, webFile?: any) =>
