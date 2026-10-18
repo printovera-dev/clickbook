@@ -1,6 +1,6 @@
-# ClickBook — premium 8×8″ photo books
+# Printovera Wedding Album Studio (ClickBook)
 
-Monorepo: **Expo (React Native + web)** customer app · **FastAPI** backend · **MongoDB** · VPS file storage.
+Project: **Printovera Wedding Album Studio**. Product brand: **ClickBook**. Monorepo: **Expo (React Native + web)** customer app · **FastAPI** backend · **MongoDB** · local/S3-compatible file storage.
 One backend, one database, one image store — every client (Expo Go, iOS/Android builds, web at https://clickbook.world) sees the same accounts, albums, orders and payments.
 
 ```
