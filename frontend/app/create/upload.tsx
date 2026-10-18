@@ -135,14 +135,18 @@ export default function UploadStep() {
       return;
     }
 
+    // Limit decoded local previews on iPhone to reduce memory spikes for large batches.
+    // Other selected photos use lightweight placeholders until their upload completes.
+    const MAX_LOCAL_PREVIEWS = 4;
+    const previewBatchKey = Date.now();
+    setProgress({ done: 0, total: assets.length });
     setLocalPreviews(assets.map((asset: any, i: number) => ({
-      key: "local-preview-" + Date.now() + "-" + i,
+      key: "local-preview-" + previewBatchKey + "-" + i,
       index: i,
       localPreview: true,
-      localUri: asset.uri,
+      localUri: i < MAX_LOCAL_PREVIEWS ? asset.uri : undefined,
       filename: asset.fileName,
     })));
-    setProgress({ done: 0, total: assets.length });
     let failed = 0;
     const failedFiles: string[] = [];
     let nextIndex = 0;
