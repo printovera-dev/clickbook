@@ -1,5 +1,6 @@
 // Album Designs: the design system customers choose from — album styles (layout rhythm) and cover styles.
 import { useEffect, useState } from "react";
+import * as ImagePicker from "expo-image-picker";
 import { View, Text, StyleSheet, Pressable, TextInput, Switch, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { AdminPage } from "@/src/components/admin-page";
@@ -21,10 +22,23 @@ export default function AdminDesigns() {
     finally { setLoadingDesigns(false); }
   };
   useEffect(() => { loadPageDesigns(); }, []);
+  const uploadMockFile = async (d: any) => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsMultipleSelection: false, quality: 1 });
+      if (result.canceled || !result.assets?.[0]) return;
+      const asset: any = result.assets[0];
+      const uploaded = await api.adminUploadImage(asset.uri, asset.fileName || `mock-${d.segment || "general"}.jpg`, asset.file);
+      const url = uploaded.image?.original_url || uploaded.image?.url;
+      if (!url) throw new Error("Upload did not return a file URL");
+      setPageDesigns((all) => all.map((x) => x.id === d.id ? { ...x, mock_file_url: url } : x));
+      await api.adminUpdatePageDesign(d.id, { name: d.name, description: d.description || "", preset_key: d.preset_key, background: d.background, positions_by_count: d.positions_by_count, segment: d.segment || "All", mock_file_url: url, active: !!d.active, display_order: Number(d.display_order || 1) });
+      await loadPageDesigns();
+    } catch (e: any) { Alert.alert("Could not upload mock file", e?.message || "Please try again"); }
+  };
   const savePageDesign = async (d: any) => {
     setSavingId(d.id);
     try {
-      await api.adminUpdatePageDesign(d.id, { name: d.name, description: d.description || "", preset_key: d.preset_key, background: d.background, positions_by_count: d.positions_by_count, segment: d.segment || "All", active: !!d.active, display_order: Number(d.display_order || 1) });
+      await api.adminUpdatePageDesign(d.id, { name: d.name, description: d.description || "", preset_key: d.preset_key, background: d.background, positions_by_count: d.positions_by_count, segment: d.segment || "All", mock_file_url: d.mock_file_url || null, active: !!d.active, display_order: Number(d.display_order || 1) });
       await loadPageDesigns();
     } catch (e: any) { Alert.alert("Could not save design", e?.message || "Please try again"); }
     finally { setSavingId(null); }
@@ -47,6 +61,8 @@ export default function AdminDesigns() {
             <TextInput value={d.description || ""} onChangeText={(v) => setPageDesigns((all) => all.map((x) => x.id === d.id ? { ...x, description: v } : x))} style={styles.editInput} />
             <View style={styles.settingRow}><Text style={s.bodyMuted}>Background colour</Text><TextInput value={d.background} autoCapitalize="characters" onChangeText={(v) => setPageDesigns((all) => all.map((x) => x.id === d.id ? { ...x, background: v } : x))} style={[styles.editInput, { width: 110 }]} /></View>
             <View style={styles.settingRow}><Text style={s.bodyMuted}>Available to customers</Text><Switch value={!!d.active} onValueChange={(v) => setPageDesigns((all) => all.map((x) => x.id === d.id ? { ...x, active: v } : x))} /></View>
+            <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>{d.mock_file_url ? "Mock/reference file attached" : "No mock/reference file uploaded"}</Text>
+            <Button label="Upload mock file" variant="outline" onPress={() => uploadMockFile(d)} />
             <Button label={savingId === d.id ? "Saving…" : "Save design"} loading={savingId === d.id} onPress={() => savePageDesign(d)} />
           </View>
         ))}
