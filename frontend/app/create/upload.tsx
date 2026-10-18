@@ -59,10 +59,6 @@ export default function UploadStep() {
     try { await api.reorderPhotos(String(albumId), next, isWedding ? segment : undefined); await q.refetch(); }
     catch (e: any) { setErr(e?.message || "Could not save photo sequence"); await q.refetch(); }
   };
-  const movePhoto = async (photoId: string, direction: -1 | 1) => {
-    const index = orderedPhotoIds.indexOf(photoId);
-    await reorderPhotoTo(index, index + direction);
-  };
   const zoomPanResponder = PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
@@ -173,8 +169,8 @@ export default function UploadStep() {
         )}
         {ready ? (
           <View style={styles.photoOrderControls}>
-            <Pressable accessibilityLabel="Move photo earlier" onPress={() => movePhoto(p.id, -1)} disabled={orderedPhotoIds.indexOf(p.id) === 0} style={styles.orderButton}><Feather name="chevron-left" size={13} color={colors.onSurface} /></Pressable>
-            <Pressable accessibilityLabel="Move photo later" onPress={() => movePhoto(p.id, 1)} disabled={orderedPhotoIds.indexOf(p.id) === orderedPhotoIds.length - 1} style={styles.orderButton}><Feather name="chevron-right" size={13} color={colors.onSurface} /></Pressable>
+            <Pressable accessibilityLabel="Move photo earlier" onPress={() => reorderPhotoTo(orderedPhotoIds.indexOf(p.id), orderedPhotoIds.indexOf(p.id) - 1)} disabled={orderedPhotoIds.indexOf(p.id) === 0} style={styles.orderButton}><Feather name="chevron-left" size={13} color={colors.onSurface} /></Pressable>
+            <Pressable accessibilityLabel="Move photo later" onPress={() => reorderPhotoTo(orderedPhotoIds.indexOf(p.id), orderedPhotoIds.indexOf(p.id) + 1)} disabled={orderedPhotoIds.indexOf(p.id) === orderedPhotoIds.length - 1} style={styles.orderButton}><Feather name="chevron-right" size={13} color={colors.onSurface} /></Pressable>
           </View>
         ) : null}
         {ready ? (
