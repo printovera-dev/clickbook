@@ -89,6 +89,8 @@ async def razorpay_checkout_shell(rzp_order_id: str):
     order = await db.orders.find_one({"razorpay_order_id": rzp_order_id}, {"_id": 0})
     if not order:
         raise HTTPException(404, "Order unavailable")
+    if order.get("payment_status") == "paid":
+        return Response(content="<html><body><h2>Payment already completed</h2><p>This order has already been paid.</p></body></html>", media_type="text/html")
     amount = int(order.get("amount_paise") or round(float(order["price"]["total"]) * 100))
     key_id = rzp.public_key_id()
     if not key_id:
