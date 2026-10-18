@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { View, Modal, ActivityIndicator, Text, Pressable, StyleSheet, Platform } from "react-native";
+import { View, Modal, ActivityIndicator, Text, Pressable, StyleSheet, Platform, Linking } from "react-native";
 import { WebView } from "react-native-webview";
 import Feather from "@react-native-vector-icons/feather";
 import { api } from "@/src/api";
@@ -35,6 +35,7 @@ export function RazorpayCheckout({ visible, clickbookOrderId, onClose, onSuccess
   const [rpOrderId, setRpOrderId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [provider, setProvider] = useState<"mock" | "razorpay">("mock");
+  const [checkout, setCheckout] = useState<any>(null);
   const [verifying, setVerifying] = useState(false);
   const rzRef = useRef<any>(null);
 
@@ -74,12 +75,11 @@ export function RazorpayCheckout({ visible, clickbookOrderId, onClose, onSuccess
       const r = await api.createRazorpayOrder(clickbookOrderId);
       setRpOrderId(r.razorpay_order_id);
       setProvider(r.provider);
+      setCheckout(r);
       if (r.provider === "mock") {
         // No Razorpay keys yet — simulate success and mark paid via /orders/pay for demo continuity.
         await api.payOrder(clickbookOrderId);
         onSuccess(`MOCK_${r.razorpay_order_id}`);
-      } else if (Platform.OS === "web") {
-        await openWeb(r);
       }
     } catch (e: any) {
       onError(e.message || "Could not start payment");
@@ -111,7 +111,17 @@ export function RazorpayCheckout({ visible, clickbookOrderId, onClose, onSuccess
     }
   };
 
-  const checkoutUrl = rpOrderId ? `${BASE}/api/payments/razorpay/checkout/${rpOrderId}` : null;
+  const checkoutBase = BASE || (Platform.OS === "web" ? window.location.origin : "");
+  const checkoutUrl = rpOrderId ? `${checkoutBase}/api/payments/razorpay/checkout/${rpOrderId}` : null;
+  const sharePaymentViaWhatsApp = async () => {
+    if (!checkoutUrl) return;
+    const message = `Please complete payment for my ClickBook photo album through secure Razorpay checkout: ${checkoutUrl}`;
+    const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    try {
+      if (Platform.OS === "web") window.open(url, "_blank", "noopener,noreferrer");
+      else await Linking.openURL(url);
+    } catch { onError("Could not open WhatsApp. Please copy the payment link and share it manually."); }
+  };
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
@@ -121,14 +131,20 @@ export function RazorpayCheckout({ visible, clickbookOrderId, onClose, onSuccess
             <Feather name="x" size={22} color={colors.onSurface} />
           </Pressable>
           <Text style={{ fontFamily: fonts.text, color: colors.onSurface, fontSize: 14 }}>Secure Checkout</Text>
-          <View style={{ width: 22 }} />
+          {provider === "razorpay" && checkoutUrl ? <Pressable accessibilityLabel="Share payment link via WhatsApp" testID="payment-share-whatsapp" onPress={sharePaymentViaWhatsApp} style={styles.shareButton}><Feather name="message-circle" size={18} color={colors.brandPrimary} /></Pressable> : <View style={{ width: 22 }} />}
         </View>
-        {loading || verifying || provider === "mock" || Platform.OS === "web" ? (
+        {loading || verifying || provider === "mock" ? (
           <View style={styles.loadingWrap}>
             <ActivityIndicator size="large" color={colors.brandPrimary} />
             <Text style={{ marginTop: spacing.md, fontFamily: fonts.text, color: colors.onSurfaceTertiary }}>
               {verifying ? "Verifying payment..." : provider === "mock" ? "Processing test payment..." : Platform.OS === "web" && rpOrderId ? "Complete your payment in the Razorpay window" : "Loading Razorpay..."}
             </Text>
+          </View>
+        ) : Platform.OS === "web" ? (
+          <View style={styles.loadingWrap}>
+            <Text style={{ fontFamily: fonts.text, color: colors.onSurface, textAlign: "center" }}>Your secure Razorpay checkout is ready.</Text>
+            <Pressable testID="razorpay-continue-web" onPress={() => checkout && openWeb(checkout)} style={styles.actionButton}><Text style={styles.actionText}>Continue to secure payment</Text></Pressable>
+            <Pressable testID="razorpay-share-whatsapp" onPress={sharePaymentViaWhatsApp} style={[styles.actionButton, styles.secondaryButton]}><Text style={[styles.actionText, { color: colors.brandPrimary }]}>Share payment link via WhatsApp</Text></Pressable>
           </View>
         ) : checkoutUrl ? (
           <WebView
@@ -150,5 +166,9 @@ export function RazorpayCheckout({ visible, clickbookOrderId, onClose, onSuccess
 const styles = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: colors.surface },
   topbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border, paddingTop: spacing.xxl + spacing.md },
-  loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
+  loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl, gap: spacing.md },
+  shareButton: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
+  actionButton: { width: "100%", maxWidth: 360, alignItems: "center", paddingVertical: spacing.md, paddingHorizontal: spacing.lg, borderRadius: 12, backgroundColor: colors.brandPrimary },
+  secondaryButton: { backgroundColor: "transparent", borderWidth: 1, borderColor: colors.brandPrimary },
+  actionText: { color: colors.onBrandPrimary, fontFamily: fonts.text, fontWeight: "600" },
 });
