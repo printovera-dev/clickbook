@@ -26,6 +26,11 @@ class PagesUpdate(BaseModel):
     pages: List[Dict[str, Any]]
 
 
+class PhotoOrderUpdate(BaseModel):
+    photo_ids: List[str]
+    segment: Optional[str] = None
+
+
 class GenerateRequest(BaseModel):
     style: Optional[str] = None  # elegant | balanced | gallery
     cover_photo_id: Optional[str] = None
@@ -209,6 +214,35 @@ async def upload_photo(album_id: str, file: UploadFile = File(...), segment: str
         {"$push": {"photos": photo}, "$set": {"updated_at": now_iso()}},
     )
     return {"photo": photo}
+
+
+@router.put("/albums/{album_id}/photos/order")
+async def reorder_photos(album_id: str, payload: PhotoOrderUpdate, customer: dict = Depends(get_current_customer)):
+    """Persist the photographer's photo order, scoped to one category for wedding albums."""
+    album = await _owned_album(album_id, customer)
+    _ensure_locked(album)
+    photos = list(album.get("photos", []))
+    segment = payload.segment
+    if album.get("album_config"):
+        if segment not in {"Couple", "Ritual", "Dance", "Ceremony", "Guest", "Family"}:
+            raise HTTPException(400, "Choose a valid wedding photo category")
+        scoped = [p for p in photos if p.get("segment") == segment]
+    else:
+        if segment is not None:
+            raise HTTPException(400, "Categories are only supported for wedding albums")
+        scoped = photos
+    current_ids = [p["id"] for p in scoped]
+    if len(payload.photo_ids) != len(set(payload.photo_ids)) or set(payload.photo_ids) != set(current_ids):
+        raise HTTPException(400, "Photo order must contain every photo in this category exactly once")
+    by_id = {p["id"]: p for p in scoped}
+    reordered = [by_id[pid] for pid in payload.photo_ids]
+    if album.get("album_config"):
+        ordered_iter = iter(reordered)
+        photos = [next(ordered_iter) if p.get("segment") == segment else p for p in photos]
+    else:
+        photos = reordered
+    await db.albums.update_one({"id": album_id, "customer_id": customer["id"]}, {"$set": {"photos": photos, "updated_at": now_iso()}})
+    return {"success": True, "photo_ids": payload.photo_ids}
 
 
 @router.delete("/albums/{album_id}/photos/{photo_id}")
