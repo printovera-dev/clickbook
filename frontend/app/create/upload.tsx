@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList, useWindowDimensions, Alert, Platform } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -23,6 +23,7 @@ export default function UploadStep() {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [err, setErr] = useState("");
   const [segment, setSegment] = useState("Couple");
+  const [previewZoom, setPreviewZoom] = useState(100);
   const isWedding = project === "wedding";
   const [segments, setSegments] = useState(() => {
     const defaults = ["Couple", "Ritual", "Dance", "Ceremony", "Guest", "Family"];
@@ -42,7 +43,21 @@ export default function UploadStep() {
   };
 
   const q = useQuery({ queryKey: ["album", albumId], queryFn: () => api.getAlbum(String(albumId)), enabled: !!albumId });
-  const photos: any[] = q.data?.album?.photos || [];
+  const allPhotos: any[] = q.data?.album?.photos || [];
+  const photos: any[] = isWedding ? allPhotos.filter((p: any) => p.segment === segment) : allPhotos;
+  const orderedPhotoIds = useMemo(() => photos.map((p: any) => p.id).filter(Boolean), [photos]);
+  const movePhoto = async (photoId: string, direction: -1 | 1) => {
+    const index = orderedPhotoIds.indexOf(photoId);
+    const nextIndex = index + direction;
+    if (index < 0 || nextIndex < 0 || nextIndex >= orderedPhotoIds.length) return;
+    const next = [...orderedPhotoIds];
+    [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+    const byId = new Map(photos.map((p: any) => [p.id, p]));
+    const reordered = next.map((id) => byId.get(id));
+    qc.setQueryData(["album", albumId], (old: any) => old ? { ...old, album: { ...old.album, photos: isWedding ? (old.album.photos || []).map((p: any) => p.segment === segment ? reordered.shift() : p) : next.map((id) => byId.get(id)) } } : old);
+    try { await api.reorderPhotos(String(albumId), next, isWedding ? segment : undefined); await q.refetch(); }
+    catch (e: any) { setErr(e?.message || "Could not save photo sequence"); await q.refetch(); }
+  };
 
   const pickAndUpload = async () => {
     setErr("");
@@ -128,10 +143,16 @@ export default function UploadStep() {
   const renderItem = useCallback(({ item: p, index }: { item: any; index: number }) => {
     const ready = !!p.id && !!p.thumbnail_url && !p.pending;
     return (
-      <View style={{ width: cell, height: cell, marginLeft: index % COLS === 0 ? 0 : GAP, marginBottom: GAP }} testID={ready ? `upload-photo-${p.id}` : `upload-pending-${index}`} pointerEvents={ready ? "auto" : "none"}>
+      <View style={{ width: Math.min(cell * previewZoom / 100, cell * 1.6), height: Math.min(cell * previewZoom / 100, cell * 1.6), marginLeft: index % COLS === 0 ? 0 : GAP, marginBottom: GAP }} testID={ready ? `upload-photo-${p.id}` : `upload-pending-${index}`} pointerEvents={ready ? "auto" : "none"}>
         {ready ? <Thumb uri={p.thumbnail_url} recyclingKey={p.id} style={styles.thumb} /> : (
           <View style={[styles.thumb, { alignItems: "center", justifyContent: "center" }]}><ActivityIndicator color={colors.brandPrimary} /></View>
         )}
+        {ready ? (
+          <View style={styles.photoOrderControls}>
+            <Pressable accessibilityLabel="Move photo earlier" onPress={() => movePhoto(p.id, -1)} disabled={orderedPhotoIds.indexOf(p.id) === 0} style={styles.orderButton}><Feather name="chevron-left" size={13} color={colors.onSurface} /></Pressable>
+            <Pressable accessibilityLabel="Move photo later" onPress={() => movePhoto(p.id, 1)} disabled={orderedPhotoIds.indexOf(p.id) === orderedPhotoIds.length - 1} style={styles.orderButton}><Feather name="chevron-right" size={13} color={colors.onSurface} /></Pressable>
+          </View>
+        ) : null}
         {ready ? (
           <Pressable style={styles.thumbRemove} onPress={() => removePhoto(p.id)} testID={`upload-remove-${p.id}`} hitSlop={6}>
             <Feather name="x" size={14} color="#FFF" />
@@ -176,6 +197,13 @@ export default function UploadStep() {
               </View>
             ) : null}
             <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>{isWedding ? "Choose a category, then add photos. Each upload goes into the selected category." : "Pick from your gallery — as many as you like. We’ll design the album automatically."}</Text>
+            <View style={styles.zoomRow} testID="upload-preview-zoom">
+              <Text style={s.bodyMuted}>Preview size</Text>
+              <Pressable accessibilityLabel="Zoom previews out" onPress={() => setPreviewZoom((z) => Math.max(70, z - 10))} style={styles.zoomButton}><Feather name="minus" size={16} color={colors.onSurface} /></Pressable>
+              <View style={styles.zoomTrack}><View style={[styles.zoomFill, { width: `${((previewZoom - 70) / 90) * 100}%` }]} /></View>
+              <Pressable accessibilityLabel="Zoom previews in" onPress={() => setPreviewZoom((z) => Math.min(160, z + 10))} style={styles.zoomButton}><Feather name="plus" size={16} color={colors.onSurface} /></Pressable>
+              <Text style={[s.bodyMuted, { width: 42, textAlign: "right" }]}>{previewZoom}%</Text>
+            </View>
             {isWedding ? (
               <>
                 <View testID="wedding-photo-categories" style={styles.segmentWrap}>
@@ -252,6 +280,12 @@ const styles = StyleSheet.create({
   bar: { marginTop: spacing.md, width: "100%", height: 4, borderRadius: 2, backgroundColor: colors.surfaceTertiary, overflow: "hidden" },
   barFill: { height: 4, backgroundColor: colors.brandPrimary },
   thumb: { width: "100%", height: "100%", borderRadius: radius.sm },
+  zoomRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.md },
+  zoomButton: { width: 28, height: 28, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm },
+  zoomTrack: { flex: 1, height: 5, borderRadius: 3, backgroundColor: colors.surfaceTertiary, overflow: "hidden" },
+  zoomFill: { height: 5, backgroundColor: colors.brandPrimary },
+  photoOrderControls: { position: "absolute", left: 2, bottom: 2, flexDirection: "row", gap: 2, zIndex: 2 },
+  orderButton: { width: 22, height: 22, alignItems: "center", justifyContent: "center", borderRadius: 11, backgroundColor: "rgba(255,255,255,0.92)" },
   thumbRemove: {
     position: "absolute", top: 4, right: 4,
     width: 24, height: 24, borderRadius: 12,
