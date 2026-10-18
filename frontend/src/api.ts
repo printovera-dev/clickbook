@@ -138,6 +138,8 @@ export const api = {
     request<{ album: any }>(`/albums/${id}/pages`, { method: "PUT", body: { pages } }),
   deletePhoto: (albumId: string, photoId: string) =>
     request(`/albums/${albumId}/photos/${photoId}`, { method: "DELETE" }),
+  reorderPhotos: (albumId: string, photo_ids: string[], segment?: string) =>
+    request(`/albums/${albumId}/photos/order`, { method: "PUT", body: { photo_ids, ...(segment ? { segment } : {}) } }),
 
   // Upload
   uploadPhoto: (albumId: string, uri: string, filename: string, webFile?: any, segment?: string) =>
