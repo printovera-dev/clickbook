@@ -43,16 +43,16 @@ export default function UploadStep() {
   };
 
   const q = useQuery({ queryKey: ["album", albumId], queryFn: () => api.getAlbum(String(albumId)), enabled: !!albumId });
-  const allPhotos: any[] = q.data?.album?.photos || [];
-  const photos: any[] = isWedding ? allPhotos.filter((p: any) => p.segment === segment) : allPhotos;
-  const orderedPhotoIds = useMemo(() => photos.map((p: any) => p.id).filter(Boolean), [photos]);
+  const photos: any[] = q.data?.album?.photos || [];
+  const visiblePhotos: any[] = isWedding ? photos.filter((p: any) => p.segment === segment) : photos;
+  const orderedPhotoIds = useMemo(() => visiblePhotos.map((p: any) => p.id).filter(Boolean), [visiblePhotos]);
   const movePhoto = async (photoId: string, direction: -1 | 1) => {
     const index = orderedPhotoIds.indexOf(photoId);
     const nextIndex = index + direction;
     if (index < 0 || nextIndex < 0 || nextIndex >= orderedPhotoIds.length) return;
     const next = [...orderedPhotoIds];
     [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
-    const byId = new Map(photos.map((p: any) => [p.id, p]));
+    const byId = new Map(visiblePhotos.map((p: any) => [p.id, p]));
     const reordered = next.map((id) => byId.get(id));
     qc.setQueryData(["album", albumId], (old: any) => old ? { ...old, album: { ...old.album, photos: isWedding ? (old.album.photos || []).map((p: any) => p.segment === segment ? reordered.shift() : p) : next.map((id) => byId.get(id)) } } : old);
     try { await api.reorderPhotos(String(albumId), next, isWedding ? segment : undefined); await q.refetch(); }
@@ -164,7 +164,7 @@ export default function UploadStep() {
 
   const uploading = !!progress;
   const pendingTiles = progress ? Array.from({ length: Math.max(0, progress.total - progress.done) }, (_, i) => ({ id: "", pending: true, key: `pending-${i}` })) : [];
-  const gridData = [...photos, ...pendingTiles];
+  const gridData = [...visiblePhotos, ...pendingTiles];
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface, paddingTop: insets.top }}>
