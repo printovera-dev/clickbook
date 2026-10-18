@@ -1,0 +1,46 @@
+name: Printovera pre-deploy checks
+
+on:
+  push:
+    branches:
+      - wedding-album-v1
+  pull_request:
+    branches:
+      - wedding-album-v1
+
+permissions:
+  contents: read
+
+jobs:
+  backend-syntax:
+    name: Backend Python syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile backend Python
+        run: python -m compileall -q backend
+
+  frontend-checks:
+    name: Frontend lint and TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+      - name: Enable Yarn 1
+        run: npm install --global yarn@1.22.22
+      - name: Install dependencies
+        working-directory: frontend
+        run: yarn install --frozen-lockfile
+      - name: Lint
+        working-directory: frontend
+        run: yarn lint
+      - name: TypeScript
+        working-directory: frontend
+        run: npx tsc --noEmit
