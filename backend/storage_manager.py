@@ -163,8 +163,34 @@ def _get_bytes(rel_path: str) -> Optional[bytes]:
     return p.read_bytes()
 
 
-def save_original(customer_id: str, album_id: str, filename: str, data: bytes) -> dict:
-    """Stores the untouched original plus resized JPEG derivatives (thumbnail / preview / print)."""
+def create_presigned_upload(rel_path: str, content_type: str, expires_in: int = 900) -> str:
+    """Create a short-lived presigned PUT URL for direct client-to-S3 uploads."""
+    if not _use_s3():
+        raise RuntimeError("Direct upload requires STORAGE_DRIVER=s3")
+    return _get_s3().generate_presigned_url(
+        "put_object",
+        Params={"Bucket": S3_BUCKET, "Key": rel_path, "ContentType": content_type},
+        ExpiresIn=expires_in,
+    )
+
+
+def s3_head(rel_path: str) -> dict:
+    if not _use_s3():
+        raise RuntimeError("S3 storage is not enabled")
+    return _get_s3().head_object(Bucket=S3_BUCKET, Key=rel_path)
+
+
+def delete_storage_object(rel_path: str) -> None:
+    if _use_s3():
+        _get_s3().delete_object(Bucket=S3_BUCKET, Key=rel_path)
+        return
+    path = resolve_path(rel_path)
+    if path and path.exists():
+        path.unlink()
+
+
+def save_original(customer_id: str, album_id: str, filename: str, data: bytes, existing_original_path: Optional[str] = None) -> dict:
+    """Stores an original plus resized derivatives. Reuses an already uploaded S3 original when supplied."""
     from image_processor import make_derivatives
 
     ensure_dirs(customer_id, album_id)
@@ -176,13 +202,20 @@ def save_original(customer_id: str, album_id: str, filename: str, data: bytes) -
     rel = f"clickbook/customers/{customer_id}/albums/{album_id}"
     content_type = "image/jpeg" if ext in (".jpg", ".jpeg") else "image/png" if ext == ".png" else "image/webp" if ext == ".webp" else "application/octet-stream"
     derivs = make_derivatives(data)
-    _put(f"{rel}/originals/{key}", data, content_type)
+    original_path = existing_original_path or f"{rel}/originals/{key}"
+    if existing_original_path:
+        expected_prefix = f"{rel}/originals/"
+        if not existing_original_path.startswith(expected_prefix) or ".." in existing_original_path.split("/"):
+            raise ValueError("Invalid existing original storage path")
+        key = existing_original_path.rsplit("/", 1)[-1]
+    else:
+        _put(original_path, data, content_type)
     _put(f"{rel}/thumbnails/{webp_key}", derivs["thumbnail"], "image/webp")
     _put(f"{rel}/previews/{webp_key}", derivs["preview"], "image/webp")
     _put(f"{rel}/print/{jpg_key}", derivs["print"], "image/jpeg")
     return {
         "storage_key": key,
-        "original_path": f"{rel}/originals/{key}",
+        "original_path": original_path,
         "thumbnail_path": f"{rel}/thumbnails/{webp_key}",
         "preview_path": f"{rel}/previews/{webp_key}",
         "print_path": f"{rel}/print/{jpg_key}",
