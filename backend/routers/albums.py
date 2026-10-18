@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Any, Dict
 
 from core import db, now_utc, now_iso, new_id, get_current_customer, get_settings_doc
-from storage_manager import save_original, public_url
+from storage_manager import save_original, public_url, STORAGE_DRIVER, create_presigned_upload, s3_head, get_file_bytes
 from routers.catalog import with_thumbnails
 from design import STYLE_RHYTHMS, DEFAULT_STYLE, default_transform, default_cover_design
 
@@ -29,6 +29,19 @@ class PagesUpdate(BaseModel):
 class PhotoOrderUpdate(BaseModel):
     photo_ids: List[str]
     segment: Optional[str] = None
+
+
+class DirectUploadRequest(BaseModel):
+    filename: str
+    content_type: str = "application/octet-stream"
+    size_bytes: int
+    segment: str = "Unassigned"
+
+
+class DirectUploadFinalize(BaseModel):
+    key: str
+    filename: str
+    segment: str = "Unassigned"
 
 
 class GenerateRequest(BaseModel):
@@ -181,6 +194,65 @@ async def update_album(album_id: str, payload: AlbumUpdate, customer: dict = Dep
                 "snapshot": {"cover_design": update["cover_design"]}, "created_at": now_iso(),
             })
     return {"album": _decorate(await db.albums.find_one({"id": album_id}, {"_id": 0}))}
+
+
+@router.post("/albums/{album_id}/photos/presign")
+async def presign_photo_upload(album_id: str, payload: DirectUploadRequest, customer: dict = Depends(get_current_customer)):
+    if STORAGE_DRIVER != "s3":
+        return {"enabled": False}
+    if payload.segment not in {"Couple", "Ritual", "Dance", "Ceremony", "Guest", "Family", "Unassigned"}:
+        raise HTTPException(400, "Invalid photo category")
+    _ensure_locked(await _owned_album(album_id, customer))
+    filename = payload.filename or "photo.jpg"
+    ext = __import__("os").path.splitext(filename)[1].lower()
+    if ext not in ALLOWED_EXT:
+        raise HTTPException(400, "Unsupported file type")
+    if payload.size_bytes < 1 or payload.size_bytes > MAX_UPLOAD_BYTES:
+        raise HTTPException(400, "File must be between 1 byte and 20MB")
+    if payload.content_type and payload.content_type not in {"image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "application/octet-stream"}:
+        raise HTTPException(400, "Unsupported image content type")
+    key = f"clickbook/customers/{customer['id']}/albums/{album_id}/originals/{new_id()}{ext}"
+    content_type = payload.content_type or "application/octet-stream"
+    try:
+        url = create_presigned_upload(key, content_type)
+    except Exception as exc:
+        raise HTTPException(503, "Direct S3 upload is unavailable. Check S3 configuration.") from exc
+    return {"enabled": True, "put_url": url, "key": key, "content_type": content_type}
+
+
+@router.post("/albums/{album_id}/photos/finalize")
+async def finalize_photo_upload(album_id: str, payload: DirectUploadFinalize, customer: dict = Depends(get_current_customer)):
+    if STORAGE_DRIVER != "s3":
+        raise HTTPException(409, "Direct S3 upload is not enabled")
+    if payload.segment not in {"Couple", "Ritual", "Dance", "Ceremony", "Guest", "Family", "Unassigned"}:
+        raise HTTPException(400, "Invalid photo category")
+    _ensure_locked(await _owned_album(album_id, customer))
+    prefix = f"clickbook/customers/{customer['id']}/albums/{album_id}/originals/"
+    if not payload.key.startswith(prefix) or ".." in payload.key.split("/") or payload.key.rsplit("/", 1)[-1] == "":
+        raise HTTPException(400, "Invalid upload key")
+    filename = payload.filename or "photo.jpg"
+    if __import__("os").path.splitext(filename)[1].lower() not in ALLOWED_EXT:
+        raise HTTPException(400, "Unsupported file type")
+    try:
+        head = s3_head(payload.key)
+        size = int(head.get("ContentLength", 0))
+        if size < 1 or size > MAX_UPLOAD_BYTES:
+            raise HTTPException(400, "File must be between 1 byte and 20MB")
+        data = get_file_bytes(payload.key)
+        if not data:
+            raise HTTPException(400, "Uploaded image was not found in S3")
+        meta = await run_in_threadpool(save_original, customer["id"], album_id, filename, data, payload.key)
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(503, "Could not process the uploaded image") from exc
+    photo = {"id": new_id(), "filename": filename, "uploaded_at": now_iso(), "segment": payload.segment, **meta,
+             "thumbnail_url": public_url(meta["thumbnail_path"]), "preview_url": public_url(meta["preview_path"]),
+             "original_url": public_url(meta["original_path"])}
+    await db.albums.update_one({"id": album_id, "customer_id": customer["id"]}, {"$push": {"photos": photo}, "$set": {"updated_at": now_iso()}})
+    return {"photo": photo}
 
 
 @router.post("/albums/{album_id}/photos")
