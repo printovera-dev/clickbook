@@ -137,7 +137,7 @@ export default function UploadStep() {
 
     // Limit decoded local previews on iPhone to reduce memory spikes for large batches.
     // Other selected photos use lightweight placeholders until their upload completes.
-    const MAX_LOCAL_PREVIEWS = 4;
+    const MAX_LOCAL_PREVIEWS = 50;
     const previewBatchKey = Date.now();
     setProgress({ done: 0, total: assets.length });
     setLocalPreviews(assets.map((asset: any, i: number) => ({
