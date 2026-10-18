@@ -9,7 +9,7 @@ from storage_manager import STORAGE_BASE
 from seed import seed
 from routers import auth, catalog, albums, orders, payments, admin, files, notifications, home
 
-app = FastAPI(title="ClickBook API", docs_url=None)
+app = FastAPI(title="Printovera Wedding Album Studio API", docs_url=None)
 api = APIRouter(prefix="/api")
 
 
@@ -20,12 +20,12 @@ async def root():
 
 @app.get("/docs", include_in_schema=False)
 async def docs():
-    return get_swagger_ui_html(openapi_url="openapi.json", title="ClickBook API Docs")
+    return get_swagger_ui_html(openapi_url="openapi.json", title="Printovera API Docs")
 
 
 @api.get("/health")
 async def health():
-    return {"ok": True, "service": "clickbook", "time": now_iso()}
+    return {"ok": True, "service": "printovera", "time": now_iso()}
 
 
 for r in (auth.router, catalog.router, albums.router, orders.router, payments.router, admin.router, files.router,
