@@ -10,8 +10,6 @@ export default function TabsLayout() {
   const [authed, setAuthed] = useState<boolean | null>(null);
   useEffect(() => { getToken().then((t) => setAuthed(!!t)); }, []);
 
-  // Home is public; the other tabs need a signed-in customer → guests stay on the new home page and are taken to its
-  // inline sign-in block (never the legacy login screen). Token is re-read on every press so the guard is never stale.
   const guard = (name: string) => ({
     tabPress: (e: any) => {
       if (authed !== false) return;
@@ -38,26 +36,11 @@ export default function TabsLayout() {
         tabBarLabelStyle: { fontFamily: fonts.text, fontSize: 11 },
       }}
     >
-      <Tabs.Screen
-        name="home"
-        options={{ title: "Home", tabBarIcon: ({ color, size }) => <Feather name="home" color={color} size={size} /> }}
-      />
-      <Tabs.Screen
-        name="chat"
-        listeners={guard("chat")}
-        options={{ title: "Chat", tabBarIcon: ({ color, size }) => <Feather name="message-circle" color={color} size={size} /> }}
-      />
-      <Tabs.Screen
-        name="orders"
-        listeners={guard("orders")}
-        options={{ title: "Orders", tabBarIcon: ({ color, size }) => <Feather name="shopping-cart" color={color} size={size} /> }}
-      />
-      <Tabs.Screen
-        name="profile"
-        listeners={guard("profile")}
-        options={{ title: "Profile", tabBarIcon: ({ color, size }) => <Feather name="user" color={color} size={size} /> }}
-      />
-      {/* My Books stays reachable (Home → "See all", Profile) but is not a bottom tab */}
+      <Tabs.Screen name="home" options={{ title: "Home", tabBarIcon: ({ color, size }) => <Feather name="home" color={color} size={size} /> }} />
+      <Tabs.Screen name="print-studio" options={{ title: "Print Studio", tabBarIcon: ({ color, size }) => <Feather name="printer" color={color} size={size} }} />
+      <Tabs.Screen name="chat" listeners={guard("chat")} options={{ title: "Chat", tabBarIcon: ({ color, size }) => <Feather name="message-circle" color={color} size={size} /> }} />
+      <Tabs.Screen name="orders" listeners={guard("orders")} options={{ title: "Orders", tabBarIcon: ({ color, size }) => <Feather name="shopping-cart" color={color} size={size} /> }} />
+      <Tabs.Screen name="profile" listeners={guard("profile")} options={{ title: "Profile", tabBarIcon: ({ color, size }) => <Feather name="user" color={color} size={size} /> }} />
       <Tabs.Screen name="albums" listeners={guard("albums")} options={{ href: null, title: "My ClickBooks" }} />
     </Tabs>
   );
