@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList, useWindowDimensions, Alert, Platform, PanResponder } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -25,6 +25,7 @@ export default function UploadStep() {
   const [segment, setSegment] = useState("Couple");
   const [previewZoom, setPreviewZoom] = useState(100);
   const [zoomTrackWidth, setZoomTrackWidth] = useState(1);
+  const zoomStart = useRef(100);
   const isWedding = project === "wedding";
   const [segments, setSegments] = useState(() => {
     const defaults = ["Couple", "Ritual", "Dance", "Ceremony", "Guest", "Family"];
@@ -63,6 +64,12 @@ export default function UploadStep() {
     await reorderPhotoTo(index, index + direction);
   };
   const setZoomFromX = (x: number) => setPreviewZoom(Math.max(70, Math.min(160, Math.round(70 + (Math.max(0, Math.min(zoomTrackWidth, x)) / Math.max(1, zoomTrackWidth)) * 90))));
+  const zoomPanResponder = PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => { zoomStart.current = previewZoom; },
+    onPanResponderMove: (_, gesture) => setPreviewZoom(Math.max(70, Math.min(160, Math.round(zoomStart.current + gesture.dx / Math.max(1, zoomTrackWidth) * 90)))),
+  });
 
   const pickAndUpload = async () => {
     setErr("");
@@ -110,7 +117,7 @@ export default function UploadStep() {
         const name = asset.fileName || `photo_${Date.now()}_${i}.jpg`;
         try {
           // one file at a time: only a single upload body is ever held in memory
-          const r = await api.uploadPhoto(String(albumId), asset.uri, name, (asset as any).file, isWedding ? segment : undefined);
+          const r = await api.uploadPhoto(String(albumId), asset.uri, name, (asset as any).file, isWedding ? segment : undefined, asset.fileSize, (asset as any).mimeType);
           qc.setQueryData(["album", albumId], (old: any) => old ? { ...old, album: { ...old.album, photos: [...(old.album.photos || []), r.photo] } } : old);
         } catch (e: any) {
           failed += 1;
@@ -145,10 +152,23 @@ export default function UploadStep() {
       : router.replace({ pathname: "/create/style", params: { albumId: String(albumId), ...(orderParam ? { segmentOrder: orderParam } : {}), ...(isWedding ? { project: "wedding" } : {}) } });
   };
 
+  const gridCols = previewZoom >= 140 ? 1 : previewZoom >= 110 ? 2 : COLS;
   const renderItem = useCallback(({ item: p, index }: { item: any; index: number }) => {
     const ready = !!p.id && !!p.thumbnail_url && !p.pending;
+    const itemSize = Math.min(cell * previewZoom / 100, cell * 1.6);
+    const dragResponder = PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dx) > 12 || Math.abs(gesture.dy) > 12,
+      onPanResponderRelease: (_, gesture) => {
+        if (!ready) return;
+        const across = Math.round(gesture.dx / Math.max(1, itemSize + GAP));
+        const down = Math.round(gesture.dy / Math.max(1, itemSize + GAP));
+        const target = Math.max(0, Math.min(orderedPhotoIds.length - 1, index + down * gridCols + across));
+        void reorderPhotoTo(index, target);
+      },
+    });
     return (
-      <View style={{ width: Math.min(cell * previewZoom / 100, cell * 1.6), height: Math.min(cell * previewZoom / 100, cell * 1.6), marginLeft: index % COLS === 0 ? 0 : GAP, marginBottom: GAP }} testID={ready ? `upload-photo-${p.id}` : `upload-pending-${index}`} pointerEvents={ready ? "auto" : "none"}>
+      <View {...(ready ? dragResponder.panHandlers : {})} style={{ width: itemSize, height: itemSize, marginLeft: index % gridCols === 0 ? 0 : GAP, marginBottom: GAP }} testID={ready ? `upload-photo-${p.id}` : `upload-pending-${index}`} pointerEvents={ready ? "auto" : "none"}>
         {ready ? <Thumb uri={p.thumbnail_url} recyclingKey={p.id} style={styles.thumb} /> : (
           <View style={[styles.thumb, { alignItems: "center", justifyContent: "center" }]}><ActivityIndicator color={colors.brandPrimary} /></View>
         )}
@@ -165,7 +185,7 @@ export default function UploadStep() {
         ) : null}
       </View>
     );
-  }, [cell, removePhoto]);
+  }, [cell, previewZoom, gridCols, orderedPhotoIds, reorderPhotoTo, removePhoto]);
 
   const uploading = !!progress;
   const pendingTiles = progress ? Array.from({ length: Math.max(0, progress.total - progress.done) }, (_, i) => ({ id: "", pending: true, key: `pending-${i}` })) : [];
@@ -182,14 +202,14 @@ export default function UploadStep() {
         testID="upload-photo-grid"
         data={gridData}
         keyExtractor={(p: any) => p.id || p.key}
-        numColumns={COLS}
+        numColumns={gridCols}
         renderItem={renderItem}
         // virtualization: only ~2 screens of thumbnails are mounted; off-screen rows are released
         initialNumToRender={12}
         maxToRenderPerBatch={9}
         windowSize={3}
         removeClippedSubviews
-        getItemLayout={(_, index) => { const itemSize = Math.min(cell * previewZoom / 100, cell * 1.6); return { length: itemSize + GAP, offset: (itemSize + GAP) * Math.floor(index / COLS), index }; }}
+        getItemLayout={(_, index) => { const itemSize = Math.min(cell * previewZoom / 100, cell * 1.6); return { length: itemSize + GAP, offset: (itemSize + GAP) * Math.floor(index / gridCols), index }; }}
         contentContainerStyle={{ padding: spacing.xl, paddingBottom: 140 }}
         ListHeaderComponent={
           <View>
@@ -205,7 +225,7 @@ export default function UploadStep() {
             <View style={styles.zoomRow} testID="upload-preview-zoom">
               <Text style={s.bodyMuted}>Preview size</Text>
               <Pressable accessibilityLabel="Zoom previews out" onPress={() => setPreviewZoom((z) => Math.max(70, z - 10))} style={styles.zoomButton}><Feather name="minus" size={16} color={colors.onSurface} /></Pressable>
-              <View style={styles.zoomTrack}><View style={[styles.zoomFill, { width: `${((previewZoom - 70) / 90) * 100}%` }]} /></View>
+              <View style={styles.zoomTrackTouch} onLayout={(event) => setZoomTrackWidth(event.nativeEvent.layout.width)} {...zoomPanResponder.panHandlers}><View style={styles.zoomTrack}><View style={[styles.zoomFill, { width: `${((previewZoom - 70) / 90) * 100}%` }]} /></View></View>
               <Pressable accessibilityLabel="Zoom previews in" onPress={() => setPreviewZoom((z) => Math.min(160, z + 10))} style={styles.zoomButton}><Feather name="plus" size={16} color={colors.onSurface} /></Pressable>
               <Text style={[s.bodyMuted, { width: 42, textAlign: "right" }]}>{previewZoom}%</Text>
             </View>
@@ -287,7 +307,8 @@ const styles = StyleSheet.create({
   thumb: { width: "100%", height: "100%", borderRadius: radius.sm },
   zoomRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.md },
   zoomButton: { width: 28, height: 28, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm },
-  zoomTrack: { flex: 1, height: 5, borderRadius: 3, backgroundColor: colors.surfaceTertiary, overflow: "hidden" },
+  zoomTrackTouch: { flex: 1, height: 28, justifyContent: "center", paddingHorizontal: 2 },
+  zoomTrack: { width: "100%", height: 5, borderRadius: 3, backgroundColor: colors.surfaceTertiary, overflow: "hidden" },
   zoomFill: { height: 5, backgroundColor: colors.brandPrimary },
   photoOrderControls: { position: "absolute", left: 2, bottom: 2, flexDirection: "row", gap: 2, zIndex: 2 },
   orderButton: { width: 22, height: 22, alignItems: "center", justifyContent: "center", borderRadius: 11, backgroundColor: "rgba(255,255,255,0.92)" },
