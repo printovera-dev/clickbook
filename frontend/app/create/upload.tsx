@@ -153,9 +153,9 @@ export default function UploadStep() {
     let completed = 0;
     const uploaded: { index: number; photo: any }[] = [];
 
-    // Completion creates print derivatives server-side; two parallel requests avoid
-    // overwhelming the small backend while keeping direct S3 PUTs concurrent.
-    const concurrency = Math.min(2, assets.length);
+    // iOS uploads run one at a time to limit peak memory and native file-handle pressure.
+    // Other platforms retain two concurrent requests; server-side derivative work is unchanged.
+    const concurrency = Math.min(Platform.OS === "ios" ? 1 : 2, assets.length);
     const worker = async () => {
       while (true) {
         const i = nextIndex++;
