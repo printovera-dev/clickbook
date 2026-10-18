@@ -11,12 +11,17 @@ API_URL = os.environ.get("WHATSAPP_API_URL", "").strip()
 API_KEY = os.environ.get("WHATSAPP_API_KEY", "").strip()
 FROM = os.environ.get("WHATSAPP_FROM", "").strip()
 TEMPLATE = os.environ.get("WHATSAPP_TEMPLATE", "authentication").strip()
-CAMPAIGN = os.environ.get("WHATSAPP_CAMPAIGN", "clickbook-otp").strip()
+CAMPAIGN = os.environ.get("WHATSAPP_CAMPAIGN", "printovera-otp").strip()
+APP_ENV = os.environ.get("APP_ENV", "").strip().lower()
+
+
+def _is_production() -> bool:
+    return APP_ENV in {"production", "prod"}
 
 
 def generate_otp(length: int = 6) -> str:
     """Use predictable demo OTPs only in explicit mock mode."""
-    if PROVIDER == "mock":
+    if PROVIDER == "mock" and not _is_production():
         return "123456"
     return "".join(str(secrets.randbelow(10)) for _ in range(length))
 
@@ -34,6 +39,9 @@ def _format_to(mobile: str) -> str:
 async def send_otp(mobile: str, otp: str, channel: str = "whatsapp") -> dict:
     """Send OTP through the configured provider. Never silently fall back to mock."""
     if PROVIDER == "mock":
+        if _is_production():
+            logger.error("Refusing mock WhatsApp OTP provider in production")
+            return {"success": False, "provider": "mock", "message": "WhatsApp provider is not configured for production"}
         logger.info("[MOCK OTP] provider=mock channel=%s", channel)
         return {"success": True, "provider": "mock", "message": "OTP delivered (mock)"}
 
@@ -70,7 +78,6 @@ async def send_otp(mobile: str, otp: str, channel: str = "whatsapp") -> dict:
             response = await client.post(API_URL, headers=headers, json=payload)
         ok = 200 <= response.status_code < 300
         logger.info("WhatsApp OTP provider response status=%s", response.status_code)
-        logger.info("WhatsApp OTP provider response body=%s", response.text[:2000])
         if not ok:
             # Do not log provider response bodies: they may contain sensitive account data.
             logger.warning("WhatsApp OTP provider rejected request (HTTP %s)", response.status_code)
