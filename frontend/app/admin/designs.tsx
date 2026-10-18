@@ -1,12 +1,12 @@
 // Album Designs: the design system customers choose from — album styles (layout rhythm) and cover styles.
 import { useEffect, useState } from "react";
 import * as ImagePicker from "expo-image-picker";
-import { View, Text, StyleSheet, Pressable, TextInput, Switch, Alert } from "react-native";
+import { View, Text, StyleSheet, Pressable, TextInput, Switch, Alert, Image } from "react-native";
 import { useRouter } from "expo-router";
 import { AdminPage } from "@/src/components/admin-page";
 import { ALBUM_STYLES, COVER_STYLES } from "@/src/design";
 import { s, Button } from "@/src/ui";
-import { api } from "@/src/api";
+import { api, fileUrl } from "@/src/api";
 import { colors, fonts, radius, spacing } from "@/src/theme";
 import Feather from "@react-native-vector-icons/feather";
 
@@ -51,8 +51,8 @@ export default function AdminDesigns() {
       <View style={styles.grid}>
         {pageDesigns.map((d) => (
           <View key={d.id} style={styles.card} testID={"admin-page-design-" + d.id}>
-            <View style={{ width: 112, height: 90, alignSelf: "center", backgroundColor: d.background || "#FFFFFF", borderWidth: 1, borderColor: colors.border }}>
-              {(d.positions_by_count?.["4"] || []).map((r: any, i: number) => <View key={i} style={{ position: "absolute", left: r.x * 112, top: r.y * 90, width: r.w * 112, height: r.h * 90, backgroundColor: d.preset_key === "cinematic" ? "#D6D3D1" : colors.borderStrong }} />)}
+            <View style={{ width: 112, height: 90, alignSelf: "center", backgroundColor: d.background || "#FFFFFF", borderWidth: 1, borderColor: colors.border, overflow: "hidden" }}>
+              {d.mock_file_url ? <Image source={{ uri: fileUrl(d.mock_file_url) }} resizeMode="cover" style={StyleSheet.absoluteFillObject} /> : (d.positions_by_count?.["4"] || []).map((r: any, i: number) => <View key={i} style={{ position: "absolute", left: r.x * 112, top: r.y * 90, width: r.w * 112, height: r.h * 90, backgroundColor: d.preset_key === "cinematic" ? "#D6D3D1" : colors.borderStrong }} />)}
             </View>
             <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>{d.segment && d.segment !== "All" ? "Photo section: " + d.segment : "General page design"}</Text>
             <Text style={[s.label, { marginTop: spacing.sm }]}>Design name</Text>
