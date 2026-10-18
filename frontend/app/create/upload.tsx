@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList, useWindowDimensions, Alert, Platform } from "react-native";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, FlatList, useWindowDimensions, Alert, Platform, PanResponder } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -24,6 +24,7 @@ export default function UploadStep() {
   const [err, setErr] = useState("");
   const [segment, setSegment] = useState("Couple");
   const [previewZoom, setPreviewZoom] = useState(100);
+  const [zoomTrackWidth, setZoomTrackWidth] = useState(1);
   const isWedding = project === "wedding";
   const [segments, setSegments] = useState(() => {
     const defaults = ["Couple", "Ritual", "Dance", "Ceremony", "Guest", "Family"];
@@ -46,15 +47,22 @@ export default function UploadStep() {
   const photos: any[] = q.data?.album?.photos || [];
   const visiblePhotos: any[] = isWedding ? photos.filter((p: any) => p.segment === segment) : photos;
   const orderedPhotoIds = useMemo(() => visiblePhotos.map((p: any) => p.id).filter(Boolean), [visiblePhotos]);
-  const movePhoto = async (photoId: string, direction: -1 | 1) => {
-    const index = orderedPhotoIds.indexOf(photoId);
-    const nextIndex = index + direction;
-    if (index < 0 || nextIndex < 0 || nextIndex >= orderedPhotoIds.length) return;
+  const reorderPhotoTo = async (fromIndex: number, toIndex: number) => {
+    if (fromIndex < 0 || toIndex < 0 || fromIndex >= orderedPhotoIds.length || toIndex >= orderedPhotoIds.length || fromIndex === toIndex) return;
     const next = [...orderedPhotoIds];
-    [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    const byId = new Map(visiblePhotos.map((p: any) => [p.id, p]));
+    const reordered = next.map((id) => byId.get(id));
+    qc.setQueryData(["album", albumId], (old: any) => old ? { ...old, album: { ...old.album, photos: isWedding ? (old.album.photos || []).map((p: any) => p.segment === segment ? reordered.shift() : p) : reordered } } : old);
     try { await api.reorderPhotos(String(albumId), next, isWedding ? segment : undefined); await q.refetch(); }
     catch (e: any) { setErr(e?.message || "Could not save photo sequence"); await q.refetch(); }
   };
+  const movePhoto = async (photoId: string, direction: -1 | 1) => {
+    const index = orderedPhotoIds.indexOf(photoId);
+    await reorderPhotoTo(index, index + direction);
+  };
+  const setZoomFromX = (x: number) => setPreviewZoom(Math.max(70, Math.min(160, Math.round(70 + (Math.max(0, Math.min(zoomTrackWidth, x)) / Math.max(1, zoomTrackWidth)) * 90))));
 
   const pickAndUpload = async () => {
     setErr("");
