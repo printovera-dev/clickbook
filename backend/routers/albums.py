@@ -415,6 +415,7 @@ async def auto_generate(album_id: str, payload: Optional[GenerateRequest] = None
                 "text": "",
                 "order": idx,
                 "segment": segment,
+                "design_mock_file_url": (design or {}).get("mock_file_url"),
             }
             if len(rects) == count:
                 page["slots"] = rects
