@@ -38,6 +38,7 @@ export function RazorpayCheckout({ visible, clickbookOrderId, onClose, onSuccess
   const [checkout, setCheckout] = useState<any>(null);
   const [verifying, setVerifying] = useState(false);
   const rzRef = useRef<any>(null);
+  const startAttemptRef = useRef(false);
 
   const handleSuccess = async (p: RzpPayload) => {
     setVerifying(true);
@@ -89,10 +90,13 @@ export function RazorpayCheckout({ visible, clickbookOrderId, onClose, onSuccess
   };
 
   useEffect(() => {
-    if (visible) {
+    if (visible && !startAttemptRef.current) {
+      startAttemptRef.current = true;
       start();
-    } else {
+    } else if (!visible) {
+      startAttemptRef.current = false;
       setRpOrderId(null);
+      setCheckout(null);
     }
     // Razorpay appends its own iframe to document.body on web; remove it when the modal goes away.
     return () => { rzRef.current?.close?.(); rzRef.current = null; };
