@@ -101,9 +101,13 @@ export default function PageEditor() {
     const singlePhoto = page.photo_ids.length === 1;
     const nextImage: any = { ...cur, photo_id: page.photo_ids[slot], fit: "fill", scale: 1, ox: 0, oy: 0 };
     let nextPage: Page = { ...page, images: { ...(page.images || {}), [String(slot)]: nextImage } };
-    if (singlePhoto && !cur.pageFill) {
+    if (singlePhoto) {
+      // Always re-apply full-page geometry when Fill is tapped. Do not trust the
+      // saved flag alone: another layout action or older saved page may have
+      // left the image flagged as filled while its slot is still inset.
+      const wasAlreadyFullBleed = Boolean(cur.pageFill) && rect.x === 0 && rect.y === 0 && rect.w === 1 && rect.h === 1;
       nextImage.pageFill = true;
-      nextImage.restoreSlot = rect;
+      nextImage.restoreSlot = wasAlreadyFullBleed ? cur.restoreSlot : rect;
       nextPage = { ...nextPage, slots: [{ x: 0, y: 0, w: 1, h: 1 }] };
     }
     commit(nextPage);
