@@ -47,15 +47,14 @@ async function getDroppedImageFiles(dataTransfer: any): Promise<any[]> {
     const file = item.getAsFile?.();
     if (file) itemFiles.push(file);
   }
-  // Snapshot FileList synchronously too; it contains the full multi-file drop
-  // in browsers that don't expose all photos through DataTransferItem.
+  // Snapshot FileList synchronously too. Some browsers expose only one of
+  // several dragged files through FileList while DataTransferItem exposes all.
   const fileList = Array.from(dataTransfer?.files || []) as any[];
 
   const folderGroups = await Promise.all(directoryEntries.map((entry) => filesFromDroppedEntry(entry)));
-  // Prefer FileList as the authoritative list for multi-file drops. Combining
-  // it with item.getAsFile() and deduplicating by filename/metadata can silently
-  // discard distinct photos that share metadata or names from separate folders.
-  const individualFiles = fileList.length ? fileList : itemFiles;
+  // Use the fuller snapshot for individual-file drops; never let a partial
+  // FileList override a longer item.getAsFile() list.
+  const individualFiles = fileList.length >= itemFiles.length ? fileList : itemFiles;
   const files = [...individualFiles, ...folderGroups.flat()];
   const seenObjects = new Set<any>();
   return files.filter((file) => {
