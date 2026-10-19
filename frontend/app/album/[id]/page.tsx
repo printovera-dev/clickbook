@@ -403,6 +403,17 @@ export default function PageEditor() {
             }}
             onImageDims={(pid, w, h) => { dims.current[pid] = { w, h }; }}
           />
+          {/* Parent-level hit targets route saved text taps directly to selection. */}
+          {tool === "text" ? (page.texts || []).map((t) => (
+            <Pressable key={`text-hit-${t.id}`} testID={`saved-text-hit-${t.id}`} onPress={() => selectTextForEditing(t.id)}
+              style={{ position: "absolute", left: t.x * size, top: t.y * size, width: t.w * size, height: t.h * size, zIndex: 60 + (t.z || 0), elevation: 60 + (t.z || 0), backgroundColor: "transparent" }} />
+          )) : null}
+          {tool === "text" && page.text && !(page.texts || []).length ? (
+            <Pressable testID="saved-legacy-text-hit" onPress={() => {
+              const t = newTextObject({ text: page.text || "", x: 0.06, y: 0.42, w: 0.88, h: 0.16, size: 0.045, font: "playfair", color: "#FFFFFF", align: "center", z: 1 });
+              commit({ ...page, texts: [t], text: undefined }); selectTextForEditing(t.id);
+            }} style={{ position: "absolute", left: size * 0.06, right: size * 0.06, bottom: size * 0.04, height: size * 0.16, zIndex: 60, elevation: 60, backgroundColor: "transparent" }} />
+          ) : null}
           {/* Snap guides */}
           {guides.v.map((v) => <View key={`v${v}`} pointerEvents="none" style={{ position: "absolute", left: v * size - 0.5, top: 0, width: 1, height: size, backgroundColor: colors.brandPrimary, zIndex: 50 }} />)}
           {guides.h.map((h) => <View key={`h${h}`} pointerEvents="none" style={{ position: "absolute", top: h * size - 0.5, left: 0, height: 1, width: size, backgroundColor: colors.brandPrimary, zIndex: 50 }} />)}
