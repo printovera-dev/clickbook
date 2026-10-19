@@ -89,6 +89,7 @@ export default function UploadStep() {
   const [savingOrder, setSavingOrder] = useState(false);
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const [err, setErr] = useState("");
+  const [dropDiagnostics, setDropDiagnostics] = useState("");
   const hintTimer = useRef<any>(null);
   const dragDepth = useRef(0);
   const uploadInProgress = useRef(false);
@@ -290,7 +291,12 @@ export default function UploadStep() {
         return;
       }
       try {
+        // Capture browser counts synchronously while the native drop event is live.
+        const rawItemCount = Array.from(event.dataTransfer?.items || []).filter((item: any) => item.kind === "file").length;
+        const rawFileCount = Array.from(event.dataTransfer?.files || []).length;
         const files = await getDroppedImageFiles(event.dataTransfer);
+        setDropDiagnostics("Drop detected " + files.length + " supported image(s) (browser files: " + rawFileCount + ", file items: " + rawItemCount + ").");
+        console.info("[ClickBook drop diagnostics]", { rawFileCount, rawItemCount, supportedImageCount: files.length, names: files.map((file: any) => file.name) });
         if (!files.length) {
           setErr("No supported images found. Drop JPG, JPEG, PNG, WebP, HEIC or HEIF files, or a folder containing them.");
           return;
@@ -599,6 +605,7 @@ export default function UploadStep() {
               )}
             </Pressable>
 
+            {dropDiagnostics ? <Text style={[s.bodyMuted, { marginTop: spacing.xs }]} testID="upload-drop-diagnostics">{dropDiagnostics}</Text> : null}
             {err ? <Text style={{ color: colors.error, marginTop: spacing.sm }} testID="upload-error">{err}</Text> : null}
             {photos.length > 0 ? (
               <View style={styles.gridToolbar} testID="upload-grid-toolbar">
