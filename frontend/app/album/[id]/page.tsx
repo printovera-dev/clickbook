@@ -111,10 +111,30 @@ export default function PageEditor() {
   const redoFn = () => { if (!redo.length || !page) return; const nx = redo[redo.length - 1]; setRedo((r) => r.slice(0, -1)); setHistory((h) => [...h, page]); setPage(nx); };
 
   const selectedTextObj = page?.texts?.find((t) => t.id === selText) || null;
+
+  // Keep text edits functional: typing can emit several changes before React
+  // renders again, so deriving each keystroke from the captured page can drop
+  // characters or restore an older value. Cover titles and page text both use
+  // the same TextObject model and this one update path.
   const updateText = (patch: Partial<TextObject>, live = false) => {
-    if (!page || !selText) return;
-    const next = { ...page, texts: page.texts!.map((t) => (t.id === selText ? { ...t, ...patch } : t)) };
-    live ? setPage(next) : commit(next);
+    if (!selText) return;
+    if (live) {
+      setPage((prev) => {
+        if (!prev) return prev;
+        return { ...prev, texts: (prev.texts || []).map((t) => (t.id === selText ? { ...t, ...patch } : t)) };
+      });
+      return;
+    }
+    if (!page) return;
+    commit({ ...page, texts: (page.texts || []).map((t) => (t.id === selText ? { ...t, ...patch } : t)) });
+  };
+
+  // One selection path for cover titles and page text layers.
+  const selectTextForEditing = (textId: string) => {
+    setSelSlot(null);
+    setSelText(textId);
+    setTool("text");
+    setEditingText(true);
   };
   const updateImage = (slot: number, patch: any, live = false) => {
     if (!page) return;
@@ -366,16 +386,20 @@ export default function PageEditor() {
             }}
             emptySlotLabel="Change Image"
             onTextPress={(tid) => {
-              setSelSlot(null); setTool("text");
               if (tid === "__legacy_text__") {
+                // Promote old caption-only pages into the same editable text
+                // layer model used by cover titles, then select that exact layer.
                 const existing = page.texts?.[0];
-                if (existing) { setSelText(existing.id); setEditingText(true); }
-                else {
+                if (existing) {
+                  selectTextForEditing(existing.id);
+                } else {
                   const t = newTextObject({ text: page.text || "", x: 0.06, y: 0.42, w: 0.88, h: 0.16, size: 0.045, font: "playfair", color: "#FFFFFF", align: "center", z: 1 });
-                  const next = { ...page, texts: [t], text: undefined };
-                  commit(next); setSelText(t.id); setEditingText(true);
+                  commit({ ...page, texts: [t], text: undefined });
+                  selectTextForEditing(t.id);
                 }
-              } else { setSelText(tid); setEditingText(true); }
+              } else {
+                selectTextForEditing(tid);
+              }
             }}
             onImageDims={(pid, w, h) => { dims.current[pid] = { w, h }; }}
           />
@@ -483,9 +507,9 @@ export default function PageEditor() {
                     testID="text-input"
                     value={selectedTextObj.text}
                     onChangeText={(v) => updateText({ text: v }, true)}
-                    onBlur={() => { setEditingText(false); snapshot(); }}
-                    onFocus={snapshot}
-                    autoFocus multiline
+                    onBlur={() => setEditingText(false)}
+                    autoFocus
+                    multiline
                     placeholder="Type your text"
                     placeholderTextColor={colors.muted}
                     style={styles.input}
