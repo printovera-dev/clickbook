@@ -299,7 +299,7 @@ const FaceView = memo(function FaceView({ face, photosById, cover, coverDesign, 
   if (face.kind === "blank") {
     return <View style={[styles.face, { backgroundColor: "#FFFFFF" }]} testID="preview-blank-page" />;
   }
-  return <PageCanvas page={face.page!} photosById={photosById} size={pageSize} pageNumber={face.number!} numberSide={side} />;
+  return <PageCanvas page={{ ...face.page!, background: "#FFFFFF" }} photosById={photosById} size={pageSize} pageNumber={face.number!} numberSide={side} />;
 });
 
 function CoverFace({ cover, albumName }: { cover: any; albumName?: string }) {
