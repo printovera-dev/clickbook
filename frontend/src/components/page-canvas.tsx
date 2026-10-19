@@ -83,7 +83,13 @@ function PageCanvasImpl({ page, photosById, size, pageNumber, numberSide = "righ
         <TextBox key={t.id} t={t} size={size} selected={selectedText === t.id} onPress={onTextPress ? () => onTextPress(t.id) : undefined} />
       ))}
       {page.text && !(page.texts || []).length ? (
-        <Text style={{ position: "absolute", bottom: size * 0.04, left: size * 0.06, right: size * 0.06, color: colors.onSurface, fontFamily: "PlayfairDisplay-Regular", fontSize: size * 0.035 }} numberOfLines={2}>{page.text}</Text>
+        <Pressable
+          disabled={!onTextPress}
+          onPress={() => onTextPress?.("__legacy_text__")}
+          style={{ position: "absolute", bottom: size * 0.04, left: size * 0.06, right: size * 0.06, minHeight: size * 0.06, zIndex: 20 }}
+        >
+          <Text style={{ color: colors.onSurface, fontFamily: "PlayfairDisplay-Regular", fontSize: size * 0.035 }} numberOfLines={2}>{page.text}</Text>
+        </Pressable>
       ) : null}
       {pageNumber ? <Text style={[styles.pageNum, { fontSize: Math.max(7, size * 0.025), bottom: size * 0.012 }, numberSide === "left" ? { left: size * 0.03 } : { right: size * 0.03 }]}>{pageNumber}</Text> : null}
     </View>
