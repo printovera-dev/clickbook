@@ -53,7 +53,7 @@ export default function PageEditor() {
     if (album && !page) {
       if (isCover) {
         const cd: CoverDesign | null = album.cover_design;
-        if (cd) { setPage(coverToPage(cd)); setCoverKey(cd.style || "signature"); if (initialTool && ["image", "replace", "coverstyle", "background", "text"].includes(initialTool)) setTool(initialTool as Tool); }
+        if (cd) { const coverPage = coverToPage(cd); setPage(coverPage); setCoverKey(cd.style || "signature"); if (initialTool && ["image", "replace", "coverstyle", "background", "text"].includes(initialTool)) { setTool(initialTool as Tool); } else if (coverPage.texts?.length) { setSelText(coverPage.texts[0].id); setSelSlot(null); setTool("text"); } }
         return;
       }
       const p = album.pages?.[pageIndex];
