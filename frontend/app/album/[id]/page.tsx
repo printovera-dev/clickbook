@@ -92,6 +92,38 @@ export default function PageEditor() {
     live ? setPage(next) : commit(next);
   };
 
+  // Fill a single-photo page/cover edge-to-edge, remembering its original frame so Fit restores it.
+  const fillImage = (slot: number) => {
+    if (!page) return;
+    const cur = page.images?.[String(slot)] || defaultTransform();
+    const rect = slotRects(page)[slot];
+    if (!rect) return;
+    const singlePhoto = page.photo_ids.length === 1;
+    const nextImage: any = { ...cur, photo_id: page.photo_ids[slot], fit: "fill", scale: 1, ox: 0, oy: 0 };
+    let nextPage: Page = { ...page, images: { ...(page.images || {}), [String(slot)]: nextImage } };
+    if (singlePhoto && !cur.pageFill) {
+      nextImage.pageFill = true;
+      nextImage.restoreSlot = rect;
+      nextPage = { ...nextPage, slots: [{ x: 0, y: 0, w: 1, h: 1 }] };
+    }
+    commit(nextPage);
+  };
+  const fitImage = (slot: number) => {
+    if (!page) return;
+    const cur: any = page.images?.[String(slot)] || defaultTransform();
+    const nextImage: any = { ...cur, photo_id: page.photo_ids[slot], fit: "fit", scale: 1, ox: 0, oy: 0 };
+    const nextPage: Page = { ...page, images: { ...(page.images || {}), [String(slot)]: nextImage } };
+    if (cur.pageFill) {
+      const slots = [...slotRects(page)];
+      const restored = cur.restoreSlot;
+      if (restored) slots[slot] = restored;
+      delete nextImage.pageFill;
+      delete nextImage.restoreSlot;
+      nextPage.slots = slots;
+    }
+    commit(nextPage);
+  };
+
   // ---- image gestures (pan + pinch on the selected slot) ----
   const rects = page ? slotRects(page) : [];
   const slotRect = selSlot != null && rects[selSlot] ? rects[selSlot] : null;
@@ -351,8 +383,8 @@ export default function PageEditor() {
               <Chip icon="zoom-in" label="Zoom in" onPress={() => updateImage(selSlot, { scale: Math.min(4, slotTr.scale + 0.2) })} testID="img-zoom-in" />
               <Chip icon="zoom-out" label="Zoom out" onPress={() => updateImage(selSlot, { scale: Math.max(1, slotTr.scale - 0.2), ox: slotTr.scale - 0.2 <= 1 ? 0 : slotTr.ox, oy: slotTr.scale - 0.2 <= 1 ? 0 : slotTr.oy })} testID="img-zoom-out" />
               <Chip icon="rotate-cw" label="Rotate 90°" onPress={rotateImage} testID="img-rotate" />
-              <Chip icon="maximize" label="Fill" active={slotTr.fit !== "fit"} onPress={() => updateImage(selSlot, { fit: "fill", scale: 1, ox: 0, oy: 0 })} testID="img-fill" />
-              <Chip icon="minimize" label="Fit" active={slotTr.fit === "fit"} onPress={() => updateImage(selSlot, { fit: "fit", scale: 1, ox: 0, oy: 0 })} testID="img-fit" />
+              <Chip icon="maximize" label="Fill" active={slotTr.fit !== "fit" || Boolean((slotTr as any).pageFill)} onPress={() => fillImage(selSlot)} testID="img-fill" />
+              <Chip icon="minimize" label="Fit" active={slotTr.fit === "fit" && !Boolean((slotTr as any).pageFill)} onPress={() => fitImage(selSlot)} testID="img-fit" />
               <Chip icon="rotate-ccw" label="Reset" onPress={() => updateImage(selSlot, defaultTransform())} testID="img-reset" />
             </ScrollView>
           ) : null}
