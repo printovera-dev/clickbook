@@ -365,7 +365,18 @@ export default function PageEditor() {
               else if (tool === "text") setTool("image");
             }}
             emptySlotLabel="Change Image"
-            onTextPress={(tid) => { setSelText(tid); setSelSlot(null); setTool("text"); setEditingText(true); }}
+            onTextPress={(tid) => {
+              setSelSlot(null); setTool("text");
+              if (tid === "__legacy_text__") {
+                const existing = page.texts?.[0];
+                if (existing) { setSelText(existing.id); setEditingText(true); }
+                else {
+                  const t = newTextObject({ text: page.text || "", x: 0.06, y: 0.42, w: 0.88, h: 0.16, size: 0.045, font: "playfair", color: "#FFFFFF", align: "center", z: 1 });
+                  const next = { ...page, texts: [t], text: undefined };
+                  commit(next); setSelText(t.id); setEditingText(true);
+                }
+              } else { setSelText(tid); setEditingText(true); }
+            }}
             onImageDims={(pid, w, h) => { dims.current[pid] = { w, h }; }}
           />
           {/* Snap guides */}
