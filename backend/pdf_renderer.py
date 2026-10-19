@@ -100,6 +100,12 @@ def render_page(page: dict, photos_by_id: dict, layouts_by_id: dict, size_px: in
     layout = layouts_by_id.get(page.get("layout_id"))
     positions = page.get("slots") or (layout or {}).get("positions") or DEFAULT_POSITIONS.get(len(photo_ids)) or DEFAULT_POSITIONS[1]
     images = page.get("images") or {}
+    # The Fill tool stores this per-image flag so full bleed survives save/reload
+    # even if older page data still contains inset slot geometry.
+    positions = [
+        {"x": 0, "y": 0, "w": 1, "h": 1} if (images.get(str(i)) or {}).get("pageFill") else pos
+        for i, pos in enumerate(positions)
+    ]
     for i, pid in enumerate(photo_ids[: len(positions)]):
         photo = photos_by_id.get(pid)
         if not photo:
