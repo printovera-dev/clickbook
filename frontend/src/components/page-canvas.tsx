@@ -27,7 +27,9 @@ type Props = {
 export const PageCanvas = memo(PageCanvasImpl);
 
 function PageCanvasImpl({ page, photosById, size, pageNumber, numberSide = "right", selectedSlot, selectedText, onSlotPress, onTextPress, hideText, onImageDims, emptySlotLabel }: Props) {
-  const rects = slotRects(page);
+  const rects = slotRects(page).map((rect, i) =>
+    (page.images?.[String(i)] as any)?.pageFill ? { x: 0, y: 0, w: 1, h: 1 } : rect
+  );
   const [dims, setDims] = useState<Record<string, { w: number; h: number }>>({});
   return (
     <View style={{ width: size, height: size, backgroundColor: page.background || "#FFFFFF", overflow: "hidden" }}>
