@@ -71,7 +71,18 @@ export default function PageEditor() {
       }
       const p = album.pages?.[pageIndex];
       if (p) {
-        const base = { ...p, images: p.images || {}, texts: p.texts || [] };
+        // Older saved pages may store their caption in the legacy `text`
+        // field instead of the editable `texts` layer array. Promote it to a
+        // normal text object so it can be selected, edited, and saved again.
+        const savedTexts = Array.isArray(p.texts) ? p.texts : [];
+        const legacyText = typeof p.text === "string" ? p.text.trim() : "";
+        const base = {
+          ...p,
+          images: p.images || {},
+          texts: savedTexts.length || !legacyText
+            ? savedTexts
+            : [newTextObject({ text: p.text!, x: 0.06, y: 0.42, w: 0.88, h: 0.16, size: 0.045, font: "playfair", color: "#FFFFFF", align: "center", z: 1 })],
+        };
         if (initialTool === "text") {
           // Re-entering Text from preview should edit an existing saved layer,
           // not silently create a new layer each time.
