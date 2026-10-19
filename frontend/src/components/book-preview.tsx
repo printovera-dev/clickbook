@@ -320,11 +320,11 @@ function CoverFace({ cover, albumName }: { cover: any; albumName?: string }) {
 }
 
 const styles = StyleSheet.create({
-  half: { position: "absolute", top: 0, overflow: "hidden", backgroundColor: colors.surfaceSecondary },
-  empty: { backgroundColor: "transparent" },
+  half: { position: "absolute", top: 0, overflow: "hidden", backgroundColor: "#FFFFFF" },
+  empty: { backgroundColor: "#FFFFFF" },
   leaf: { zIndex: 10, ...(Platform.OS === "web" ? { boxShadow: "0 6px 12px rgba(0,0,0,0.25)" } as any : { elevation: 10, shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } }) },
   block: { position: "absolute", backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.borderStrong, borderRadius: 2 },
-  face: { flex: 1 },
+  face: { flex: 1, backgroundColor: "#FFFFFF" },
   spine: { position: "absolute", top: 0, bottom: 0, width: 2, backgroundColor: "rgba(0,0,0,0.35)", zIndex: 5 },
   controls: { flexDirection: "row", alignItems: "center", gap: spacing.lg, marginTop: spacing.lg },
   ctrlBtn: { padding: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border, minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" },
