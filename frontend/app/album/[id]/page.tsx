@@ -334,7 +334,7 @@ export default function PageEditor() {
               else if (tool === "text") setTool("image");
             }}
             emptySlotLabel="Change Image"
-            onTextPress={(tid) => { setSelText(tid); setSelSlot(null); setTool("text"); }}
+            onTextPress={(tid) => { setSelText(tid); setSelSlot(null); setTool("text"); setEditingText(true); }}
             onImageDims={(pid, w, h) => { dims.current[pid] = { w, h }; }}
           />
           {/* Snap guides */}
