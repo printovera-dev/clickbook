@@ -32,36 +32,43 @@ async function filesFromDroppedEntry(entry: any): Promise<any[]> {
 }
 
 async function getDroppedImageFiles(dataTransfer: any): Promise<any[]> {
-  const files: any[] = [];
+  // DataTransfer is only reliably readable during the synchronous drop event.
+  // Snapshot every individual File and folder entry before awaiting anything.
+  const itemFiles: any[] = [];
+  const directoryEntries: any[] = [];
   const items = Array.from(dataTransfer?.items || []) as any[];
   for (const item of items) {
     if (item.kind !== "file") continue;
     const entry = typeof item.webkitGetAsEntry === "function" ? item.webkitGetAsEntry() : null;
-    if (entry) {
-      files.push(...await filesFromDroppedEntry(entry));
-    } else {
-      const file = item.getAsFile?.();
-      if (file) files.push(file);
+    if (entry?.isDirectory && typeof entry.createReader === "function") {
+      directoryEntries.push(entry);
+      continue;
     }
+    const file = item.getAsFile?.();
+    if (file) itemFiles.push(file);
   }
-  // Some browsers expose only one item through DataTransferItem/WebKitEntry
-  // when several individual photos are dragged together. Always merge the
-  // browser's complete FileList as well as any recursively-read folder entries.
-  files.push(...Array.from(dataTransfer?.files || []) as any[]);
+  // Snapshot FileList synchronously too; it contains the full multi-file drop
+  // in browsers that don't expose all photos through DataTransferItem.
+  const fileList = Array.from(dataTransfer?.files || []) as any[];
 
-  const seen = new Set<string>();
+  const folderGroups = await Promise.all(directoryEntries.map((entry) => filesFromDroppedEntry(entry)));
+  const files = [...itemFiles, ...fileList, ...folderGroups.flat()];
+  const seenObjects = new Set<any>();
+  const seenIdentities = new Set<string>();
   return files.filter((file) => {
     if (!file || !SUPPORTED_IMAGE_EXTENSION.test(String(file.name || ""))) return false;
-    // Entry-based and FileList-based reads can refer to the same photo as
-    // different File objects, so deduplicate by stable file metadata too.
+    if (seenObjects.has(file)) return false;
+    seenObjects.add(file);
+    // FileList and item.getAsFile may produce separate File objects for the
+    // same dropped photo, so also deduplicate by path/name/size/modified time.
     const identity = [
       String(file.webkitRelativePath || ""),
       String(file.name || ""),
       String(file.size ?? ""),
       String(file.lastModified ?? ""),
     ].join("::");
-    if (seen.has(identity)) return false;
-    seen.add(identity);
+    if (seenIdentities.has(identity)) return false;
+    seenIdentities.add(identity);
     return true;
   });
 }
