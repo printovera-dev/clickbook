@@ -269,7 +269,7 @@ export default function PageEditor() {
   const tools: { key: Tool; icon: any; label: string }[] = [
     { key: "image", icon: "move", label: "Adjust Image" },
     { key: "replace", icon: "image", label: "Change Image" },
-    { key: "text", icon: "type", label: "Add Text" },
+    { key: "text", icon: "type", label: isCover ? "Change Cover Text" : "Add Text" },
     isCover ? { key: "coverstyle", icon: "book", label: "Change Cover Style" } : { key: "layout", icon: "grid", label: "Change Layout" },
     { key: "background", icon: "droplet", label: "Background" },
   ];
@@ -337,7 +337,7 @@ export default function PageEditor() {
       <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.sm }]}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: spacing.md }}>
           {tools.map((t) => (
-            <Pressable key={t.key} testID={`page-tool-${t.key}`} onPress={() => { if (t.key === "text" && !selectedTextObj) addText(); else setTool(t.key); if (t.key !== "text") setSelText(null); if ((t.key === "image" || t.key === "replace") && selSlot == null) setSelSlot(0); }}
+            <Pressable key={t.key} testID={`page-tool-${t.key}`} onPress={() => { if (t.key === "text" && isCover) { const existing = page?.texts?.[0]; if (existing) { setSelText(existing.id); setSelSlot(null); setTool("text"); setEditingText(true); } else { addText(); } } else if (t.key === "text" && !selectedTextObj) addText(); else setTool(t.key); if (t.key !== "text") { setSelText(null); setEditingText(false); } if ((t.key === "image" || t.key === "replace") && selSlot == null) setSelSlot(0); }}
               style={[styles.toolTab, tool === t.key && styles.toolTabActive]}>
               <Feather name={t.icon} size={16} color={tool === t.key ? colors.onBrandPrimary : colors.onSurface} />
               <Text style={[styles.toolText, tool === t.key && { color: colors.onBrandPrimary }]}>{t.label}</Text>
