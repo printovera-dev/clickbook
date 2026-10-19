@@ -53,15 +53,35 @@ export default function PageEditor() {
     if (album && !page) {
       if (isCover) {
         const cd: CoverDesign | null = album.cover_design;
-        if (cd) { const coverPage = coverToPage(cd); setPage(coverPage); setCoverKey(cd.style || "signature"); if (initialTool && ["image", "replace", "coverstyle", "background", "text"].includes(initialTool)) { setTool(initialTool as Tool); } else if (coverPage.texts?.length) { setSelText(coverPage.texts[0].id); setSelSlot(null); setTool("text"); } }
+        if (cd) {
+          const coverPage = coverToPage(cd);
+          setPage(coverPage);
+          setCoverKey(cd.style || "signature");
+          if (initialTool === "text") {
+            const existing = coverPage.texts?.[0];
+            if (existing) { setSelText(existing.id); setSelSlot(null); setTool("text"); setEditingText(true); }
+            else { const t = newTextObject({ z: 1 }); setPage({ ...coverPage, texts: [...(coverPage.texts || []), t] }); setSelText(t.id); setSelSlot(null); setTool("text"); setEditingText(true); }
+          } else if (initialTool && ["image", "replace", "coverstyle", "background"].includes(initialTool)) {
+            setTool(initialTool as Tool);
+          } else if (coverPage.texts?.length) {
+            setSelText(coverPage.texts[0].id); setSelSlot(null); setTool("text");
+          }
+        }
         return;
       }
       const p = album.pages?.[pageIndex];
       if (p) {
         const base = { ...p, images: p.images || {}, texts: p.texts || [] };
         if (initialTool === "text") {
-          const t = newTextObject({ z: base.texts.length + 1 });
-          setPage({ ...base, texts: [...base.texts, t] }); setHistory([base]); setSelText(t.id); setSelSlot(null); setTool("text"); setEditingText(true);
+          // Re-entering Text from preview should edit an existing saved layer,
+          // not silently create a new layer each time.
+          const existing = base.texts[base.texts.length - 1];
+          if (existing) {
+            setPage(base); setSelText(existing.id); setSelSlot(null); setTool("text"); setEditingText(true);
+          } else {
+            const t = newTextObject({ z: 1 });
+            setPage({ ...base, texts: [t] }); setHistory([base]); setSelText(t.id); setSelSlot(null); setTool("text"); setEditingText(true);
+          }
         } else { setPage(base); if (initialTool && ["image", "replace", "layout", "background"].includes(initialTool)) setTool(initialTool as Tool); }
       }
     }
