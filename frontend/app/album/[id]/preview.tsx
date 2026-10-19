@@ -37,13 +37,13 @@ export default function AlbumPreview() {
     ? router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: "cover", ...(tool ? { tool } : {}) } })
     : router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: String(selected), ...(tool ? { tool } : {}) } });
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surface, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: "#FFFFFF", paddingTop: insets.top }}>
       <View style={styles.topbar}>
         <Pressable onPress={() => router.replace("/(tabs)/home")} testID="preview-close"><Feather name="x" size={22} color={colors.onSurface} /></Pressable>
         <Text style={s.label}>3D Preview</Text>
         <View style={{ width: 22 }} />
       </View>
-      <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 140 }}>
+      <ScrollView style={{ backgroundColor: "#FFFFFF" }} contentContainerStyle={{ padding: spacing.xl, paddingBottom: 140, backgroundColor: "#FFFFFF" }}>
         <Text style={s.h1}>{album?.name}</Text>
         {album?.locked ? (
           <View testID="preview-locked-banner" style={{ marginTop: spacing.sm, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.brandTertiary, flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
@@ -116,5 +116,5 @@ const styles = StyleSheet.create({
   quickBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, minHeight: 40, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border },
   stats: { flexDirection: "row", gap: spacing.md, marginTop: spacing.xxl },
   stat: { flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.lg, backgroundColor: colors.surfaceSecondary },
-  footer: { position: "absolute", left: 0, right: 0, bottom: 0, padding: spacing.xl, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
+  footer: { position: "absolute", left: 0, right: 0, bottom: 0, padding: spacing.xl, backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: colors.border },
 });
