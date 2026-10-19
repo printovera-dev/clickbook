@@ -393,7 +393,22 @@ export default function PageEditor() {
       <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.sm }]}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: spacing.md }}>
           {tools.map((t) => (
-            <Pressable key={t.key} testID={`page-tool-${t.key}`} onPress={() => { if (t.key === "text" && isCover) { const existing = page?.texts?.[0]; if (existing) { setSelText(existing.id); setSelSlot(null); setTool("text"); setEditingText(true); } else { addText(); } } else if (t.key === "text" && !selectedTextObj) addText(); else setTool(t.key); if (t.key !== "text") { setSelText(null); setEditingText(false); } if ((t.key === "image" || t.key === "replace") && selSlot == null) setSelSlot(0); }}
+            <Pressable key={t.key} testID={`page-tool-${t.key}`} onPress={() => {
+              if (t.key === "text") {
+                // The Text toolbar action must re-open saved text for editing.
+                // Only create a new layer when this page has no saved text.
+                const texts = page?.texts || [];
+                const target = selectedTextObj || (isCover ? texts[0] : texts[texts.length - 1]);
+                if (target) {
+                  setSelText(target.id); setSelSlot(null); setTool("text"); setEditingText(true);
+                } else {
+                  addText();
+                }
+              } else {
+                setTool(t.key); setSelText(null); setEditingText(false);
+                if ((t.key === "image" || t.key === "replace") && selSlot == null) setSelSlot(0);
+              }
+            }}
               style={[styles.toolTab, tool === t.key && styles.toolTabActive]}>
               <Feather name={t.icon} size={16} color={tool === t.key ? colors.onBrandPrimary : colors.onSurface} />
               <Text style={[styles.toolText, tool === t.key && { color: colors.onBrandPrimary }]}>{t.label}</Text>
