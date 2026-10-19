@@ -360,6 +360,7 @@ export default function PageEditor() {
           {tool === "replace" ? (
             <FlatList
               horizontal
+              showsHorizontalScrollIndicator
               data={photos}
               keyExtractor={(p) => p.id}
               showsHorizontalScrollIndicator={false}
