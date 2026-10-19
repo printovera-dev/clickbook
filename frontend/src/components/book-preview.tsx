@@ -236,14 +236,12 @@ export function BookPreview({
             {/* Static left page */}
             <View style={[styles.half, { left: 0, width: pageW, height: pageH }, !leftFace && styles.empty]}>
               {leftFace ? <FaceView face={leftFace} photosById={photosById} cover={cover} coverDesign={coverDesign} albumName={albumName} side="left" pageSize={pageW} lastPageUrl={lastPageUrl} /> : null}
-              {leftFace ? <LinearGradient colors={["rgba(0,0,0,0.06)", "rgba(0,0,0,0)"]} start={{ x: 1, y: 0 }} end={{ x: 0.75, y: 0 }} style={StyleSheet.absoluteFill} pointerEvents="none" /> : null}
               {flip && leftFace ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }, leftCast]} /> : null}
               {isSel(leftFace) && !flip ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderWidth: 3, borderColor: colors.brandPrimary }]} /> : null}
             </View>
             {/* Static right page */}
             <View style={[styles.half, { left: pageW, width: pageW, height: pageH }, !rightFace && styles.empty]}>
               {rightFace ? <FaceView face={rightFace} photosById={photosById} cover={cover} coverDesign={coverDesign} albumName={albumName} side="right" pageSize={pageW} lastPageUrl={lastPageUrl} /> : null}
-              {rightFace && rightFace.kind !== "cover" ? <LinearGradient colors={["rgba(0,0,0,0.06)", "rgba(0,0,0,0)"]} start={{ x: 0, y: 0 }} end={{ x: 0.25, y: 0 }} style={StyleSheet.absoluteFill} pointerEvents="none" /> : null}
               {flip && rightFace ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }, rightCast]} /> : null}
               {isSel(rightFace) && !flip ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderWidth: 3, borderColor: colors.brandPrimary }]} /> : null}
             </View>
