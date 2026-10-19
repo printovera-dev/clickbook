@@ -404,11 +404,11 @@ export default function PageEditor() {
             onImageDims={(pid, w, h) => { dims.current[pid] = { w, h }; }}
           />
           {/* Parent-level hit targets route saved text taps directly to selection. */}
-          {tool === "text" ? (page.texts || []).map((t) => (
+          {(page.texts || []).map((t) => (
             <Pressable key={`text-hit-${t.id}`} testID={`saved-text-hit-${t.id}`} onPress={() => selectTextForEditing(t.id)}
               style={{ position: "absolute", left: t.x * size, top: t.y * size, width: t.w * size, height: t.h * size, zIndex: 60 + (t.z || 0), elevation: 60 + (t.z || 0), backgroundColor: "transparent" }} />
-          )) : null}
-          {tool === "text" && page.text && !(page.texts || []).length ? (
+          ))}
+          {page.text && !(page.texts || []).length ? (
             <Pressable testID="saved-legacy-text-hit" onPress={() => {
               const t = newTextObject({ text: page.text || "", x: 0.06, y: 0.42, w: 0.88, h: 0.16, size: 0.045, font: "playfair", color: "#FFFFFF", align: "center", z: 1 });
               commit({ ...page, texts: [t], text: undefined }); selectTextForEditing(t.id);
