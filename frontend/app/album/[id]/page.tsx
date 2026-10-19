@@ -404,7 +404,7 @@ export default function PageEditor() {
             onImageDims={(pid, w, h) => { dims.current[pid] = { w, h }; }}
           />
           {/* Parent-level hit targets route saved text taps directly to selection. */}
-          {(page.texts || []).map((t) => (
+          {(page.texts || []).filter((t) => t.id !== selText).map((t) => (
             <Pressable key={`text-hit-${t.id}`} testID={`saved-text-hit-${t.id}`} onPress={() => selectTextForEditing(t.id)}
               style={{ position: "absolute", left: t.x * size, top: t.y * size, width: t.w * size, height: t.h * size, zIndex: 60 + (t.z || 0), elevation: 60 + (t.z || 0), backgroundColor: "transparent" }} />
           ))}
