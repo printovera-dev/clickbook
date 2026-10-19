@@ -360,10 +360,9 @@ export default function PageEditor() {
           {tool === "replace" ? (
             <FlatList
               horizontal
-              showsHorizontalScrollIndicator
+              showsHorizontalScrollIndicator={true}
               data={photos}
               keyExtractor={(p) => p.id}
-              showsHorizontalScrollIndicator={false}
               initialNumToRender={6}
               windowSize={3}
               removeClippedSubviews
