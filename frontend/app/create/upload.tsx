@@ -52,23 +52,16 @@ async function getDroppedImageFiles(dataTransfer: any): Promise<any[]> {
   const fileList = Array.from(dataTransfer?.files || []) as any[];
 
   const folderGroups = await Promise.all(directoryEntries.map((entry) => filesFromDroppedEntry(entry)));
-  const files = [...itemFiles, ...fileList, ...folderGroups.flat()];
+  // Prefer FileList as the authoritative list for multi-file drops. Combining
+  // it with item.getAsFile() and deduplicating by filename/metadata can silently
+  // discard distinct photos that share metadata or names from separate folders.
+  const individualFiles = fileList.length ? fileList : itemFiles;
+  const files = [...individualFiles, ...folderGroups.flat()];
   const seenObjects = new Set<any>();
-  const seenIdentities = new Set<string>();
   return files.filter((file) => {
     if (!file || !SUPPORTED_IMAGE_EXTENSION.test(String(file.name || ""))) return false;
     if (seenObjects.has(file)) return false;
     seenObjects.add(file);
-    // FileList and item.getAsFile may produce separate File objects for the
-    // same dropped photo, so also deduplicate by path/name/size/modified time.
-    const identity = [
-      String(file.webkitRelativePath || ""),
-      String(file.name || ""),
-      String(file.size ?? ""),
-      String(file.lastModified ?? ""),
-    ].join("::");
-    if (seenIdentities.has(identity)) return false;
-    seenIdentities.add(identity);
     return true;
   });
 }
