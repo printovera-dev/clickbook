@@ -98,9 +98,13 @@ function PageCanvasImpl({ page, photosById, size, pageNumber, numberSide = "righ
 
 export function TextBox({ t, size, selected, onPress }: { t: TextObject; size: number; selected?: boolean; onPress?: () => void }) {
   return (
-    <Pressable disabled={!onPress} onPress={onPress}
-      style={{ position: "absolute", left: t.x * size, top: t.y * size, width: t.w * size, height: t.h * size, zIndex: 5 + (t.z || 0), overflow: "hidden" }}>
-      <Text style={{
+    <Pressable
+      disabled={!onPress}
+      onPress={onPress}
+      hitSlop={4}
+      // Keep saved text above photo-slot touch targets on Android and Web.
+      style={{ position: "absolute", left: t.x * size, top: t.y * size, width: t.w * size, height: t.h * size, zIndex: 1000 + (t.z || 0), elevation: 1000 + (t.z || 0), overflow: "hidden" }}>
+      <Text pointerEvents="none" style={{
         fontFamily: fontFamilyFor(t.font, t.weight), fontSize: t.size * size, lineHeight: t.size * size * 1.25,
         color: t.color, textAlign: t.align, fontStyle: t.italic ? "italic" : "normal",
       }}>{t.text}</Text>
