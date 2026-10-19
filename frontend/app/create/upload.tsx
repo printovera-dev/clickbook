@@ -44,12 +44,25 @@ async function getDroppedImageFiles(dataTransfer: any): Promise<any[]> {
       if (file) files.push(file);
     }
   }
-  if (!files.length) files.push(...Array.from(dataTransfer?.files || []) as any[]);
-  const seen = new Set<any>();
+  // Some browsers expose only one item through DataTransferItem/WebKitEntry
+  // when several individual photos are dragged together. Always merge the
+  // browser's complete FileList as well as any recursively-read folder entries.
+  files.push(...Array.from(dataTransfer?.files || []) as any[]);
+
+  const seen = new Set<string>();
   return files.filter((file) => {
-    if (!file || seen.has(file)) return false;
-    seen.add(file);
-    return SUPPORTED_IMAGE_EXTENSION.test(String(file.name || ""));
+    if (!file || !SUPPORTED_IMAGE_EXTENSION.test(String(file.name || ""))) return false;
+    // Entry-based and FileList-based reads can refer to the same photo as
+    // different File objects, so deduplicate by stable file metadata too.
+    const identity = [
+      String(file.webkitRelativePath || ""),
+      String(file.name || ""),
+      String(file.size ?? ""),
+      String(file.lastModified ?? ""),
+    ].join("::");
+    if (seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
   });
 }
 
