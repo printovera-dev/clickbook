@@ -13,12 +13,16 @@ export default function AlbumPreview() {
   const { id, focusIndex } = useLocalSearchParams<{ id: string; focusIndex?: string }>();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  // Larger book: phones use (almost) the full width (+~20% vs the old 32px-inset 400 cap); desktop +40% (560).
+  // Keep the 3D book readable on phones while using more available width on larger screens.
   const bookSize = width >= 1024 ? Math.min(560, width - 64) : Math.min(width - 8, 480);
   const router = useRouter();
   const q = useQuery({ queryKey: ["album", id], queryFn: () => api.getAlbum(String(id)), enabled: !!id });
   const album = q.data?.album;
-  const requestedFocus = focusIndex === "cover" ? "cover" : focusIndex != null && focusIndex !== "" ? Number(focusIndex) : null;
+  const requestedFocus: number | "cover" | null = focusIndex === "cover"
+    ? "cover"
+    : focusIndex != null && focusIndex !== "" && Number.isFinite(Number(focusIndex))
+      ? Number(focusIndex)
+      : null;
   const [selected, setSelected] = useState<number | "cover" | null>(requestedFocus);
   // The editor returns with focusIndex; restore both the highlight and the 3D spread.
   useEffect(() => { if (requestedFocus != null) setSelected(requestedFocus); }, [focusIndex]);
