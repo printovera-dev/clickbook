@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView, useWindowDimensions } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -10,7 +10,7 @@ import { colors, spacing, radius, fonts } from "@/src/theme";
 import Feather from "@react-native-vector-icons/feather";
 
 export default function AlbumPreview() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, focusIndex } = useLocalSearchParams<{ id: string; focusIndex?: string }>();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   // Larger book: phones use (almost) the full width (+~20% vs the old 32px-inset 400 cap); desktop +40% (560).
@@ -32,7 +32,10 @@ export default function AlbumPreview() {
   const storedSheetCount = Number(album?.sheets || Math.ceil(storedPages.length / 2));
   const reservedSheets = Math.max(0, storedSheetCount - Math.ceil(storedPages.length / 2));
   const previewSheetCount = reservedSheets + Math.ceil(previewPageCount / 2);
-  const [selected, setSelected] = useState<number | "cover" | null>(null);
+  const requestedFocus: number | "cover" | null = focusIndex === "cover" ? "cover" : focusIndex != null && focusIndex !== "" && Number.isFinite(Number(focusIndex)) ? Number(focusIndex) : null;
+  const [selected, setSelected] = useState<number | "cover" | null>(requestedFocus);
+  // Restore the selected page and let BookPreview focus the matching spread.
+  useEffect(() => { if (requestedFocus != null) setSelected(requestedFocus); }, [focusIndex]);
   const goPage = (tool?: string) => selected === "cover"
     ? router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: "cover", ...(tool ? { tool } : {}) } })
     : router.push({ pathname: "/album/[id]/page", params: { id: String(id), index: String(selected), ...(tool ? { tool } : {}) } });
