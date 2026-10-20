@@ -333,7 +333,8 @@ export default function PageEditor() {
       qc.setQueryData(["album", id], r);
       void qc.invalidateQueries({ queryKey: ["album", id] });
       void qc.invalidateQueries({ queryKey: ["albums"] });
-      router.replace({ pathname: "/album/[id]/preview", params: { id: String(id) } });
+      // Preserve the edited location when returning from the page/cover editor.
+      router.replace({ pathname: "/album/[id]/preview", params: { id: String(id), focusIndex: isCover ? "cover" : String(pageIndex) } });
     } catch (e: any) {
       Alert.alert("Could not save", e?.message || "Please try again");
     } finally { setSaving(false); }
