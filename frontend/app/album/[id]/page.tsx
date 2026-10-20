@@ -233,7 +233,8 @@ export default function PageEditor() {
         : await api.updatePages(String(id), album.pages.map((p: Page, i: number) => (i === pageIndex ? page : p)));
       qc.setQueryData(["album", id], r);
       qc.invalidateQueries({ queryKey: ["albums"] });
-      router.back();
+      // Return to the exact page/cover that was edited, rather than resetting the 3D book to its cover.
+      router.replace({ pathname: "/album/[id]/preview", params: { id: String(id), focusIndex: isCover ? "cover" : String(pageIndex) } });
     } catch (e: any) {
       Alert.alert("Could not save", e?.message || "Please try again");
     } finally { setSaving(false); }
