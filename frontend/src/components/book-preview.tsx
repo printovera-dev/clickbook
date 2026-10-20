@@ -15,7 +15,7 @@ import { colors, spacing, radius, fonts } from "@/src/theme";
 import { PageCanvas } from "@/src/components/page-canvas";
 import { Page, Photo, CoverDesign, coverToPage } from "@/src/design";
 
-type Face = { kind: "cover" | "back" | "blank" | "page"; page?: Page; number?: number };
+type Face = { kind: "cover" | "back" | "blank" | "page"; page?: Page; number?: number; pageIndex?: number };
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const FLIP_MS = 520;
@@ -30,13 +30,36 @@ export function BookPreview({
   const home = useQuery({ queryKey: ["home"], queryFn: () => api.homeContent(), staleTime: 5 * 60 * 1000 });
   const lastPageUrl = fileUrl(home.data?.content?.last_page_url || "/api/files/home/last-page.webp");
 
-  // Faces in reading order: cover, p1..pn, (blank filler), back cover (fixed ClickBook artwork). Leaf i = faces[2i] (front) + faces[2i+1] (back).
+  // Hide an older interior page only when it duplicates the selected cover photo.
+  // This is a preview-only adjustment; it does not modify saved album pages or designs.
+  const visiblePages = useMemo(() => {
+    const coverPhotoId = coverDesign?.photo_id;
+    const first = pages[0];
+    const firstIds = (first?.photo_ids || []).filter(Boolean);
+    const firstSlotPhotoId = first?.images?.["0"]?.photo_id;
+    const duplicateCoverOnlyPage = !!coverPhotoId && !!first && (
+      (firstIds.length === 1 && firstIds[0] === coverPhotoId) ||
+      (firstIds.length === 0 && first.layout_photo_count === 1 && firstSlotPhotoId === coverPhotoId)
+    );
+    return pages
+      .map((page, pageIndex) => ({ page, pageIndex }))
+      .filter(({ pageIndex }) => !(pageIndex === 0 && duplicateCoverOnlyPage));
+  }, [pages, coverDesign?.photo_id]);
+
+  // Reading order: front cover, plain inside-front-cover, interior pages,
+  // optional blank filler, and the fixed ClickBook back cover.
   const faces = useMemo<Face[]>(() => {
-    const f: Face[] = [{ kind: "cover" }, ...pages.map((p, i) => ({ kind: "page" as const, page: p, number: i + 1 }))];
-    if (f.length % 2 === 0) f.push({ kind: "blank" }); // keep back cover as the back face of the last leaf
+    const f: Face[] = [
+      { kind: "cover" },
+      { kind: "blank" },
+      ...visiblePages.map(({ page, pageIndex }, i) => ({
+        kind: "page" as const, page, pageIndex, number: i + 1,
+      })),
+    ];
+    if (f.length % 2 === 0) f.push({ kind: "blank" });
     f.push({ kind: "back" });
     return f;
-  }, [pages]);
+  }, [visiblePages]);
   const leaves = faces.length / 2;
 
   const [turned, setTurned] = useState(0); // leaves already turned to the left
@@ -49,12 +72,14 @@ export function BookPreview({
   // Live-preview sync: when the editor's active page changes, open the book at that spread (no reset to the cover).
   useEffect(() => {
     if (focusPage == null) return;
-    const faceIdx = focusPage === "cover" ? 0 : focusPage + 1;
-    const target = faceIdx % 2 === 0 ? faceIdx / 2 : (faceIdx + 1) / 2; // even = right face of leaf f/2, odd = left face
+    const faceIdx = focusPage === "cover"
+      ? 0
+      : Math.max(2, faces.findIndex((face) => face.kind === "page" && face.pageIndex === focusPage));
+    const target = faceIdx % 2 === 0 ? faceIdx / 2 : (faceIdx + 1) / 2;
     setFlip(null); activeDir.value = 0; progress.value = 0;
     setTurned(Math.max(0, Math.min(leaves, target)));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusPage, leaves]);
+  }, [focusPage, leaves, faces]);
 
   const finish = (target: number) => {
     const dir = activeDir.value;
@@ -132,13 +157,13 @@ export function BookPreview({
   function handleSingleTap(right: boolean) {
     const face = faceAt(right);
     if (!face || !onSelectPage) return;
-    if (face.kind === "page") onSelectPage(face.number! - 1);
+    if (face.kind === "page") onSelectPage(face.pageIndex!);
     if (face.kind === "cover") onSelectPage("cover");
   }
   function handleDoubleTap(right: boolean) {
     const face = faceAt(right);
     if (!face) return;
-    if (face.kind === "page" && onEditPage) onEditPage(face.number! - 1);
+    if (face.kind === "page" && onEditPage) onEditPage(face.pageIndex!);
     if (face.kind === "cover" && onEditCover) onEditCover();
   }
 
@@ -180,7 +205,7 @@ export function BookPreview({
   const rightTurned = flip?.dir === 1 ? turned + 1 : flip?.dir === -1 ? turned : turned;
   const leftFace = leftTurned > 0 ? faces[2 * leftTurned - 1] : null;
   const rightFace = rightTurned < leaves ? faces[2 * rightTurned] : null;
-  const isSel = (f: Face | null) => !!f && selectedPage != null && ((f.kind === "page" && selectedPage === f.number! - 1) || (f.kind === "cover" && selectedPage === "cover"));
+  const isSel = (f: Face | null) => !!f && selectedPage != null && ((f.kind === "page" && selectedPage === f.pageIndex) || (f.kind === "cover" && selectedPage === "cover"));
   const flipFront = flip ? faces[2 * flip.leaf] : null;
   const flipBack_ = flip ? faces[2 * flip.leaf + 1] : null;
 
