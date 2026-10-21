@@ -9,6 +9,15 @@ router = APIRouter(tags=["frame-pricing"])
 
 DEFAULTS = {
     "moulding_rates_per_inch": {"Black": 20.0, "Natural oak": 24.0, "Walnut": 28.0, "Gold": 30.0, "White": 20.0, "Silver": 26.0},
+    "frame_sizes": ["4x6", "5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24", "20x30", "24x36", "24x49"],
+    "moulding_size_availability": {
+        "Black": ["4x6", "5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24", "20x30", "24x36", "24x49"],
+        "Natural oak": ["4x6", "5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24", "20x30"],
+        "Walnut": ["5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24", "20x30"],
+        "Gold": ["4x6", "5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24"],
+        "White": ["4x6", "5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24", "20x30"],
+        "Silver": ["4x6", "5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24", "20x30"]
+    },
     "glass_per_sqft": 100.0,
     "manufacturing_per_sqft": 80.0,
     "print_rates_per_sqft": {"Photo paper": 60.0, "Canvas": 180.0, "Acrylic print": 220.0},
@@ -22,6 +31,8 @@ DEFAULTS = {
 }
 
 class PricingSettings(BaseModel):
+    frame_sizes: list[str] = Field(default_factory=lambda: DEFAULTS["frame_sizes"])
+    moulding_size_availability: Dict[str, list[str]] = Field(default_factory=lambda: DEFAULTS["moulding_size_availability"])
     moulding_rates_per_inch: Dict[str, float] = Field(default_factory=lambda: DEFAULTS["moulding_rates_per_inch"])
     glass_per_sqft: float = 100
     manufacturing_per_sqft: float = 80
@@ -33,6 +44,21 @@ class PricingSettings(BaseModel):
     pricing_gst_percent: float = 18
     glass_enabled: bool = True
     backing_enabled: bool = True
+
+    @validator("frame_sizes")
+    def valid_frame_sizes(cls, values):
+        if not values or any(not str(v).strip() for v in values):
+            raise ValueError("At least one valid frame size is required")
+        return list(dict.fromkeys(values))
+
+    @validator("moulding_size_availability")
+    def valid_moulding_sizes(cls, values):
+        for moulding, sizes in values.items():
+            if not str(moulding).strip():
+                raise ValueError("Moulding names cannot be empty")
+            if any(not isinstance(size, str) or not size.strip() for size in sizes):
+                raise ValueError("Moulding sizes must be valid size names")
+        return values
 
     @validator("glass_per_sqft", "manufacturing_per_sqft", "backing_per_sqft")
     def nonnegative_rates(cls, v):
@@ -52,7 +78,7 @@ class PricingSettings(BaseModel):
         return values
 
 class PriceRequest(BaseModel):
-    width_in: float = Field(gt=0, le=120)
+    size_label: Optional[str] = None\n    width_in: float = Field(gt=0, le=120)
     height_in: float = Field(gt=0, le=120)
     product_type: Literal["framed_photo", "canvas_print", "photo_print", "acrylic_photo"] = "framed_photo"
     moulding: Optional[str] = "Black"
@@ -65,6 +91,11 @@ class PriceRequest(BaseModel):
 async def _settings():
     doc = await get_settings_doc()
     return {**DEFAULTS, **{k: doc[k] for k in DEFAULTS if k in doc}}
+
+@router.get("/pricing/frame-options")
+async def get_public_frame_options():
+    cfg = await _settings()
+    return {"frame_sizes": cfg["frame_sizes"], "moulding_size_availability": cfg["moulding_size_availability"], "moulding_rates_per_inch": cfg["moulding_rates_per_inch"]}
 
 @router.get("/pricing/frame-settings")
 async def get_frame_pricing_settings(admin: dict = Depends(get_current_admin)):
