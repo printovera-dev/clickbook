@@ -22,6 +22,9 @@ export const ADMIN_NAV: { group: string; items: { key: string; label: string; ic
     { key: "sliders", label: "Promotional Sliders", icon: "film", path: "/admin/sliders" },
     { key: "videos", label: "Videos", icon: "youtube", path: "/admin/videos" },
   ] },
+  { group: "Printovera Print Studio", items: [
+    { key: "print-studio-templates", label: "Print Studio Templates", icon: "credit-card", path: "/admin/print-studio-templates" },
+  ] },
   { group: "Album catalog", items: [
     { key: "covers", label: "Covers", icon: "book", path: "/admin/covers" },
     { key: "designs", label: "Album Designs", icon: "feather", path: "/admin/designs" },
