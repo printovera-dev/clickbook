@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Image, ScrollView, View, Text, Pressable, TextInput, StyleSheet, Platform } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { Stack } from "expo-router";
+import { Stack, useLocalSearchParams } from "expo-router";
 import { api } from "@/src/api";
 
 type Kind = "Acrylic Photo" | "Framed Photo" | "Canvas Print" | "Photo Collage" | "Photo Prints" | "Visiting Cards" | "Brochures" | "Letterheads" | "Wedding Cards";
@@ -32,8 +32,8 @@ const finishes: Record<Kind,string[]> = {
 const templates = ["Elegant","Modern","Classic","Minimal","Luxury"];
 export default function PrintStudioScreen() {
  const [kind,setKind] = useState<Kind>("Acrylic Photo");
- const [variant,setVariant] = useState(variants["Acrylic Photo"][0]);
- const [finish,setFinish] = useState(finishes["Acrylic Photo"][0]);
+ const [variant,setVariant] = useState(variants[initialKind][0]);
+ const [finish,setFinish] = useState(finishes[initialKind][0]);
  const [category,setCategory] = useState(categories[0]);
  const [template,setTemplate] = useState("Elegant");
  const [photo,setPhoto] = useState<string|null>(null);
