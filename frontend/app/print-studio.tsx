@@ -7,7 +7,7 @@ import { api } from "@/src/api";
 type Kind = "Acrylic Photo" | "Framed Photo" | "Canvas Print" | "Photo Collage" | "Photo Prints" | "Visiting Cards" | "Brochures" | "Letterheads" | "Wedding Cards";
 const kinds: Kind[] = ["Framed Photo", "Acrylic Photo", "Canvas Print", "Photo Collage", "Photo Prints", "Visiting Cards", "Brochures", "Letterheads", "Wedding Cards"];
 const frameColours: Record<string,string> = {"Black":"#242424","Natural oak":"#b99465","Walnut":"#68452f","Gold":"#c7a45b","White":"#f4f1e9","Silver":"#a8adb1"};
-const printSizes = ["A4 (8.27 × 11.69 in)","12 × 15 in","12 × 18 in","16 × 20 in","18 × 24 in","20 × 30 in","24 × 36 in","24 × 49 in"];
+const printSizes = ["6x4", "5x7", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24", "20x30", "24x36", "24x49", "A4 (8.27 × 11.69 in)"];
 const categories = ["Photography & Events", "Restaurant & Cafe", "Retail & Fashion", "Real Estate", "Healthcare", "Education", "Professional Services", "Other"];
 const variants: Record<Kind,string[]> = {
  "Acrylic Photo":["3mm acrylic","5mm acrylic","8mm acrylic"],
@@ -67,12 +67,12 @@ export default function PrintStudioScreen() {
  }
  useEffect(() => {
    if (!wall) { setLiveQuote(null); setQuoteMessage(""); return; }
-   const [w,h]=sizeInches(productSize);
+   const [w,h]=sizeInches(productSize);\n   const size_label=frameSizeLabel(productSize);
    const product_type = kind==="Framed Photo" ? "framed_photo" : kind==="Canvas Print" ? "canvas_print" : kind==="Acrylic Photo" ? "acrylic_photo" : "photo_print";
    const print_material = kind==="Canvas Print" ? "Canvas" : kind==="Acrylic Photo" ? "Acrylic print" : "Photo paper";
    const normalizedFinish = finish.toLowerCase().includes("textured") ? "Textured canvas" : finish.toLowerCase().includes("matte") ? "Matte" : finish.toLowerCase().includes("lustre") ? "Lustre" : finish.toLowerCase().includes("canvas") ? "Matte" : finish.toLowerCase().includes("gloss") ? "Gloss" : "None";
    let active=true;
-   api.calculateFramePrice({width_in:w,height_in:h,product_type,moulding:frameColour,print_material,finish:normalizedFinish,quantity:Math.max(1,Number(quantity)||1)})
+   api.calculateFramePrice({width_in:w,height_in:h,size_label,product_type,moulding:frameColour,print_material,finish:normalizedFinish,quantity:Math.max(1,Number(quantity)||1)})
      .then(q=>{if(active){setLiveQuote(q);setQuoteMessage("");}})
      .catch(e=>{if(active){setLiveQuote(null);setQuoteMessage(e.message||"Live price is not available yet.");}});
    return ()=>{active=false;};
