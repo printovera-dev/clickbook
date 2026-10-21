@@ -88,11 +88,11 @@ export default function FramePricingEngine() {
         <Field label="Width (in)" value={width} onChange={setWidth} />
         <Field label="Height (in)" value={height} onChange={setHeight} />
         <Text style={styles.label}>Moulding</Text>
-        <View style={styles.chips}>{Object.keys(cfg.moulding_rates_per_inch || {}).map(name => <Button key={name} label={name} size="sm" variant={moulding === name ? "solid" : "outline"} onPress={() => setMoulding(name)} />)}</View>
+        <View style={styles.chips}>{Object.keys(cfg.moulding_rates_per_inch || {}).map(name => <Button key={name} label={name} size="sm" variant={moulding === name ? "primary" : "outline"} onPress={() => setMoulding(name)} />)}</View>
         <Text style={styles.label}>Print material</Text>
-        <View style={styles.chips}>{Object.keys(cfg.print_rates_per_sqft || {}).map(name => <Button key={name} label={name} size="sm" variant={material === name ? "solid" : "outline"} onPress={() => setMaterial(name)} />)}</View>
+        <View style={styles.chips}>{Object.keys(cfg.print_rates_per_sqft || {}).map(name => <Button key={name} label={name} size="sm" variant={material === name ? "primary" : "outline"} onPress={() => setMaterial(name)} />)}</View>
         <Text style={styles.label}>Finish</Text>
-        <View style={styles.chips}>{Object.keys(cfg.finish_rates_per_sqft || {}).map(name => <Button key={name} label={name} size="sm" variant={finish === name ? "solid" : "outline"} onPress={() => setFinish(name)} />)}</View>
+        <View style={styles.chips}>{Object.keys(cfg.finish_rates_per_sqft || {}).map(name => <Button key={name} label={name} size="sm" variant={finish === name ? "primary" : "outline"} onPress={() => setFinish(name)} />)}</View>
         <Button label="Calculate from saved rates" onPress={calculate} disabled={!validQuote} style={{ marginTop: spacing.md }} />
         {quoteError ? <Text accessibilityRole="alert" style={[s.body, { color: colors.error, marginTop: spacing.md }]}>{quoteError}</Text> : null}
         {quote ? <View style={styles.result}>
