@@ -7,7 +7,7 @@ from starlette.middleware.cors import CORSMiddleware
 from core import client, now_iso, logger  # loads .env before anything reads it
 from storage_manager import STORAGE_BASE
 from seed import seed
-from routers import auth, catalog, albums, orders, payments, admin, files, notifications, home, frame_pricing, printing_pricing
+from routers import auth, catalog, albums, orders, payments, admin, files, notifications, home, frame_pricing, printing_pricing, print_studio
 
 app = FastAPI(title="Printovera Wedding Album Studio API", docs_url=None)
 api = APIRouter(prefix="/api")
@@ -29,7 +29,7 @@ async def health():
 
 
 for r in (auth.router, catalog.router, albums.router, orders.router, payments.router, admin.router, files.router,
-          notifications.router, home.router, frame_pricing.router, printing_pricing.router):
+          notifications.router, home.router, frame_pricing.router, printing_pricing.router, print_studio.router):
     api.include_router(r)
 
 app.include_router(api)
