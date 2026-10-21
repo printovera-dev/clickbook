@@ -21,7 +21,7 @@ function OptionCard({ title, subtitle, selected, onPress, testID }: {
         <Text style={s.bodyMuted}>{subtitle}</Text>
       </View>
       <Feather name={selected ? "check-circle" : "circle"} size={21}
-        color={selected ? colors.brandPrimary : colors.textMuted} />
+        color={selected ? colors.brandPrimary : colors.muted} />
     </Pressable>
   );
 }
