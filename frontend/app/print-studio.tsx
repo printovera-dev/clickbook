@@ -39,6 +39,7 @@ export default function PrintStudioScreen() {
  const [photoUris,setPhotoUris] = useState<string[]>([]);
  const [wallPhoto,setWallPhoto] = useState<string|null>(null);
  const [frameColour,setFrameColour] = useState("Black");
+ const [collageColour,setCollageColour] = useState("#f5f0e5");
  const [productSize,setProductSize] = useState("8 × 10 in");
  const [quantity,setQuantity] = useState("1");
  const [brand,setBrand] = useState("");
@@ -88,7 +89,7 @@ export default function PrintStudioScreen() {
    <Text style={st.galleryHint}>See your {kind.toLowerCase()} against your own wall. You can change the wall photo anytime.</Text>
    <View style={[st.stage,wallPhoto&&st.stageWithWall]}>
     {wallPhoto&&<Image source={{uri:wallPhoto}} style={st.wallBackground} resizeMode="cover"/>}
-    {wall ? <View style={[st.wall,{transform:[{perspective:700},{rotateY:angle+"deg"},{rotateX:"-3deg"}]},kind==="Acrylic Photo"?st.acrylic:kind==="Framed Photo"?[st.frame,{borderColor:frameColours[frameColour]}]:kind==="Photo Collage"?st.collageFrame:st.canvas]}>
+    {wall ? <View style={[st.wall,{transform:[{perspective:700},{rotateY:angle+"deg"},{rotateX:"-3deg"}]},kind==="Acrylic Photo"?st.acrylic:kind==="Framed Photo"?[st.frame,{borderColor:frameColours[frameColour]}]:kind==="Photo Collage"?[st.collageFrame,{backgroundColor:collageColour,borderColor:collageColour}]:st.canvas]}>
       <View style={[st.art,kind==="Canvas Print"&&st.canvasArt]}>
        {kind==="Photo Collage" && photoUris.length>0 ? <View style={st.collageGrid}>{photoUris.slice(0,9).map((uri,i)=><Image key={uri+i} source={{uri}} style={st.collagePhoto} resizeMode="cover"/> )}</View> : photo ? <Image source={{uri:photo}} style={st.photo} resizeMode="cover"/> : <View style={st.placeholder}><Text style={st.artSmall}>YOUR PHOTO</Text><Text style={st.artTitle}>{title}</Text><Text style={st.artDetail}>{tagline||"A memory worth displaying"}</Text></View>}
       </View>
@@ -110,7 +111,7 @@ export default function PrintStudioScreen() {
   <View style={st.panel}><Text style={st.section}>1 · PRODUCT SPECIFICATIONS</Text>
    {kind==="Framed Photo"&&<><Text style={st.label}>Browse frame mouldings</Text><Text style={st.galleryHint}>Choose a moulding below; the preview border changes with your selection.</Text><View style={st.frameGallery}>{Object.keys(frameColours).map(col=><Pressable key={col} onPress={()=>setFrameColour(col)} style={[st.frameSwatch,frameColour===col&&st.frameSwatchOn]}><View style={[st.swatchSample,{backgroundColor:frameColours[col]}]}/><Text style={st.optionText}>{col}</Text></Pressable>)}</View><Text style={st.label}>Frame size</Text><View style={st.options}>{printSizes.map(s=><Pressable key={s} onPress={()=>setProductSize(s)} style={[st.option,productSize===s&&st.optionOn]}><Text style={st.optionText}>{s}</Text></Pressable>)}</View></>}
    {kind==="Photo Prints"&&<><Text style={st.label}>Print size</Text><View style={st.options}>{printSizes.map(s=><Pressable key={s} onPress={()=>setProductSize(s)} style={[st.option,productSize===s&&st.optionOn]}><Text style={st.optionText}>{s}</Text></Pressable>)}</View><Text style={st.label}>Quantity</Text><TextInput value={quantity} onChangeText={v=>setQuantity(v.replace(/[^0-9]/g,"").slice(0,5))} keyboardType="number-pad" placeholder="1" style={st.input}/></>}
-   {kind==="Photo Collage"&&<Text style={st.galleryHint}>Upload multiple photos to build a collage preview. Choose a layout above; detailed drag-and-drop layout editing will be added in a later pass.</Text>
+   {kind==="Photo Collage"&&<><Text style={st.label}>Collage background colour</Text><View style={st.frameGallery}>{[["Ivory","#f5f0e5"],["White","#ffffff"],["Black","#242424"],["Warm beige","#d8c3a5"],["Sage green","#b9c9b0"],["Dusty pink","#d9b2b7"],["Navy","#253b5a"],["Grey","#b9bdc1"],["Gold","#c7a45b"]].map(([name,hex])=><Pressable key={hex} onPress={()=>setCollageColour(hex)} style={[st.frameSwatch,collageColour===hex&&st.frameSwatchOn]}><View style={[st.swatchSample,{backgroundColor:hex,borderColor:hex}]}/><Text style={st.optionText}>{name}</Text></Pressable>)}</View><Text style={st.galleryHint}>Select a colour to update the collage preview instantly.</Text></>}
    <Text style={st.label}>Style / size</Text><View style={st.options}>{variants[kind].map(v=><Pressable key={v} onPress={()=>setVariant(v)} style={[st.option,variant===v&&st.optionOn]}><Text style={st.optionText}>{v}</Text></Pressable>)}</View>
    <Text style={st.label}>Paper / finish</Text><View style={st.options}>{finishes[kind].map(v=><Pressable key={v} onPress={()=>setFinish(v)} style={[st.option,finish===v&&st.optionOn]}><Text style={st.optionText}>{v}</Text></Pressable>)}</View>
    {kind==="Brochures"&&<><Text style={st.label}>Printing sides</Text><View style={st.options}>{["Single side","Both sides"].map(v=><Pressable key={v} onPress={()=>setSides(v)} style={[st.option,sides===v&&st.optionOn]}><Text style={st.optionText}>{v}</Text></Pressable>)}</View></>}
