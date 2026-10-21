@@ -31,7 +31,10 @@ const finishes: Record<Kind,string[]> = {
 };
 const templates = ["Elegant","Modern","Classic","Minimal","Luxury"];
 export default function PrintStudioScreen() {
- const [kind,setKind] = useState<Kind>("Acrylic Photo");
+ const params = useLocalSearchParams<{ kind?: string }>();
+ const validKinds: Kind[] = ["Acrylic Photo", "Framed Photo", "Canvas Print", "Photo Collage", "Photo Prints", "Visiting Cards", "Brochures", "Letterheads", "Wedding Cards"];
+ const initialKind = validKinds.includes(params.kind as Kind) ? params.kind as Kind : "Acrylic Photo";
+ const [kind,setKind] = useState<Kind>(initialKind);
  const [variant,setVariant] = useState(variants[initialKind][0]);
  const [finish,setFinish] = useState(finishes[initialKind][0]);
  const [category,setCategory] = useState(categories[0]);
@@ -75,6 +78,14 @@ export default function PrintStudioScreen() {
    const m=value.match(/(\\d+(?:\\.\\d+)?)\\s*[×x]\\s*(\\d+(?:\\.\\d+)?)/i);
    return m ? [Number(m[1]),Number(m[2])] : [12,18];
  }
+ useEffect(() => {
+   const requested = params.kind as Kind | undefined;
+   if (requested && validKinds.includes(requested) && requested !== kind) {
+     setKind(requested);
+     setVariant(variants[requested][0]);
+     setFinish(finishes[requested][0]);
+   }
+ }, [params.kind]);
  useEffect(() => {
    let active=true;
    api.listPrintStudioTemplates(kind, language).then(r=>{if(active)setStudioTemplates(r.templates||[]);}).catch(()=>{if(active)setStudioTemplates([]);});
