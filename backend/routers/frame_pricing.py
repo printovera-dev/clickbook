@@ -1,7 +1,7 @@
 """Backend-controlled Printovera pricing engine for wall art and photo prints."""
 from typing import Dict, Optional, Literal
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, FieldValidationInfo
 
 from core import db, get_current_admin, get_settings_doc
 
@@ -45,13 +45,15 @@ class PricingSettings(BaseModel):
     glass_enabled: bool = True
     backing_enabled: bool = True
 
-    @validator("frame_sizes")
+    @field_validator("frame_sizes")
+    @classmethod
     def valid_frame_sizes(cls, values):
         if not values or any(not str(v).strip() for v in values):
             raise ValueError("At least one valid frame size is required")
         return list(dict.fromkeys(values))
 
-    @validator("moulding_size_availability")
+    @field_validator("moulding_size_availability")
+    @classmethod
     def valid_moulding_sizes(cls, values):
         for moulding, sizes in values.items():
             if not str(moulding).strip():
@@ -60,18 +62,23 @@ class PricingSettings(BaseModel):
                 raise ValueError("Moulding sizes must be valid size names")
         return values
 
-    @validator("glass_per_sqft", "manufacturing_per_sqft", "backing_per_sqft")
+    @field_validator("glass_per_sqft", "manufacturing_per_sqft", "backing_per_sqft")
+    @classmethod
     def nonnegative_rates(cls, v):
-        if v < 0: raise ValueError("Rates cannot be negative")
+        if v < 0:
+            raise ValueError("Rates cannot be negative")
         return v
 
-    @validator("wastage_percent", "profit_margin_percent", "pricing_gst_percent")
-    def valid_percent(cls, v, field):
-        max_value = 99 if field.name == "profit_margin_percent" else 100
-        if v < 0 or v > max_value: raise ValueError(f"{field.name} must be between 0 and {max_value}")
+    @field_validator("wastage_percent", "profit_margin_percent", "pricing_gst_percent")
+    @classmethod
+    def valid_percent(cls, v, info: FieldValidationInfo):
+        max_value = 99 if info.field_name == "profit_margin_percent" else 100
+        if v < 0 or v > max_value:
+            raise ValueError(f"{info.field_name} must be between 0 and {max_value}")
         return v
 
-    @validator("moulding_rates_per_inch", "print_rates_per_sqft", "finish_rates_per_sqft")
+    @field_validator("moulding_rates_per_inch", "print_rates_per_sqft", "finish_rates_per_sqft")
+    @classmethod
     def valid_rate_map(cls, values):
         if any(not str(k).strip() or float(v) < 0 for k, v in values.items()):
             raise ValueError("Rate names must be non-empty and rates cannot be negative")
