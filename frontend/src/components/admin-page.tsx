@@ -33,6 +33,7 @@ export const ADMIN_NAV: { group: string; items: { key: string; label: string; ic
     { key: "notifications", label: "Notifications", icon: "bell", path: "/admin/notifications" },
     { key: "bots", label: "Process Bots", icon: "message-circle", path: "/admin/bots" },
     { key: "settings", label: "Settings", icon: "settings", path: "/admin/settings" },
+    { key: "frame-pricing", label: "Frame Pricing Engine", icon: "dollar-sign", path: "/admin/frame-pricing" },
   ] },
 ];
 
