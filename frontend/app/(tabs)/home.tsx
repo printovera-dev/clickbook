@@ -49,8 +49,8 @@ export default function Home() {
 
   const go = (route: string) => {
     setMenuOpen(false);
-    if (route === "album") router.push("/wedding-album" as any);
-    else router.push("/(tabs)/print-studio" as any);
+    if (route === "album" || route === "Photo Albums") router.push("/wedding-album" as any);
+    else router.push({ pathname: "/print-studio", params: { kind: route === "print" ? "Acrylic Photo" : route } } as any);
   };
 
   return (
@@ -75,7 +75,7 @@ export default function Home() {
             </View>
           ) : null}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.nav}>
-            {categories.map((item) => <Pressable key={item} onPress={() => go(item === "Photo Albums" ? "album" : "print")} style={s.navItem}><Text style={s.navText}>{item}</Text></Pressable>)}
+            {categories.map((item) => <Pressable key={item} onPress={() => go(item === "Photo Albums" ? "album" : (categoryKinds[item] || "Acrylic Photo"))} style={s.navItem}><Text style={s.navText}>{item}</Text></Pressable>)}
           </ScrollView>
         </View>
 
