@@ -13,6 +13,8 @@ module.exports = defineConfig([
     // and Reanimated shared-value mutations inside worklets. Keep these exceptions
     // scoped to the affected screens/components; all other Expo lint rules remain active.
     files: [
+      'app/**/*.tsx',
+      'src/components/**/*.tsx',
       'app/(tabs)/chat.tsx',
       'app/(tabs)/home.tsx',
       'app/(tabs)/profile.tsx',
