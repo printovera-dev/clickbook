@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, Image, ScrollView, View, Text, Pressable, TextInput, StyleSheet } from "react-native";
+import { Alert, Image, ScrollView, View, Text, Pressable, TextInput, StyleSheet, Platform } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Stack } from "expo-router";
 import { api } from "@/src/api";
@@ -61,6 +61,10 @@ export default function PrintStudioScreen() {
  const [lamination,setLamination] = useState("None");
  const [printQuote,setPrintQuote] = useState<any>(null);
  const [printQuoteMessage,setPrintQuoteMessage] = useState("");
+ const [language,setLanguage] = useState<"English"|"Hindi">("English");
+ const [studioTemplates,setStudioTemplates] = useState<any[]>([]);
+ const [uploadedPrintFiles,setUploadedPrintFiles] = useState<any[]>([]);
+ const [uvPreview,setUvPreview] = useState(false);
  const [quoteMessage,setQuoteMessage] = useState("");
  const wall = ["Acrylic Photo","Framed Photo","Canvas Print","Photo Collage"].includes(kind);
  const business = ["Visiting Cards","Brochures","Letterheads"].includes(kind);
@@ -70,6 +74,29 @@ export default function PrintStudioScreen() {
    if (value.startsWith("A4")) return [8.27,11.69];
    const m=value.match(/(\\d+(?:\\.\\d+)?)\\s*[×x]\\s*(\\d+(?:\\.\\d+)?)/i);
    return m ? [Number(m[1]),Number(m[2])] : [12,18];
+ }
+ useEffect(() => {
+   let active=true;
+   api.listPrintStudioTemplates(kind, language).then(r=>{if(active)setStudioTemplates(r.templates||[]);}).catch(()=>{if(active)setStudioTemplates([]);});
+   return ()=>{active=false;};
+ },[kind,language]);
+ async function choosePrintPdf(side:"front"|"back"|"page", artworkType:"base"|"uv") {
+   if (Platform.OS !== "web" || typeof document === "undefined") {
+     setMessage("PDF upload is currently available in the web Print Studio. Please open Printovera Print Studio in a browser.");
+     return;
+   }
+   const input=document.createElement("input");
+   input.type="file"; input.accept=artworkType==="uv"?".pdf,.png,application/pdf,image/png":".pdf,application/pdf";
+   input.onchange=async()=>{
+     const file=input.files?.[0]; if(!file)return;
+     try {
+       const result=await api.uploadPrintStudioArtwork(URL.createObjectURL(file),file.name,kind,side,artworkType,file);
+       setUploadedPrintFiles(prev=>[result.artwork,...prev]);
+       if(artworkType==="uv") setUvPreview(true);
+       setMessage(`${artworkType==="uv"?"UV mask":"Artwork"} uploaded for ${side}. Preview and production alignment must be checked before print approval.`);
+     } catch(e:any) { setMessage(e?.message||"Artwork upload failed."); }
+   };
+   input.click();
  }
  useEffect(() => {
    if (!wall) { setLiveQuote(null); setQuoteMessage(""); return; }
@@ -155,7 +182,7 @@ export default function PrintStudioScreen() {
     </View> : <View style={[st.flat,wedding&&st.invite,kind==="Visiting Cards"&&st.card]}>
       {photo && <Image source={{uri:photo}} style={st.flatPhoto} resizeMode="cover"/>}
       <Text style={st.artSmall}>{wedding?"TOGETHER WITH OUR FAMILIES":business?category.toUpperCase():"PRINTOVERA"}</Text>
-      <Text style={st.artTitle}>{title}</Text><Text style={st.artDetail}>{tagline||(wedding?"Request the pleasure of your company":"Thoughtfully designed for you")}</Text>
+      <Text style={[st.artTitle,uvPreview&&st.uvEmboss]}>{title}</Text><Text style={[st.artDetail,uvPreview&&st.uvEmboss]}>{tagline||(wedding?"Request the pleasure of your company":"Thoughtfully designed for you")}</Text>
       {!!contact&&<Text style={st.artDetail}>{contact}</Text>}{!!date&&<Text style={st.artDetail}>{date}</Text>}{!!venue&&<Text style={st.artDetail}>{venue}</Text>}
     </View>}
    </View>
@@ -174,8 +201,26 @@ export default function PrintStudioScreen() {
    {business&&<><Text style={st.label}>Business category</Text><View style={st.options}>{categories.map(c=><Pressable key={c} onPress={()=>setCategory(c)} style={[st.option,category===c&&st.optionOn]}><Text style={st.optionText}>{c}</Text></Pressable>)}</View></>}
   </View>
   {wall&&<View style={st.pricePanel}><Text style={st.section}>LIVE ESTIMATED PRICE</Text>{liveQuote ? <><Text style={st.price}>{`₹${Math.round(liveQuote.total).toLocaleString("en-IN")}`}</Text><Text style={st.priceHint}>{liveQuote.area_sqft} sq. ft. · includes manufacturing, wastage, margin and GST</Text><Text style={st.priceHint}>Unit price: ₹{Math.round(liveQuote.breakdown_per_unit.unit_total).toLocaleString("en-IN")}</Text></> : <Text style={st.priceHint}>{quoteMessage||"Calculating from backend rates…"}</Text>}<Text style={st.priceHint}>Final pricing is calculated by the backend from admin-configured rates.</Text></View>}
+  <View style={st.panel}>
+   <Text style={st.section}>PRINTOVERA PRINT STUDIO · LANGUAGE & MOCK DESIGNS</Text>
+   <Text style={st.label}>Design language</Text>
+   <View style={st.options}>{(["English","Hindi"] as const).map(v=><Pressable key={v} onPress={()=>setLanguage(v)} style={[st.option,language===v&&st.optionOn]}><Text style={st.optionText}>{v==="Hindi"?"हिन्दी":"English"}</Text></Pressable>)}</View>
+   <Text style={st.galleryHint}>Hindi and English templates can be mixed in the design copy. Verify Hindi font embedding and shaping in the production PDF.</Text>
+   <Text style={st.label}>Admin-uploaded mock designs for {kind}</Text>
+   {studioTemplates.length ? <View style={st.frameGallery}>{studioTemplates.map(t=><Pressable key={t.id} onPress={()=>{setTemplate(t.name);setMessage("Selected mock design: "+t.name);}} style={[st.mouldingCard,template===t.name&&st.frameSwatchOn]}>{t.preview_image_url?<Image source={{uri:t.preview_image_url}} style={st.mouldingImage} resizeMode="contain"/>:null}<Text style={st.optionText}>{t.name}</Text><Text style={st.mouldingCaption}>{t.language} · {t.size_label}</Text></Pressable>)}</View>:<Text style={st.galleryHint}>No published mock designs for this product yet. Add them in Admin → Print Studio Templates.</Text>}
+  </View>
   <View style={st.panel}><Text style={st.section}>2 · UPLOAD OR DESIGN YOURSELF</Text>
    <Pressable onPress={pickArtwork} style={st.secondary}><Text style={st.secondaryText}>{photo?"✓ Replace uploaded artwork":"＋ Upload photo / finished design"}</Text></Pressable>
+   <Text style={st.label}>Upload your finished print design (PDF)</Text>
+   <Text style={st.galleryHint}>Upload each side separately. Use front/back files for cards and page files for brochures. PDF upload is web-enabled.</Text>
+   <View style={st.options}>
+    <Pressable onPress={()=>choosePrintPdf("front","base")} style={st.option}><Text style={st.optionText}>＋ Front / first page PDF</Text></Pressable>
+    {(kind==="Visiting Cards"||kind==="Wedding Cards"||sides==="Both sides")&&<Pressable onPress={()=>choosePrintPdf("back","base")} style={st.option}><Text style={st.optionText}>＋ Back side PDF</Text></Pressable>}
+    <Pressable onPress={()=>choosePrintPdf("front","uv")} style={st.option}><Text style={st.optionText}>＋ Front selective-UV mask</Text></Pressable>
+    {(kind==="Visiting Cards"||kind==="Wedding Cards"||sides==="Both sides")&&<Pressable onPress={()=>choosePrintPdf("back","uv")} style={st.option}><Text style={st.optionText}>＋ Back selective-UV mask</Text></Pressable>}
+   </View>
+   {uploadedPrintFiles.map(f=><View key={f.id} style={st.uploadedRow}><Text style={st.optionText}>{f.filename} · {f.side} · {f.artwork_type.toUpperCase()}</Text><Pressable onPress={()=>{if(Platform.OS==="web"&&typeof window!=="undefined")window.open(f.url,"_blank","noopener,noreferrer");}}><Text style={st.linkText}>Open uploaded file</Text></Pressable></View>)}
+   <Pressable onPress={()=>setUvPreview(v=>!v)} style={st.small}><Text style={st.smallText}>{uvPreview?"✓ UV gloss preview enabled":"○ Show glossy / embossed UV preview"}</Text></Pressable>
    <Text style={st.label}>Choose a template</Text><View style={st.options}>{templates.map(t=><Pressable key={t} onPress={()=>{setTemplate(t);setMessage("Selected "+t+" template. Edit the fields below.");}} style={[st.template,template===t&&st.templateOn]}><Text style={st.templateTitle}>{t}</Text><Text style={st.templateSub}>{category}</Text></Pressable>)}</View>
    <Text style={st.label}>{wedding?"Couple names":business?"Business name":"Preview title"}</Text><TextInput value={brand} onChangeText={setBrand} placeholder={wedding?"e.g. Aanya & Rohan":"Your brand or title"} style={st.input}/>
    <Text style={st.label}>{wedding?"Invitation wording":"Tagline / message"}</Text><TextInput value={tagline} onChangeText={setTagline} placeholder="Enter your text" style={st.input}/>
