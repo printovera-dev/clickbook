@@ -55,6 +55,12 @@ export default function PrintStudioScreen() {
  const [angle,setAngle] = useState(-5);
  const [message,setMessage] = useState("");
  const [liveQuote,setLiveQuote] = useState<any>(null);
+ const [printingOptions,setPrintingOptions] = useState<any>(null);
+ const [paperGsm,setPaperGsm] = useState(300);
+ const [printType,setPrintType] = useState("Digital");
+ const [lamination,setLamination] = useState("None");
+ const [printQuote,setPrintQuote] = useState<any>(null);
+ const [printQuoteMessage,setPrintQuoteMessage] = useState("");
  const [quoteMessage,setQuoteMessage] = useState("");
  const wall = ["Acrylic Photo","Framed Photo","Canvas Print","Photo Collage"].includes(kind);
  const business = ["Visiting Cards","Brochures","Letterheads"].includes(kind);
@@ -77,6 +83,23 @@ export default function PrintStudioScreen() {
      .catch(e=>{if(active){setLiveQuote(null);setQuoteMessage(e.message||"Live price is not available yet.");}});
    return ()=>{active=false;};
  },[wall,kind,productSize,frameColour,finish,quantity]);
+ useEffect(() => {
+   let active=true;
+   api.getPrintingOptions().then(data=>{if(active){setPrintingOptions(data);if(data.paper_gsm_options?.length)setPaperGsm(data.paper_gsm_options.includes(300)?300:data.paper_gsm_options[0]);if(data.print_types?.length)setPrintType(data.print_types[0]);if(data.lamination_options?.length)setLamination(data.lamination_options[0]);}}).catch(()=>{if(active)setPrintingOptions(null);});
+   return ()=>{active=false;};
+ },[]);
+ useEffect(() => {
+   const enabled = business || wedding || kind==="Photo Prints";
+   if (!enabled) { setPrintQuote(null); setPrintQuoteMessage(""); return; }
+   const productCategory = kind;
+   const size = kind==="Visiting Cards" ? "3.5x2 in" : kind==="Brochures" ? "A4" : kind==="Letterheads" ? "A4" : kind==="Wedding Cards" ? "6x9 inch" : productSize;
+   const sidesValue = sides==="Both sides" || sides==="Double-sided" ? "Double-sided" : "Single-sided";
+   let active=true;
+   api.calculatePrintingPrice({category:productCategory,size,paper_gsm:paperGsm,print_type:printType,lamination,sides:sidesValue,quantity:Math.max(1,Number(quantity)||1)})
+     .then(q=>{if(active){setPrintQuote(q);setPrintQuoteMessage("");}})
+     .catch(e=>{if(active){setPrintQuote(null);setPrintQuoteMessage(e.message||"No matching print rate is configured yet.");}});
+   return ()=>{active=false;};
+ },[business,wedding,kind,productSize,paperGsm,printType,lamination,sides,quantity]);
  function changeKind(next:Kind) { setKind(next); setVariant(variants[next][0]); setFinish(finishes[next][0]); setMessage(""); }
  async function pickWallPhoto() {
    const result = await ImagePicker.launchImageLibraryAsync({mediaTypes:["images"],allowsEditing:true,aspect:[4,3],quality:1});
