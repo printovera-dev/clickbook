@@ -74,7 +74,7 @@ export default function WeddingAlbumSetup() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface, paddingTop: insets.top }}>
       <View style={styles.topbar}>
-        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityRole="button" accessibilityLabel="Go back">
+        <Pressable onPress={() => router.replace("/(tabs)/home" as any)} hitSlop={12} accessibilityRole="button" accessibilityLabel="Go back">
           <Feather name="arrow-left" size={22} color={colors.onSurface} />
         </Pressable>
         <Text style={s.label}>WEDDING ALBUM STUDIO</Text>
