@@ -54,7 +54,7 @@ export default function PrintingPricingAdmin() {
         }) : <Text style={s.bodyMuted}>Open this admin page in a web browser to upload an Excel file.</Text>}
         {picked ? <Text style={s.bodyMuted}>Selected: {picked.name}</Text> : null}
         <View style={{ marginTop: spacing.md }}><Button label={busy ? "Importing…" : "Validate & import Excel"} onPress={upload} disabled={busy || !picked} /></View>
-        {notice ? <Text style={[s.body, { marginTop: spacing.md, color: notice.startsWith("Imported") ? colors.success : colors.danger }]}>{notice}</Text> : null}
+        {notice ? <Text style={[s.body, { marginTop: spacing.md, color: notice.startsWith("Imported") ? colors.success : colors.error }]}>{notice}</Text> : null}
       </View>
       <Text style={s.bodyMuted}>Important: importing replaces the active printing pricing rules, not orders or customer data. Export/back up your existing rate card before importing a replacement.</Text>
     </AdminPage>
