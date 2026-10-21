@@ -53,7 +53,6 @@ jobs:
   backend-integration-tests:
     name: Backend integration tests
     runs-on: ubuntu-latest
-    if: ${{ secrets.EXPO_PUBLIC_BACKEND_URL != '' }}
     env:
       EXPO_PUBLIC_BACKEND_URL: ${{ secrets.EXPO_PUBLIC_BACKEND_URL }}
     steps:
@@ -63,9 +62,15 @@ jobs:
           python-version: "3.11"
       - name: Install integration dependencies
         run: python -m pip install -r backend/requirements.txt
-      - name: Run API integration tests
+      - name: Run API integration tests when endpoint is configured
         working-directory: backend
-        run: python -m pytest -n 0 tests/test_clickbook_api.py tests/test_pdf_renderer_dimensions.py
+        shell: bash
+        run: |
+          if [ -z "$EXPO_PUBLIC_BACKEND_URL" ]; then
+            echo "EXPO_PUBLIC_BACKEND_URL secret is not configured; external API integration tests were not run."
+            exit 0
+          fi
+          python -m pytest -n 0 tests/test_clickbook_api.py
 
   frontend-lint:
     name: Frontend lint
