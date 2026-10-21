@@ -34,7 +34,7 @@ export default function Chat() {
 
   // Exactly one order → go straight to WhatsApp with that order number (no selection step).
   useEffect(() => {
-    if (!autoOpened && orders.isSuccess && settings.isSuccess && list.length === 1) { setAutoOpened(true); open(list[0].order_no); }
+    if (!autoOpened && orders.isSuccess && settings.isSuccess && list.length === 1) { open(list[0].order_no); setAutoOpened(true); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orders.isSuccess, settings.isSuccess, list.length]);
 
