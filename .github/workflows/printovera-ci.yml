@@ -23,8 +23,8 @@ jobs:
       - name: Compile backend Python
         run: python -m compileall -q backend
 
-  frontend-checks:
-    name: Frontend lint and TypeScript
+  frontend-lint:
+    name: Frontend lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,6 +41,22 @@ jobs:
       - name: Lint
         working-directory: frontend
         run: yarn lint
+
+  frontend-typescript:
+    name: Frontend TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+      - name: Enable Yarn 1
+        run: npm install --global yarn@1.22.22
+      - name: Install dependencies
+        working-directory: frontend
+        run: yarn install --frozen-lockfile
       - name: TypeScript
         working-directory: frontend
         run: npx tsc --noEmit
