@@ -78,7 +78,8 @@ class PricingSettings(BaseModel):
         return values
 
 class PriceRequest(BaseModel):
-    size_label: Optional[str] = None\n    width_in: float = Field(gt=0, le=120)
+    size_label: Optional[str] = None
+    width_in: float = Field(gt=0, le=120)
     height_in: float = Field(gt=0, le=120)
     product_type: Literal["framed_photo", "canvas_print", "photo_print", "acrylic_photo"] = "framed_photo"
     moulding: Optional[str] = "Black"
