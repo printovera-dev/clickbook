@@ -6,7 +6,7 @@ import { Stack } from "expo-router";
 type Kind = "Acrylic Photo" | "Framed Photo" | "Canvas Print" | "Photo Collage" | "Photo Prints" | "Visiting Cards" | "Brochures" | "Letterheads" | "Wedding Cards";
 const kinds: Kind[] = ["Framed Photo", "Acrylic Photo", "Canvas Print", "Photo Collage", "Photo Prints", "Visiting Cards", "Brochures", "Letterheads", "Wedding Cards"];
 const frameColours: Record<string,string> = {"Black":"#242424","Natural oak":"#b99465","Walnut":"#68452f","Gold":"#c7a45b","White":"#f4f1e9","Silver":"#a8adb1"};
-const printSizes = ["4 × 6 in","5 × 7 in","8 × 10 in","8 × 12 in","12 × 16 in","12 × 18 in","16 × 20 in","20 × 24 in"];
+const printSizes = ["A4 (8.27 × 11.69 in)","12 × 15 in","12 × 18 in","16 × 20 in","18 × 24 in","20 × 30 in","24 × 36 in","24 × 49 in"];
 const categories = ["Photography & Events", "Restaurant & Cafe", "Retail & Fashion", "Real Estate", "Healthcare", "Education", "Professional Services", "Other"];
 const variants: Record<Kind,string[]> = {
  "Acrylic Photo":["3mm acrylic","5mm acrylic","8mm acrylic"],
@@ -42,7 +42,7 @@ export default function PrintStudioScreen() {
  const [mouldings,setMouldings] = useState<{id:string;name:string;uri:string;colour:string}[]>([]);
  const [selectedMoulding,setSelectedMoulding] = useState<string>("");
  const [collageColour,setCollageColour] = useState("#f5f0e5");
- const [productSize,setProductSize] = useState("8 × 10 in");
+ const [productSize,setProductSize] = useState("A4 (8.27 × 11.69 in)");
  const [quantity,setQuantity] = useState("1");
  const [brand,setBrand] = useState("");
  const [tagline,setTagline] = useState("");
