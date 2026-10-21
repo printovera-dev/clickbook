@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Alert, View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator, useWindowDimensions } from "react-native";
 import { FluidImage } from "@/src/components/fluid-image";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { api, fileUrl } from "@/src/api";
@@ -17,6 +17,7 @@ export default function ChooseCover() {
   // card = list padding (xl) each side + 1px card border each side; the artwork fills the card width at its own ratio
   const cardW = Math.min(width, 720) - spacing.xl * 2 - 2;
   const router = useRouter();
+  const params = useLocalSearchParams<{ project?: string; size?: string; paperFinish?: string; coverMaterial?: string }>();
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // Infinite scroll: covers arrive 10 at a time, so an admin catalog of any size stays light.
@@ -32,8 +33,13 @@ export default function ChooseCover() {
     if (!selected || busy) return;
     setBusy(true);
     try {
-      const r = await api.createAlbum(selected);
-      router.replace({ pathname: "/create/upload", params: { albumId: r.album.id } });
+      const albumConfig = params.project === "wedding" ? {
+        size: params.size === "12x12" ? "12x12" as const : "12x18" as const,
+        paper_finish: params.paperFinish === "matte" ? "matte" as const : "gloss" as const,
+        cover_material: params.coverMaterial === "acrylic" ? "acrylic" as const : "digital" as const,
+      } : undefined;
+      const r = await api.createAlbum(selected, params.project === "wedding" ? "Wedding Album" : undefined, albumConfig);
+      router.replace({ pathname: "/create/upload", params: { albumId: r.album.id, ...(params.project === "wedding" ? { project: "wedding" } : {}) } });
     } catch (e: any) {
       const message = e?.message || "Could not create the album. Please try again.";
       if (/missing token|invalid token/i.test(message)) {
