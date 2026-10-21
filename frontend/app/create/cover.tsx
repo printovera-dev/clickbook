@@ -29,11 +29,19 @@ export default function ChooseCover() {
   const covers = q.data?.pages.flatMap((p) => p.covers) || [];
 
   const next = async () => {
-    if (!selected) return;
+    if (!selected || busy) return;
     setBusy(true);
     try {
       const r = await api.createAlbum(selected);
       router.replace({ pathname: "/create/upload", params: { albumId: r.album.id } });
+    } catch (e: any) {
+      const message = e?.message || "Could not create the album. Please try again.";
+      if (/missing token|invalid token/i.test(message)) {
+        Alert.alert("Sign in required", "Please sign in with your mobile number, then start the album again.");
+        router.replace({ pathname: "/(tabs)/home", params: { login: "1" } } as any);
+      } else {
+        Alert.alert("Could not continue", message);
+      }
     } finally {
       setBusy(false);
     }
