@@ -12,7 +12,7 @@ const variants: Record<Kind,string[]> = {
  "Acrylic Photo":["3mm acrylic","5mm acrylic","8mm acrylic"],
  "Framed Photo":["Black frame","Natural wood frame","Gold frame","White frame"],
  "Canvas Print":["1.5 inch gallery wrap","2 inch gallery wrap","Slim wrap"],
- "Photo Collage":["Classic grid","Gallery wall","Heart collage","Polaroid collage","自由 layout"],
+ "Photo Collage":["Classic grid","Gallery wall","Heart collage","Polaroid collage","Free layout"],
  "Photo Prints":["4 × 6 in","5 × 7 in","8 × 10 in","8 × 12 in","12 × 18 in"],
  "Visiting Cards":["Standard","Classic","UV","UV Die Cutting","Premium Textured"],
  "Brochures":["A4","A8"],
