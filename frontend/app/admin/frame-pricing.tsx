@@ -6,7 +6,7 @@ import { api } from "@/src/api";
 import { colors, spacing, radius, fonts } from "@/src/theme";
 
 const money = (n: number) => `₹${Math.round(n || 0).toLocaleString("en-IN")}`;
-const initial = {
+const initial = {\n  frame_sizes: ["4x6", "5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24", "20x30", "24x36", "24x49"],\n  moulding_size_availability: { Black: ["4x6", "5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24", "20x30", "24x36", "24x49"], "Natural oak": ["4x6", "5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24", "20x30"], Walnut: ["5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24", "20x30"], Gold: ["4x6", "5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24"], White: ["4x6", "5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24", "20x30"], Silver: ["4x6", "5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24", "20x30"] },
   moulding_rates_per_inch: { Black: 20, "Natural oak": 24, Walnut: 28, Gold: 30, White: 20, Silver: 26 },
   glass_per_sqft: 100, manufacturing_per_sqft: 80,
   print_rates_per_sqft: { "Photo paper": 60, Canvas: 180, "Acrylic print": 220 },
@@ -22,7 +22,7 @@ export default function FramePricingEngine() {
   const [notice, setNotice] = useState("");
   const [width, setWidth] = useState("12");
   const [height, setHeight] = useState("18");
-  const [moulding, setMoulding] = useState("Black");
+  const [moulding, setMoulding] = useState("Black");\n  const [newSize, setNewSize] = useState("");
   const [material, setMaterial] = useState("Photo paper");
   const [finish, setFinish] = useState("Gloss");
   const [quote, setQuote] = useState<any>(null);
@@ -62,10 +62,16 @@ export default function FramePricingEngine() {
   return (
     <AdminPage title="Frame pricing engine" testID="admin-frame-pricing">
       <Text style={s.bodyMuted}>Set rates here. The backend stores them in the existing settings document; no database migration or new storage service is required.</Text>
+      <Text style={[s.h2, { marginTop: spacing.xl }]}>Sellable frame sizes</Text>
+      <Text style={s.bodyMuted}>Enable sizes you want to sell. These are global size options; each moulding can have a different availability list below.</Text>
+      <View style={styles.chips}>{(cfg.frame_sizes || []).map((size:string) => <Button key={size} label={size} size="sm" variant="outline" onPress={() => setCfg((c:any)=>({...c,frame_sizes:c.frame_sizes.filter((v:string)=>v!==size),moulding_size_availability:Object.fromEntries(Object.entries(c.moulding_size_availability).map(([k,v])=>[k,(v as string[]).filter(s=>s!==size)]))}))} />)}</View>
+      <View style={styles.inline}><View style={{flex:1}}><Field label="Add size (e.g. 6x4)" value={newSize} onChange={setNewSize} /></View><Button label="Add size" size="sm" fullWidth={false} onPress={()=>{const v=newSize.trim().toLowerCase().replace(/\\s+/g,"");if(/^\\d+(?:\\.\\d+)?x\\d+(?:\\.\\d+)?$/.test(v)&&!(cfg.frame_sizes||[]).includes(v)){setCfg((c:any)=>({...c,frame_sizes:[...c.frame_sizes,v],moulding_size_availability:{...c.moulding_size_availability}}));setNewSize("");}}} /></View>
       <Text style={[s.h2, { marginTop: spacing.xl }]}>Moulding rates · per running inch</Text>
       {Object.entries(cfg.moulding_rates_per_inch || {}).map(([name, value]) => (
         <Field key={name} label={name} value={String(value)} onChange={v => setRate("moulding_rates_per_inch", name, v)} />
       ))}
+      <Text style={[s.h2, { marginTop: spacing.xl }]}>Size availability per moulding</Text>
+      {Object.entries(cfg.moulding_size_availability || {}).map(([name, sizes]) => <View key={name} style={styles.availability}><Text style={s.body}>{name}</Text><View style={styles.chips}>{(cfg.frame_sizes||[]).map((size:string)=><Button key={size} label={size} size="sm" variant={(sizes as string[]).includes(size)?"primary":"outline"} onPress={()=>setCfg((c:any)=>({...c,moulding_size_availability:{...c.moulding_size_availability,[name]:(c.moulding_size_availability[name]||[]).includes(size)?c.moulding_size_availability[name].filter((v:string)=>v!==size):[...(c.moulding_size_availability[name]||[]),size]}}))}/>)}</View></View>)}
       <Text style={[s.h2, { marginTop: spacing.xl }]}>Material and production rates</Text>
       {fields.slice(0, 3).map(([key, label]) => <Field key={key} label={label} value={String(cfg[key] ?? 0)} onChange={v => setScalar(key, v)} />)}
       <Toggle label="Charge glass for framed photos" value={!!cfg.glass_enabled} onChange={v => setCfg((c: any) => ({ ...c, glass_enabled: v }))} />
@@ -120,7 +126,7 @@ const styles = StyleSheet.create({
   input: { marginTop: 6, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, fontFamily: fonts.text, color: colors.onSurface, backgroundColor: colors.surfaceSecondary, fontSize: 16 },
   toggle: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginTop: spacing.md, paddingVertical: spacing.sm },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.sm },
-  quoteBox: { marginTop: spacing.xxl, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.surfaceSecondary },
+  inline: { flexDirection: "row", alignItems: "flex-end", gap: spacing.sm }, availability: { marginTop: spacing.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md },\n  quoteBox: { marginTop: spacing.xxl, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.surfaceSecondary },
   result: { marginTop: spacing.lg, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.surface },
   total: { fontFamily: fonts.text, fontSize: 30, fontWeight: "800", color: colors.onSurface, marginTop: 4 },
   breakdown: { flexDirection: "row", justifyContent: "space-between", gap: spacing.md, paddingVertical: 5, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
