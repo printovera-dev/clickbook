@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { View, Text, ScrollView, Pressable, StyleSheet, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import Feather from "@react-native-vector-icons/feather";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -19,15 +19,22 @@ const C = {
 };
 
 const categories = ["Photo Albums", "Frames & Acrylic", "Canvas & Collages", "Visiting Cards", "Wedding Cards", "Business Printing"];
+const categoryKinds: Record<string, string> = {
+  "Frames & Acrylic": "Acrylic Photo",
+  "Canvas & Collages": "Canvas Print",
+  "Visiting Cards": "Visiting Cards",
+  "Wedding Cards": "Wedding Cards",
+  "Business Printing": "Brochures",
+};
 const products = [
   { title: "Wedding Albums", desc: "Premium albums made to keep forever", image: "https://images.unsplash.com/photo-1606800052052-a08af7148866?auto=format&fit=crop&w=900&q=80", route: "album" },
-  { title: "Photo Frames", desc: "Frame a favourite moment", image: "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&w=900&q=80", route: "print" },
-  { title: "Acrylic Frames", desc: "Modern, glossy statement pieces", image: "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?auto=format&fit=crop&w=900&q=80", route: "print" },
-  { title: "Photo Collages", desc: "Bring your best memories together", image: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=900&q=80", route: "print" },
-  { title: "Canvas Prints", desc: "Gallery-style art for your walls", image: "https://images.unsplash.com/photo-1577083552431-6e5fd01aa342?auto=format&fit=crop&w=900&q=80", route: "print" },
-  { title: "Visiting Cards", desc: "Professional cards for your business", image: "https://images.unsplash.com/photo-1589330694653-ded6df03f754?auto=format&fit=crop&w=900&q=80", route: "print" },
-  { title: "Wedding Cards", desc: "A beautiful first impression", image: "https://images.unsplash.com/photo-1523438885200-e635ba2c371e?auto=format&fit=crop&w=900&q=80", route: "print" },
-  { title: "Business Printing", desc: "Branded print essentials", image: "https://images.unsplash.com/photo-1506784983877-45594efa4cbe?auto=format&fit=crop&w=900&q=80", route: "print" },
+  { title: "Photo Frames", desc: "Frame a favourite moment", image: "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&w=900&q=80", route: "Framed Photo" },
+  { title: "Acrylic Frames", desc: "Modern, glossy statement pieces", image: "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?auto=format&fit=crop&w=900&q=80", route: "Acrylic Photo" },
+  { title: "Photo Collages", desc: "Bring your best memories together", image: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=900&q=80", route: "Photo Collage" },
+  { title: "Canvas Prints", desc: "Gallery-style art for your walls", image: "https://images.unsplash.com/photo-1577083552431-6e5fd01aa342?auto=format&fit=crop&w=900&q=80", route: "Canvas Print" },
+  { title: "Visiting Cards", desc: "Professional cards for your business", image: "https://images.unsplash.com/photo-1589330694653-ded6df03f754?auto=format&fit=crop&w=900&q=80", route: "Visiting Cards" },
+  { title: "Wedding Cards", desc: "A beautiful first impression", image: "https://images.unsplash.com/photo-1523438885200-e635ba2c371e?auto=format&fit=crop&w=900&q=80", route: "Wedding Cards" },
+  { title: "Business Printing", desc: "Branded print essentials", image: "https://images.unsplash.com/photo-1506784983877-45594efa4cbe?auto=format&fit=crop&w=900&q=80", route: "Brochures" },
 ];
 
 export default function Home() {
@@ -64,7 +71,7 @@ export default function Home() {
           </View>
           {menuOpen ? (
             <View style={s.menuPanel}>
-              {categories.map((item) => <Pressable key={item} onPress={() => go(item === "Photo Albums" ? "album" : "print")} style={s.menuItem}><Text style={s.menuText}>{item}</Text><Feather name="arrow-up-right" size={16} color={C.forest} /></Pressable>)}
+              {categories.map((item) => <Pressable key={item} onPress={() => go(item === "Photo Albums" ? "album" : (categoryKinds[item] || "Acrylic Photo"))} style={s.menuItem}><Text style={s.menuText}>{item}</Text><Feather name="arrow-up-right" size={16} color={C.forest} /></Pressable>)}
             </View>
           ) : null}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.nav}>
