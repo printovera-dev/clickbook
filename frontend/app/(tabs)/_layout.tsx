@@ -37,7 +37,7 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen name="home" options={{ title: "Home", tabBarIcon: ({ color, size }) => <Feather name="home" color={color} size={size} /> }} />
-      <Tabs.Screen name="print-studio" options={{ title: "Print Studio", tabBarIcon: ({ color, size }) => <Feather name="printer" color={color} size={size} }} />
+      <Tabs.Screen name="print-studio" options={{ title: "Print Studio", tabBarIcon: ({ color, size }) => <Feather name="printer" color={color} size={size} /> }} />
       <Tabs.Screen name="chat" listeners={guard("chat")} options={{ title: "Chat", tabBarIcon: ({ color, size }) => <Feather name="message-circle" color={color} size={size} /> }} />
       <Tabs.Screen name="orders" listeners={guard("orders")} options={{ title: "Orders", tabBarIcon: ({ color, size }) => <Feather name="shopping-cart" color={color} size={size} /> }} />
       <Tabs.Screen name="profile" listeners={guard("profile")} options={{ title: "Profile", tabBarIcon: ({ color, size }) => <Feather name="user" color={color} size={size} /> }} />
