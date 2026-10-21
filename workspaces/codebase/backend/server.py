@@ -1,0 +1,55 @@
+"""ClickBook backend - FastAPI app assembly. All routes are /api/*; logic lives in routers/."""
+from fastapi import FastAPI, APIRouter
+from fastapi.responses import RedirectResponse
+from fastapi.openapi.docs import get_swagger_ui_html
+from starlette.middleware.cors import CORSMiddleware
+
+from core import client, now_iso, logger  # loads .env before anything reads it
+from storage_manager import STORAGE_BASE
+from seed import seed
+from routers import auth, catalog, albums, orders, payments, admin, files, notifications, home, frame_pricing, printing_pricing, print_studio
+
+app = FastAPI(title="Printovera Wedding Album Studio API", docs_url=None)
+api = APIRouter(prefix="/api")
+
+
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/docs")
+
+
+@app.get("/docs", include_in_schema=False)
+async def docs():
+    return get_swagger_ui_html(openapi_url="openapi.json", title="Printovera API Docs")
+
+
+@api.get("/health")
+async def health():
+    return {"ok": True, "service": "clickbook", "time": now_iso()}
+
+
+for r in (auth.router, catalog.router, albums.router, orders.router, payments.router, admin.router, files.router,
+          notifications.router, home.router, frame_pricing.router, printing_pricing.router, print_studio.router):
+    api.include_router(r)
+
+app.include_router(api)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.on_event("startup")
+async def on_startup():
+    STORAGE_BASE.mkdir(parents=True, exist_ok=True)
+    await seed()
+    logger.info("ClickBook API ready.")
+
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    client.close()

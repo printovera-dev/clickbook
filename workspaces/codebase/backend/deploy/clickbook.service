@@ -1,0 +1,18 @@
+# systemd unit: keeps the whole stack running after logout and across reboots.
+# install: sudo cp clickbook.service /etc/systemd/system/ && sudo systemctl enable --now clickbook
+[Unit]
+Description=ClickBook production stack (docker compose)
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/clickbook/backend/deploy
+ExecStart=/usr/bin/docker compose up -d --remove-orphans
+ExecStop=/usr/bin/docker compose down
+ExecReload=/usr/bin/docker compose up -d --build --remove-orphans
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target
