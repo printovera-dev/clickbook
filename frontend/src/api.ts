@@ -161,6 +161,30 @@ export const api = {
   adminOrdersExportUrl: (range: "daily" | "weekly" | "monthly" | "all", token: string) =>
     `${BASE}/api/admin/orders/export.xlsx?range=${range}&token=${encodeURIComponent(token)}`,
 
+  // Printovera Print Studio (separate from album design/order APIs)
+  listPrintStudioTemplates: (product?: string, language?: string) => request<{ templates: any[] }>(`/print-studio/templates${product ? `?product=${encodeURIComponent(product)}` : ""}${product && language ? "&" : !product && language ? "?" : ""}${language ? `language=${encodeURIComponent(language)}` : ""}`, { auth: false }),
+  adminPrintStudioTemplates: () => request<{ templates: any[] }>("/print-studio/admin/templates", { admin: true }),
+  createPrintStudioTemplate: (data: any) => request<{ template: any }>("/print-studio/admin/templates", { method: "POST", body: data, admin: true }),
+  updatePrintStudioTemplate: (id: string, data: any) => request<{ template: any }>(`/print-studio/admin/templates/${id}`, { method: "PUT", body: data, admin: true }),
+  deletePrintStudioTemplate: (id: string) => request<{ success: boolean }>(`/print-studio/admin/templates/${id}`, { method: "DELETE", admin: true }),
+  uploadPrintStudioArtwork: async (uri: string, filename: string, product: string, side: string, artworkType: "base" | "uv", webFile?: any) => {
+    const token = await getToken();
+    const form = new FormData();
+    form.append("product", product); form.append("side", side); form.append("artwork_type", artworkType);
+    if (Platform.OS === "web") {
+      let file: any = webFile;
+      if (!file) { const response = await fetch(uri); file = await response.blob(); }
+      form.append("file", file, filename);
+    } else {
+      const { File: ExpoFile } = await import("expo-file-system");
+      form.append("file", new ExpoFile(uri) as any, filename);
+    }
+    const res = await fetch(`${BASE}/api/print-studio/artwork`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form as any });
+    if (!res.ok) { let msg = `HTTP ${res.status}`; try { msg = JSON.parse(await res.text()).detail || msg; } catch {} throw new Error(msg); }
+    return res.json();
+  },
+  listMyPrintStudioArtwork: () => request<{ artwork: any[] }>("/print-studio/artwork"),
+
   // Pricing / Orders
   calculatePrice: (sheets: number, coupon_code?: string, gift_wrap = false, paper_finish?: string, cover_material?: string) =>
     request<any>("/pricing/calculate", { method: "POST", body: { sheets, coupon_code: coupon_code || null, gift_wrap, paper_finish, cover_material } }),
