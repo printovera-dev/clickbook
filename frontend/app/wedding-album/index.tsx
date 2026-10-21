@@ -6,7 +6,7 @@ import Feather from "@react-native-vector-icons/feather";
 import { Button, s } from "@/src/ui";
 import { colors, spacing, radius, fonts } from "@/src/theme";
 
-type AlbumSize = "12x18" | "24x24";
+type AlbumSize = "12x18" | "12x12";
 type PaperFinish = "gloss" | "matte";
 type CoverMaterial = "digital" | "acrylic";
 
@@ -57,8 +57,8 @@ export default function WeddingAlbumSetup() {
         <View style={styles.group}>
           <OptionCard testID="wedding-size-12x18" title="12 × 18 inches" subtitle="Landscape wedding album"
             selected={size === "12x18"} onPress={() => setSize("12x18")} />
-          <OptionCard testID="wedding-size-24x24" title="24 × 24 inches" subtitle="Large square album"
-            selected={size === "24x24"} onPress={() => setSize("24x24")} />
+          <OptionCard testID="wedding-size-12x12" title="24 × 24 inches" subtitle="Large square album"
+            selected={size === "12x12"} onPress={() => setSize("12x12")} />
         </View>
 
         <Text style={[s.label, { marginTop: spacing.xl }]}>2. PAPER FINISH</Text>
