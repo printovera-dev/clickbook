@@ -6,7 +6,9 @@ import { api } from "@/src/api";
 import { colors, spacing, radius, fonts } from "@/src/theme";
 
 const money = (n: number) => `₹${Math.round(n || 0).toLocaleString("en-IN")}`;
-const initial = {\n  frame_sizes: ["4x6", "5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24", "20x30", "24x36", "24x49"],\n  moulding_size_availability: { Black: ["4x6", "5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24", "20x30", "24x36", "24x49"], "Natural oak": ["4x6", "5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24", "20x30"], Walnut: ["5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24", "20x30"], Gold: ["4x6", "5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24"], White: ["4x6", "5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24", "20x30"], Silver: ["4x6", "5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24", "20x30"] },
+const initial = {
+  frame_sizes: ["4x6", "5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24", "20x30", "24x36", "24x49"],
+  moulding_size_availability: { Black: ["4x6", "5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24", "20x30", "24x36", "24x49"], "Natural oak": ["4x6", "5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24", "20x30"], Walnut: ["5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24", "20x30"], Gold: ["4x6", "5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24"], White: ["4x6", "5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24", "20x30"], Silver: ["4x6", "5x7", "6x4", "6x8", "8x10", "12x15", "12x18", "16x20", "18x24", "20x30"] },
   moulding_rates_per_inch: { Black: 20, "Natural oak": 24, Walnut: 28, Gold: 30, White: 20, Silver: 26 },
   glass_per_sqft: 100, manufacturing_per_sqft: 80,
   print_rates_per_sqft: { "Photo paper": 60, Canvas: 180, "Acrylic print": 220 },
@@ -22,7 +24,8 @@ export default function FramePricingEngine() {
   const [notice, setNotice] = useState("");
   const [width, setWidth] = useState("12");
   const [height, setHeight] = useState("18");
-  const [moulding, setMoulding] = useState("Black");\n  const [newSize, setNewSize] = useState("");
+  const [moulding, setMoulding] = useState("Black");
+  const [newSize, setNewSize] = useState("");
   const [material, setMaterial] = useState("Photo paper");
   const [finish, setFinish] = useState("Gloss");
   const [quote, setQuote] = useState<any>(null);
@@ -126,7 +129,8 @@ const styles = StyleSheet.create({
   input: { marginTop: 6, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, fontFamily: fonts.text, color: colors.onSurface, backgroundColor: colors.surfaceSecondary, fontSize: 16 },
   toggle: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginTop: spacing.md, paddingVertical: spacing.sm },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.sm },
-  inline: { flexDirection: "row", alignItems: "flex-end", gap: spacing.sm }, availability: { marginTop: spacing.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md },\n  quoteBox: { marginTop: spacing.xxl, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.surfaceSecondary },
+  inline: { flexDirection: "row", alignItems: "flex-end", gap: spacing.sm }, availability: { marginTop: spacing.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md },
+  quoteBox: { marginTop: spacing.xxl, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.surfaceSecondary },
   result: { marginTop: spacing.lg, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.surface },
   total: { fontFamily: fonts.text, fontSize: 30, fontWeight: "800", color: colors.onSurface, marginTop: 4 },
   breakdown: { flexDirection: "row", justifyContent: "space-between", gap: spacing.md, paddingVertical: 5, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
