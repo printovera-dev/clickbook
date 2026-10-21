@@ -1,298 +1,179 @@
-// ClickBook Home — CMS-driven landing page (GET /home). Sections are rendered through a FlatList so lower
-// sections mount lazily as the user scrolls; sliders/videos/heroes are all editable from Admin → Home Page.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, FlatList, Pressable, StyleSheet, Animated, RefreshControl, ScrollView } from "react-native";
+import { useState } from "react";
+import { View, Text, ScrollView, Pressable, StyleSheet, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import Feather from "@react-native-vector-icons/feather";
-import { useQuery } from "@tanstack/react-query";
-import { api, fileUrl, getToken } from "@/src/api";
-import { AutoSlider } from "@/src/components/auto-slider";
-import { Accordion } from "@/src/components/accordion";
-import { PromoPopup } from "@/src/components/promo-popup";
-import { HomeLogin } from "@/src/components/home-login";
-import { SideMenu } from "@/src/components/side-menu";
-import { VideoCard } from "@/src/components/video-card";
-import { Thumb } from "@/src/components/thumb";
-import { FluidImage } from "@/src/components/fluid-image";
-import { colors, spacing, radius, fonts } from "@/src/theme";
-import { MAX_CONTENT_W, useLayout } from "@/src/layout";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const STEP_COLORS = [colors.homeBlue, colors.homePink, colors.homeMint, "#8B6FD8", "#E8B43A"];
+const C = {
+  ivory: "#FAF8F2",
+  sage: "#EEF1E8",
+  sageDeep: "#DDE5D8",
+  forest: "#183F35",
+  forest2: "#245548",
+  ink: "#23352F",
+  muted: "#69756D",
+  border: "#E4E5DC",
+  white: "#FFFFFF",
+  gold: "#B99A5B",
+};
+
+const categories = ["Photo Albums", "Frames", "Canvas", "Wedding Cards", "Business Printing"];
+const products = [
+  { title: "Wedding Albums", desc: "Premium albums made to keep forever", image: "https://images.unsplash.com/photo-1606800052052-a08af7148866?auto=format&fit=crop&w=900&q=80", route: "album" },
+  { title: "Photo Frames", desc: "Frame a favourite moment", image: "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&w=900&q=80", route: "print" },
+  { title: "Acrylic Frames", desc: "Modern, glossy statement pieces", image: "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?auto=format&fit=crop&w=900&q=80", route: "print" },
+  { title: "Photo Collages", desc: "Bring your best memories together", image: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=900&q=80", route: "print" },
+  { title: "Canvas Prints", desc: "Gallery-style art for your walls", image: "https://images.unsplash.com/photo-1577083552431-6e5fd01aa342?auto=format&fit=crop&w=900&q=80", route: "print" },
+  { title: "Visiting Cards", desc: "Professional cards for your business", image: "https://images.unsplash.com/photo-1589330694653-ded6df03f754?auto=format&fit=crop&w=900&q=80", route: "print" },
+  { title: "Wedding Cards", desc: "A beautiful first impression", image: "https://images.unsplash.com/photo-1523438885200-e635ba2c371e?auto=format&fit=crop&w=900&q=80", route: "print" },
+  { title: "Business Printing", desc: "Branded print essentials", image: "https://images.unsplash.com/photo-1506784983877-45594efa4cbe?auto=format&fit=crop&w=900&q=80", route: "print" },
+];
 
 export default function Home() {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { width, contentW, isTablet, isDesktop, columns } = useLayout();
-  const params = useLocalSearchParams<{ login?: string; next?: string }>();
-  const listRef = useRef<FlatList>(null);
-  const [menu, setMenu] = useState(false);
-  const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
-  const [splash, setSplash] = useState(true);
-  const fade = useRef(new Animated.Value(1)).current;
-  const pop = useRef(new Animated.Value(0.85)).current;
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const wide = width >= 900;
+  const cols = width >= 1100 ? 4 : width >= 650 ? 2 : 1;
+  const gap = 16;
+  const cardWidth = cols === 1 ? width - 40 : (Math.min(width, 1200) - 40 - gap * (cols - 1)) / cols;
 
-  useEffect(() => { getToken().then((t) => setLoggedIn(!!t)); }, []);
-  useFocusEffect(useCallback(() => { getToken().then((t) => setLoggedIn(!!t)); }, []));
-  useEffect(() => {
-    Animated.spring(pop, { toValue: 1, useNativeDriver: true, friction: 6 }).start();
-    const t = setTimeout(() => Animated.timing(fade, { toValue: 0, duration: 450, useNativeDriver: true }).start(() => setSplash(false)), 1100);
-    return () => clearTimeout(t);
-  }, [fade, pop]);
-
-  const home = useQuery({ queryKey: ["home"], queryFn: () => api.homeContent(), staleTime: 5 * 60 * 1000 });
-  const albums = useQuery({ queryKey: ["albums"], queryFn: () => api.listMyAlbums(), enabled: loggedIn === true });
-  const orders = useQuery({ queryKey: ["orders"], queryFn: () => api.listMyOrders(), enabled: loggedIn === true });
-  const notifs = useQuery({ queryKey: ["notifications"], queryFn: () => api.listNotifications(), enabled: loggedIn === true, refetchInterval: 30000 });
-
-  const c = home.data?.content;
-  const pricing = home.data?.pricing;
-  const t = c?.texts || {};
-  const hero = (key: string) => c?.heroes?.find((h: any) => h.key === key)?.image_url;
-  const drafts = (albums.data?.albums || []).filter((a: any) => a.state === "draft" && a.is_complete);
-  const activeOrder = (orders.data?.orders || []).find((o: any) => ["processing", "printing", "packaging", "out_for_delivery"].includes(o.production_status));
-  const unread = notifs.data?.unread_count || 0;
-  const videoW = isTablet ? Math.floor((contentW - spacing.lg * 2 - spacing.md * (columns - 1)) / columns) : Math.min(300, width - spacing.lg * 2 - 24);
-
-  // Guests arriving from a protected tab (Chat / Orders / Profile) or /login are scrolled to the inline sign-in block.
-  const wantsLogin = params.login === "1" && loggedIn === false;
-  useEffect(() => {
-    if (!wantsLogin || !c) return;
-    const t = setTimeout(() => listRef.current?.scrollToIndex({ index: 1, animated: true, viewPosition: 0.1 }), splash ? 1300 : 250);
-    return () => clearTimeout(t);
-  }, [wantsLogin, c, splash]);
-
-  const sections = useMemo(() => {
-    if (!c) return [];
-    const isIn = loggedIn === true;
-    const list: { key: string; render: () => React.ReactNode }[] = [
-      { key: "slider1", render: () => <AutoSlider testID="home-slider1" orientation="portrait" slides={c.sliders?.slider1?.slides || []} intervalMs={c.sliders?.slider1?.interval_ms} /> },
-      { key: "login1", render: () => (
-        <View>
-          {wantsLogin ? (
-            <View style={styles.signinHint} testID="home-signin-hint">
-              <Feather name="lock" size={14} color={colors.homeBlue} />
-              <Text style={styles.signinHintTxt}>Sign in to open {params.next === "chat" ? "Chat" : params.next === "orders" ? "your Orders" : params.next === "profile" ? "your Profile" : "your account"}.</Text>
-            </View>
-          ) : null}
-          <HomeLogin testID="home-login1" title={t.login_title} accent={t.login_accent} subtitle={t.login_sub} loggedIn={isIn} />
-        </View>
-      ) },
-    ];
-    if (isIn) list.push({ key: "wedding-album-entry", render: () => (
-      <View style={[styles.section, { marginTop: spacing.sm }]} testID="home-wedding-album-entry">
-        <Pressable onPress={() => router.push("/wedding-album" as any)} testID="home-create-wedding-album" style={{ backgroundColor: colors.homeCharcoal, borderRadius: radius.lg, padding: spacing.xl, flexDirection: "row", alignItems: "center", gap: spacing.md }}>
-          <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.homePink, alignItems: "center", justifyContent: "center" }}><Feather name="book-open" size={23} color="#FFFFFF" /></View>
-          <View style={{ flex: 1 }}><Text style={{ color: "#FFFFFF", fontFamily: fonts.display, fontSize: 20 }}>Wedding Album Studio</Text><Text style={{ color: "#E7E5E4", fontFamily: fonts.text, fontSize: 13, marginTop: 4 }}>Create a large-format wedding album with a 3D preview</Text></View>
-          <Feather name="chevron-right" size={22} color="#FFFFFF" />
-        </Pressable>
-      </View>
-    ) });
-    if (isIn && (drafts.length || activeOrder)) list.push({ key: "mine", render: () => (
-      <View style={styles.section}>
-        <View style={styles.rowBetween}>
-          <Text style={styles.label}>Your ClickBooks</Text>
-          <Pressable onPress={() => router.push("/(tabs)/albums")} testID="home-see-all-albums"><Text style={{ color: colors.homeBlue, fontFamily: fonts.text }}>See all</Text></Pressable>
-        </View>
-        {activeOrder ? (
-          <Pressable testID="home-active-order" onPress={() => router.push({ pathname: "/order/[id]", params: { id: activeOrder.id } })} style={styles.orderCard}>
-            <Feather name="package" size={22} color={colors.homeBlue} />
-            <View style={{ marginLeft: spacing.md, flex: 1 }}>
-              <Text style={styles.cardTitle}>{activeOrder.order_no}</Text>
-              <Text style={styles.muted}>{activeOrder.production_status.replace(/_/g, " ")} · {activeOrder.sheets} sheets</Text>
-            </View>
-            <Feather name="chevron-right" size={22} color={colors.muted} />
-          </Pressable>
-        ) : null}
-        {drafts.length ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md, paddingTop: spacing.md }}>
-            {drafts.slice(0, 8).map((a: any) => (
-              <Pressable key={a.id} testID={`home-draft-${a.id}`} style={styles.draftCard} onPress={() => router.push({ pathname: "/album/[id]/preview", params: { id: a.id } })}>
-                <Thumb uri={a.cover_thumbnail_url} recyclingKey={a.id} style={{ width: "100%", height: 110 }} />
-                <View style={{ padding: spacing.md }}>
-                  <Text style={styles.cardTitle} numberOfLines={1}>{a.name}</Text>
-                  <Text style={styles.muted}>{a.photos?.length || 0} photos · draft</Text>
-                </View>
-              </Pressable>
-            ))}
-          </ScrollView>
-        ) : null}
-      </View>
-    ) });
-    list.push(
-      { key: "pricing", render: () => (
-        <View style={styles.section} testID="home-pricing">
-          {hero("pricing") ? <FluidImage uri={fileUrl(hero("pricing"))} width={contentW - spacing.lg * 2} maxHeight={560} recyclingKey="hero-pricing" style={[styles.hero]} testID="home-hero-pricing" /> : null}
-          {pricing ? (
-            <View style={styles.priceRow}>
-              <View style={[styles.priceCell, { backgroundColor: colors.homeBlueSoft }]}>
-                <Text style={styles.priceLabel}>{pricing.min_sheets}-page album</Text>
-                <Text style={[styles.priceValue, { color: colors.homeBlue }]} testID="home-base-price">₹{pricing.base_price.toLocaleString("en-IN")}</Text>
-                <Text style={styles.muted}>{pricing.size.replace("x", " × ")} inch · incl. GST</Text>
-              </View>
-              <View style={[styles.priceCell, { backgroundColor: colors.homeMintSoft }]}>
-                <Text style={styles.priceLabel}>Extra sheet</Text>
-                <Text style={[styles.priceValue, { color: colors.homeMint }]}>₹{pricing.price_per_sheet}</Text>
-                <Text style={styles.muted}>Free delivery across India</Text>
-              </View>
-            </View>
-          ) : null}
-        </View>
-      ) },
-      { key: "steps", render: () => (
-        <View style={styles.section} testID="home-steps">
-          <Text style={styles.h}>{t.steps_title} <Feather name="heart" size={18} color={colors.homePink} /></Text>
-          {hero("steps") ? <FluidImage uri={fileUrl(hero("steps"))} width={contentW - spacing.lg * 2} maxHeight={560} recyclingKey="hero-steps" style={[styles.hero, { marginTop: spacing.md }]} testID="home-hero-steps" /> : null}
-          <View style={[{ marginTop: spacing.md, gap: spacing.sm }, isTablet && { flexDirection: "row", flexWrap: "wrap" }]}>
-            {(c.steps || []).map((st: any, i: number) => (
-              <View key={st.n} style={[styles.stepRow, isTablet && { flexBasis: "48%", flexGrow: 1 }]} testID={`home-step-${i + 1}`}>
-                <View style={[styles.stepNum, { backgroundColor: STEP_COLORS[i % STEP_COLORS.length] }]}><Text style={styles.stepNumText}>{st.n}</Text></View>
-                <Text style={styles.stepText}>{st.title}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      ) },
-      { key: "why", render: () => (
-        <View style={styles.section} testID="home-why">
-          <Text style={styles.h}>{t.why_title}</Text>
-          {isTablet ? (
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.md, paddingTop: spacing.md }}>
-              {(c.videos || []).map((v: any) => <VideoCard key={v.id} video={v} width={videoW} />)}
-            </View>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md, paddingTop: spacing.md, paddingRight: spacing.lg }}>
-              {(c.videos || []).map((v: any) => <VideoCard key={v.id} video={v} width={videoW} />)}
-            </ScrollView>
-          )}
-          {(c.accordions || []).length ? (
-            <View style={{ marginTop: spacing.xl }}>
-              <Accordion rows={c.accordions} testID="home-accordion" />
-            </View>
-          ) : null}
-        </View>
-      ) },
-      { key: "slider2", render: () => <AutoSlider testID="home-slider2" slides={c.sliders?.slider2?.slides || []} intervalMs={c.sliders?.slider2?.interval_ms} /> },
-      { key: "privacy", render: () => (
-        <View style={styles.section} testID="home-privacy">
-          <Text style={styles.h}>{t.privacy_title}</Text>
-          {hero("privacy") ? <FluidImage uri={fileUrl(hero("privacy"))} width={contentW - spacing.lg * 2} maxHeight={560} recyclingKey="hero-privacy" style={[styles.hero, { marginTop: spacing.md }]} testID="home-hero-privacy" /> : null}
-          <Text style={[styles.muted, { textAlign: "center", marginTop: spacing.md }]}>{t.privacy_sub}</Text>
-          <Pressable testID="home-privacy-link" onPress={() => router.push({ pathname: "/policy/[key]", params: { key: "privacy" } })} style={styles.linkBtn}>
-            <Feather name="shield" size={16} color={colors.homeBlue} /><Text style={styles.linkBtnText}>Read our Privacy Policy</Text>
-          </Pressable>
-        </View>
-      ) },
-      { key: "login2", render: () => <HomeLogin testID="home-login2" title={t.cta_title} loggedIn={isIn} compact /> },
-      { key: "slider3", render: () => <AutoSlider testID="home-slider3" slides={c.sliders?.slider3?.slides || []} intervalMs={c.sliders?.slider3?.interval_ms} /> },
-      { key: "final", render: () => (
-        <View style={styles.section} testID="home-final-hero">
-          <Text style={[styles.h, { fontStyle: "italic" }]}>&ldquo;{t.final_quote}&rdquo;</Text>
-          <Text style={[styles.muted, { textAlign: "center" }]}>{t.final_sub}</Text>
-          {hero("final") ? <FluidImage uri={fileUrl(hero("final"))} width={contentW - spacing.lg * 2} maxHeight={560} recyclingKey="hero-final" style={[styles.hero, { marginTop: spacing.md }]} testID="home-hero-final" /> : null}
-        </View>
-      ) },
-      { key: "login3", render: () => <HomeLogin testID="home-login3" title={t.cta_title} loggedIn={isIn} compact /> },
-      { key: "footer", render: () => (
-        <View style={styles.footer} testID="home-footer">
-          <Text style={styles.brand}>Click<Text style={{ color: colors.homePink }}>Book</Text></Text>
-          <Text style={styles.tag}>Preserving memories</Text>
-          <View style={styles.footerLinks}>
-            {[["faq", "FAQ"], ["privacy", "Privacy"], ["terms", "Terms"], ["refund", "Refunds"], ["shipping", "Shipping"]].map(([k, l]) => (
-              <Pressable key={k} onPress={() => router.push({ pathname: "/policy/[key]", params: { key: k } })} testID={`footer-${k}`} hitSlop={8}><Text style={styles.footerLink}>{l}</Text></Pressable>
-            ))}
-          </View>
-          <Text style={[styles.muted, { marginTop: spacing.md }]}>© {new Date().getFullYear()} Printovera LLP | Clickbook is a product of Printovera LLP</Text>
-        </View>
-      ) },
-    );
-    return list;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [c, pricing, loggedIn, drafts, activeOrder, width, contentW, isTablet, videoW, wantsLogin, params.next, router]);
+  const go = (route: string) => {
+    setMenuOpen(false);
+    if (route === "album") router.push("/wedding-album" as any);
+    else router.push("/(tabs)/print-studio" as any);
+  };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.homeBg }}>
-      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
-        <View style={styles.headerInner}>
-        <Pressable onPress={() => setMenu(true)} testID="home-menu" style={styles.iconBtn} hitSlop={8}><Feather name="menu" size={22} color={colors.homeCharcoal} /></Pressable>
-        <View style={{ alignItems: "center" }}>
-          {c?.logo_url ? <Image source={{ uri: fileUrl(c.logo_url) }} style={{ width: Math.min(422, width - 120), height: isDesktop ? 115 : 140 }} contentFit="contain" cachePolicy="memory-disk" /> : <Text style={styles.brand}>Click<Text style={{ color: colors.homePink }}>Book</Text></Text>}
-        </View>
-        <Pressable onPress={() => router.push(loggedIn ? "/notifications" : { pathname: "/(tabs)/home", params: { login: "1" } } as any)} testID="home-notifications-bell" style={styles.iconBtn} hitSlop={8}>
-          <Feather name="bell" size={22} color={colors.homeCharcoal} />
-          {unread > 0 ? <View style={styles.badge} testID="home-notifications-badge"><Text style={styles.badgeTxt}>{unread > 9 ? "9+" : unread}</Text></View> : null}
-        </Pressable>
-        </View>
-      </View>
-
-      <FlatList
-        ref={listRef}
-        testID="home-sections"
-        data={sections}
-        keyExtractor={(s) => s.key}
-        renderItem={({ item }) => <View style={{ marginTop: spacing.xl }}>{item.render()}</View>}
-        initialNumToRender={3}
-        maxToRenderPerBatch={2}
-        windowSize={3}
-        onScrollToIndexFailed={() => {}}
-        contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xxl, width: "100%", maxWidth: MAX_CONTENT_W, alignSelf: "center" }}
-        refreshControl={<RefreshControl refreshing={home.isFetching} onRefresh={() => { home.refetch(); albums.refetch(); orders.refetch(); }} tintColor={colors.homePink} />}
-        ListEmptyComponent={home.isError ? (
-          <View style={{ padding: spacing.xxl, alignItems: "center" }}>
-            <Text style={styles.muted}>Could not load the home page.</Text>
-            <Pressable onPress={() => home.refetch()} testID="home-retry" style={styles.linkBtn}><Text style={styles.linkBtnText}>Retry</Text></Pressable>
+    <View style={s.page}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
+        <View style={[s.header, { paddingTop: Math.max(insets.top, 12) + 8 }]}>
+          <View style={[s.headerInner, { maxWidth: 1200 }]}>
+            <Pressable accessibilityLabel="Open navigation" onPress={() => setMenuOpen(!menuOpen)} style={s.menuBtn}>
+              <Feather name={menuOpen ? "x" : "menu"} size={21} color={C.forest} />
+            </Pressable>
+            <Pressable onPress={() => router.replace("/(tabs)/home" as any)} accessibilityLabel="Printovera home">
+              <Text style={s.logo}>PRINTOVERA</Text>
+              <Text style={s.logoSub}>PRINTS THAT HOLD MEANING</Text>
+            </Pressable>
+            <Pressable accessibilityLabel="Open print studio" onPress={() => go("print")} style={s.bagBtn}>
+              <Feather name="shopping-bag" size={20} color={C.forest} />
+            </Pressable>
           </View>
-        ) : null}
-      />
+          {menuOpen ? (
+            <View style={s.menuPanel}>
+              {categories.map((item) => <Pressable key={item} onPress={() => go(item === "Photo Albums" ? "album" : "print")} style={s.menuItem}><Text style={s.menuText}>{item}</Text><Feather name="arrow-up-right" size={16} color={C.forest} /></Pressable>)}
+            </View>
+          ) : null}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.nav}>
+            {categories.map((item) => <Pressable key={item} onPress={() => go(item === "Photo Albums" ? "album" : "print")} style={s.navItem}><Text style={s.navText}>{item}</Text></Pressable>)}
+          </ScrollView>
+        </View>
 
-      <PromoPopup promo={home.data?.promo} />
+        <View style={[s.heroWrap, { maxWidth: 1200, alignSelf: "center", width: "100%", paddingHorizontal: 20 }]}>
+          <View style={[s.hero, wide && s.heroWide]}>
+            <View style={[s.heroCopy, wide && { flex: 0.85 }]}>
+              <Text style={s.eyebrow}>YOUR PHOTOS, YOUR STORY</Text>
+              <Text style={s.heroTitle}>Make your memories tangible.</Text>
+              <Text style={s.heroText}>Create premium photo albums, beautiful wall art and personalised print products online.</Text>
+              <Pressable onPress={() => go("print")} style={s.primaryBtn} testID="printovera-explore-products">
+                <Text style={s.primaryBtnText}>Explore Products</Text><Feather name="arrow-right" size={18} color={C.white} />
+              </Pressable>
+              <View style={s.trustRow}><Feather name="check-circle" size={15} color={C.forest2} /><Text style={s.trustText}>Made personal. Printed with care.</Text></View>
+            </View>
+            <View style={[s.heroImageWrap, wide && { flex: 1.15 }]}>
+              <Image source={{ uri: "https://images.unsplash.com/photo-1606800052052-a08af7148866?auto=format&fit=crop&w=1400&q=85" }} style={s.heroImage} contentFit="cover" transition={250} />
+              <View style={s.imageCaption}><Text style={s.captionTop}>THE ART OF KEEPING</Text><Text style={s.captionTitle}>Moments, made lasting.</Text></View>
+            </View>
+          </View>
+        </View>
 
-      <SideMenu visible={menu} onClose={() => setMenu(false)} />
+        <View style={[s.section, { maxWidth: 1200, alignSelf: "center", width: "100%" }]}>
+          <View style={s.sectionHeading}>
+            <View><Text style={s.eyebrow}>MADE FOR YOUR MOMENTS</Text><Text style={s.sectionTitle}>Explore our products</Text></View>
+            <Pressable onPress={() => go("print")} style={s.textLink}><Text style={s.textLinkText}>View all products</Text><Feather name="arrow-up-right" size={16} color={C.forest} /></Pressable>
+          </View>
+          <View style={s.productGrid}>
+            {products.map((p) => (
+              <Pressable key={p.title} onPress={() => go(p.route)} style={[s.productCard, { width: cardWidth }]} testID={"product-" + p.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}>
+                <View style={s.productImageWrap}><Image source={{ uri: p.image }} style={s.productImage} contentFit="cover" transition={200} /><View style={s.productArrow}><Feather name="arrow-up-right" size={18} color={C.forest} /></View></View>
+                <View style={s.productInfo}><Text style={s.productTitle}>{p.title}</Text><Text style={s.productDesc}>{p.desc}</Text></View>
+              </Pressable>
+            ))}
+          </View>
+        </View>
 
-      {splash ? (
-        <Animated.View pointerEvents="none" style={[styles.splash, { opacity: fade }]} testID="home-splash">
-          <Animated.View style={{ transform: [{ scale: pop }], alignItems: "center" }}>
-            <Text style={[styles.brand, { fontSize: 40 }]}>Click<Text style={{ color: colors.homePink }}>Book</Text><Text style={{ color: colors.homeRed }}>.</Text></Text>
-            <Text style={styles.tag}>Preserving memories</Text>
-          </Animated.View>
-        </Animated.View>
-      ) : null}
+        <View style={[s.studioBanner, { maxWidth: 1160, alignSelf: "center", width: "100%" }]}>
+          <View style={s.studioCopy}><Text style={s.eyebrow}>FOR YOUR BIGGEST CHAPTER</Text><Text style={s.studioTitle}>Your wedding story deserves its own book.</Text><Text style={s.studioText}>Build your album, choose your size and finish, and organise your photographs in the Wedding Album Studio.</Text><Pressable onPress={() => go("album")} style={s.lightBtn} testID="open-wedding-album-studio"><Text style={s.lightBtnText}>Open Wedding Album Studio</Text><Feather name="arrow-right" size={17} color={C.forest} /></Pressable></View>
+          <Image source={{ uri: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1000&q=80" }} style={s.studioImage} contentFit="cover" />
+        </View>
+
+        <View style={[s.footer, { maxWidth: 1200, alignSelf: "center", width: "100%" }]}>
+          <View><Text style={s.footerLogo}>PRINTOVERA</Text><Text style={s.footerText}>Your photos. Your story. Beautifully printed.</Text></View>
+          <View style={s.footerLinks}>{categories.map((item) => <Pressable key={item} onPress={() => go(item === "Photo Albums" ? "album" : "print")}><Text style={s.footerLink}>{item}</Text></Pressable>)}</View>
+          <Text style={s.copyright}>© {new Date().getFullYear()} Printovera LLP</Text>
+        </View>
+      </ScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  header: { paddingHorizontal: spacing.md, paddingBottom: spacing.sm, backgroundColor: colors.homeBg, borderBottomWidth: 1, borderBottomColor: colors.border },
-  headerInner: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", maxWidth: MAX_CONTENT_W, alignSelf: "center" },
-  signinHint: { flexDirection: "row", alignItems: "center", gap: spacing.sm, alignSelf: "center", marginBottom: spacing.sm, paddingHorizontal: spacing.lg, minHeight: 36, borderRadius: radius.pill, backgroundColor: colors.homeBlueSoft },
-  signinHintTxt: { fontFamily: fonts.text, fontSize: 13, color: colors.homeBlue, fontWeight: "600" },
-  iconBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: radius.md, backgroundColor: colors.homeCard, borderWidth: 1, borderColor: colors.border },
-  badge: { position: "absolute", top: 4, right: 4, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 4, backgroundColor: colors.homePink, alignItems: "center", justifyContent: "center" },
-  badgeTxt: { color: "#FFF", fontSize: 10, fontFamily: fonts.text, fontWeight: "700" },
-  brand: { fontFamily: fonts.text, fontSize: 26, fontWeight: "800", color: colors.homeCharcoal, letterSpacing: -0.5 },
-  tag: { fontFamily: fonts.text, fontSize: 10, letterSpacing: 2.5, textTransform: "uppercase", color: colors.muted, marginTop: 2 },
-  section: { paddingHorizontal: spacing.lg },
-  h: { fontFamily: fonts.display, fontSize: 24, lineHeight: 30, color: colors.homeCharcoal, textAlign: "center" },
-  label: { fontFamily: fonts.text, fontSize: 12, letterSpacing: 0.6, textTransform: "uppercase", color: colors.muted },
-  muted: { fontFamily: fonts.text, fontSize: 13, color: colors.muted, lineHeight: 19 },
-  cardTitle: { fontFamily: fonts.text, fontSize: 15, fontWeight: "700", color: colors.homeCharcoal },
-  rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  hero: { alignSelf: "center", borderRadius: radius.lg, overflow: "hidden", backgroundColor: colors.homeCard },
-  priceRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.md },
-  priceCell: { flex: 1, borderRadius: radius.lg, padding: spacing.lg, borderWidth: 1, borderColor: colors.border },
-  priceLabel: { fontFamily: fonts.text, fontSize: 12, textTransform: "uppercase", letterSpacing: 0.5, color: colors.homeCharcoal },
-  priceValue: { fontFamily: fonts.text, fontSize: 28, fontWeight: "800", marginVertical: 2 },
-  stepRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.homeCard, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border, minHeight: 52 },
-  stepNum: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
-  stepNumText: { color: "#FFF", fontFamily: fonts.text, fontWeight: "800", fontSize: 13 },
-  stepText: { fontFamily: fonts.text, fontSize: 15, color: colors.homeCharcoal, fontWeight: "600" },
-  linkBtn: { alignSelf: "center", flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.md, minHeight: 44, paddingHorizontal: spacing.lg, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.homeBlue, backgroundColor: colors.homeCard },
-  linkBtnText: { color: colors.homeBlue, fontFamily: fonts.text, fontWeight: "600" },
-  orderCard: { flexDirection: "row", alignItems: "center", backgroundColor: colors.homeCard, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, borderRadius: radius.md, marginTop: spacing.md },
-  draftCard: { width: 190, borderRadius: radius.md, overflow: "hidden", backgroundColor: colors.homeCard, borderWidth: 1, borderColor: colors.border },
-  footer: { marginHorizontal: spacing.lg, padding: spacing.xl, alignItems: "center", backgroundColor: colors.homeCard, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border },
-  footerLinks: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: spacing.lg, marginTop: spacing.lg },
-  footerLink: { fontFamily: fonts.text, fontSize: 13, color: colors.homeBlue },
-  splash: { position: "absolute", inset: 0 as any, backgroundColor: colors.homeBg, alignItems: "center", justifyContent: "center", zIndex: 100 },
+const s = StyleSheet.create({
+  page: { flex: 1, backgroundColor: C.ivory },
+  header: { backgroundColor: C.ivory, borderBottomWidth: 1, borderBottomColor: C.border },
+  headerInner: { width: "100%", alignSelf: "center", paddingHorizontal: 20, paddingBottom: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  menuBtn: { width: 42, height: 42, borderRadius: 22, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center" },
+  bagBtn: { width: 42, height: 42, borderRadius: 22, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center" },
+  logo: { fontSize: 23, fontWeight: "800", letterSpacing: 1.1, color: C.forest, textAlign: "center" },
+  logoSub: { fontSize: 8, letterSpacing: 2, color: C.muted, textAlign: "center", marginTop: 3 },
+  nav: { justifyContent: "center", alignItems: "center", gap: 32, paddingHorizontal: 22, paddingVertical: 15, alignSelf: "center" },
+  navItem: { paddingVertical: 2 },
+  navText: { fontSize: 13, color: C.ink, fontWeight: "500" },
+  menuPanel: { marginHorizontal: 20, marginBottom: 12, padding: 8, borderRadius: 14, backgroundColor: C.white, borderWidth: 1, borderColor: C.border },
+  menuItem: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 12, paddingVertical: 12 },
+  menuText: { color: C.forest, fontSize: 14 },
+  heroWrap: { paddingTop: 24 },
+  hero: { borderRadius: 22, backgroundColor: C.sage, overflow: "hidden" },
+  heroWide: { flexDirection: "row", alignItems: "stretch" },
+  heroCopy: { padding: 30, justifyContent: "center" },
+  eyebrow: { color: C.forest2, fontSize: 10, fontWeight: "700", letterSpacing: 1.7, marginBottom: 13 },
+  heroTitle: { color: C.forest, fontSize: 39, lineHeight: 45, fontWeight: "600", letterSpacing: -1.1, maxWidth: 520 },
+  heroText: { color: "#52635A", fontSize: 15, lineHeight: 24, marginTop: 14, maxWidth: 490 },
+  primaryBtn: { marginTop: 23, minHeight: 50, paddingHorizontal: 20, borderRadius: 8, backgroundColor: C.forest, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, alignSelf: "flex-start" },
+  primaryBtnText: { color: C.white, fontWeight: "600", fontSize: 14 },
+  trustRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 18 },
+  trustText: { color: C.muted, fontSize: 12 },
+  heroImageWrap: { minHeight: 290, flex: 1, position: "relative" },
+  heroImage: { width: "100%", height: "100%", minHeight: 290 },
+  imageCaption: { position: "absolute", bottom: 18, left: 18, right: 18, padding: 16, borderRadius: 10, backgroundColor: "rgba(250,248,242,0.91)" },
+  captionTop: { color: C.forest2, fontSize: 9, letterSpacing: 1.6, fontWeight: "700" },
+  captionTitle: { color: C.forest, fontSize: 19, fontWeight: "600", marginTop: 4 },
+  section: { paddingHorizontal: 20, paddingTop: 46 },
+  sectionHeading: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 16, marginBottom: 22, paddingHorizontal: 2 },
+  sectionTitle: { color: C.forest, fontSize: 29, fontWeight: "600", letterSpacing: -0.5 },
+  textLink: { flexDirection: "row", alignItems: "center", gap: 5, paddingBottom: 4 },
+  textLinkText: { color: C.forest, fontSize: 13, fontWeight: "600" },
+  productGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 16 },
+  productCard: { borderRadius: 14, overflow: "hidden", backgroundColor: C.white, borderWidth: 1, borderColor: C.border, marginBottom: 2 },
+  productImageWrap: { height: 205, backgroundColor: C.sageDeep, position: "relative" },
+  productImage: { width: "100%", height: "100%" },
+  productArrow: { position: "absolute", right: 12, bottom: 12, width: 36, height: 36, borderRadius: 18, backgroundColor: C.ivory, alignItems: "center", justifyContent: "center" },
+  productInfo: { paddingHorizontal: 16, paddingVertical: 15 },
+  productTitle: { color: C.forest, fontSize: 17, fontWeight: "600" },
+  productDesc: { color: C.muted, fontSize: 12, lineHeight: 18, marginTop: 5 },
+  studioBanner: { marginTop: 48, marginHorizontal: 20, backgroundColor: C.forest, borderRadius: 20, overflow: "hidden", flexDirection: "row", minHeight: 270 },
+  studioCopy: { flex: 1, padding: 28, justifyContent: "center" },
+  studioTitle: { color: C.white, fontSize: 29, lineHeight: 35, fontWeight: "600", maxWidth: 470 },
+  studioText: { color: "#E0E9E2", fontSize: 13, lineHeight: 21, marginTop: 12, maxWidth: 480 },
+  lightBtn: { alignSelf: "flex-start", marginTop: 20, backgroundColor: C.ivory, borderRadius: 8, paddingVertical: 13, paddingHorizontal: 15, flexDirection: "row", alignItems: "center", gap: 10 },
+  lightBtnText: { color: C.forest, fontSize: 13, fontWeight: "700" },
+  studioImage: { width: "38%", minHeight: 270 },
+  footer: { paddingHorizontal: 22, paddingVertical: 34, marginTop: 38, borderTopWidth: 1, borderTopColor: C.border, gap: 16 },
+  footerLogo: { color: C.forest, fontSize: 20, fontWeight: "800", letterSpacing: 1.1 },
+  footerText: { color: C.muted, fontSize: 12, marginTop: 5 },
+  footerLinks: { flexDirection: "row", flexWrap: "wrap", gap: 16 },
+  footerLink: { color: C.ink, fontSize: 12 },
+  copyright: { color: C.muted, fontSize: 11, marginTop: 8 },
 });
