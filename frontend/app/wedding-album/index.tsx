@@ -57,7 +57,7 @@ export default function WeddingAlbumSetup() {
         <View style={styles.group}>
           <OptionCard testID="wedding-size-12x18" title="12 × 18 inches" subtitle="Landscape wedding album"
             selected={size === "12x18"} onPress={() => setSize("12x18")} />
-          <OptionCard testID="wedding-size-12x12" title="24 × 24 inches" subtitle="Large square album"
+          <OptionCard testID="wedding-size-12x12" title="12 × 12 inches" subtitle="Square wedding album"
             selected={size === "12x12"} onPress={() => setSize("12x12")} />
         </View>
 
