@@ -60,17 +60,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install integration dependencies
-        run: python -m pip install -r backend/requirements.txt
+      - name: Install integration dependencies when endpoint is configured
+        if: env.EXPO_PUBLIC_BACKEND_URL != ''
+        run: python -m pip install pytest pytest-xdist requests pillow pypdf reportlab pymongo openpyxl
       - name: Run API integration tests when endpoint is configured
+        if: env.EXPO_PUBLIC_BACKEND_URL != ''
         working-directory: backend
-        shell: bash
-        run: |
-          if [ -z "$EXPO_PUBLIC_BACKEND_URL" ]; then
-            echo "EXPO_PUBLIC_BACKEND_URL secret is not configured; external API integration tests were not run."
-            exit 0
-          fi
-          python -m pytest -n 0 tests/test_clickbook_api.py
+        run: python -m pytest -n 0 tests/test_clickbook_api.py
+      - name: Explain skipped external integration tests
+        if: env.EXPO_PUBLIC_BACKEND_URL == ''
+        run: echo "EXPO_PUBLIC_BACKEND_URL secret is not configured; external API integration tests were not run."
 
   frontend-lint:
     name: Frontend lint
