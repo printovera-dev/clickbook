@@ -18,7 +18,7 @@ const C = {
   gold: "#B99A5B",
 };
 
-const categories = ["Photo Albums", "Frames", "Canvas", "Wedding Cards", "Business Printing"];
+const categories = ["Photo Albums", "Frames & Acrylic", "Canvas & Collages", "Visiting Cards", "Wedding Cards", "Business Printing"];
 const products = [
   { title: "Wedding Albums", desc: "Premium albums made to keep forever", image: "https://images.unsplash.com/photo-1606800052052-a08af7148866?auto=format&fit=crop&w=900&q=80", route: "album" },
   { title: "Photo Frames", desc: "Frame a favourite moment", image: "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&w=900&q=80", route: "print" },
