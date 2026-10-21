@@ -73,7 +73,8 @@ export default function PrintStudioScreen() {
  }
  useEffect(() => {
    if (!wall) { setLiveQuote(null); setQuoteMessage(""); return; }
-   const [w,h]=sizeInches(productSize);\n   const size_label=frameSizeLabel(productSize);
+   const [w,h]=sizeInches(productSize);
+   const size_label=frameSizeLabel(productSize);
    const product_type = kind==="Framed Photo" ? "framed_photo" : kind==="Canvas Print" ? "canvas_print" : kind==="Acrylic Photo" ? "acrylic_photo" : "photo_print";
    const print_material = kind==="Canvas Print" ? "Canvas" : kind==="Acrylic Photo" ? "Acrylic print" : "Photo paper";
    const normalizedFinish = finish.toLowerCase().includes("textured") ? "Textured canvas" : finish.toLowerCase().includes("matte") ? "Matte" : finish.toLowerCase().includes("lustre") ? "Lustre" : finish.toLowerCase().includes("canvas") ? "Matte" : finish.toLowerCase().includes("gloss") ? "Gloss" : "None";
