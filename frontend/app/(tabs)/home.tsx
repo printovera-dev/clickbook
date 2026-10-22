@@ -9,6 +9,7 @@ import Feather from "@react-native-vector-icons/feather";
 import { useQuery } from "@tanstack/react-query";
 import { api, fileUrl, getToken } from "@/src/api";
 import { AutoSlider } from "@/src/components/auto-slider";
+import { AlbumCategorySlider } from "@/src/components/album-category-slider";
 import { Accordion } from "@/src/components/accordion";
 import { PromoPopup } from "@/src/components/promo-popup";
 import { HomeLogin } from "@/src/components/home-login";
@@ -90,6 +91,7 @@ export default function Home() {
     const isIn = loggedIn === true;
     const list: { key: string; render: () => React.ReactNode }[] = [
       { key: "slider1", render: () => <AutoSlider testID="home-slider1" orientation="portrait" slides={c.sliders?.slider1?.slides || []} intervalMs={c.sliders?.slider1?.interval_ms} /> },
+      { key: "album-categories", render: () => <AlbumCategorySlider slides={c.sliders?.slider4?.slides || []} intervalMs={c.sliders?.slider4?.interval_ms} onCreate={() => router.push("/create/cover")} /> },
       { key: "login1", render: () => (
         <View>
           {wantsLogin ? (
