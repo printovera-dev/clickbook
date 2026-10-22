@@ -47,6 +47,7 @@ def default_home_content() -> dict:
             "slider1": {"interval_ms": 4500, "slides": [_slide(f"sl1-{i}.png", i) for i in range(1, 5)]},
             "slider2": {"interval_ms": 4500, "slides": [_slide(f"sl2-{i}.png", i) for i in range(1, 4)]},
             "slider3": {"interval_ms": 4500, "slides": [_slide(f"sl3-{i}.png", i) for i in range(1, 4)]},
+            "slider4": {"interval_ms": 3200, "slides": []},
         },
         "heroes": [
             {"id": new_id(), "key": "pricing", "image_url": f"{HOME_ASSET}/hero-1.png", "active": True, "order": 1},
