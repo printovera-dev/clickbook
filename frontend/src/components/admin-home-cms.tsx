@@ -12,8 +12,8 @@ import { Button, s } from "@/src/ui";
 import { colors, spacing, radius, fonts } from "@/src/theme";
 
 const ROUTES = ["", "/create/cover", "/(tabs)/orders", "/policy/privacy", "/policy/faq"];
-const TAB_LABELS: Record<string, string> = { slider1: "Slider 1", slider2: "Slider 2", slider3: "Slider 3", heroes: "Hero images", videos: "Videos", brand: "Logo & back cover", accordions: "Accordions", promo: "Promo popup" };
-const SLIDERS = ["slider1", "slider2", "slider3"];
+const TAB_LABELS: Record<string, string> = { slider1: "Slider 1", slider2: "Slider 2", slider3: "Slider 3", slider4: "Album Categories", heroes: "Hero images", videos: "Videos", brand: "Logo & back cover", accordions: "Accordions", promo: "Promo popup" };
+const SLIDERS = ["slider1", "slider2", "slider3", "slider4"];
 
 async function pickImage(): Promise<any | null> {
   const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -129,7 +129,7 @@ export function AdminHomeCms({ title, tabs }: { title: string; tabs: string[] })
             {slides.map((sl, i) => (
               <View key={sl.id} style={styles.card} testID={`admin-slide-${sl.id}`}>
                 <View style={{ flexDirection: "row", gap: spacing.md }}>
-                  <View style={{ width: tab === "slider1" ? 72 : 128, height: tab === "slider1" ? 108 : 72, borderRadius: radius.sm, overflow: "hidden", backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" }}>
+                  <View style={{ width: tab === "slider1" ? 72 : tab === "slider4" ? 88 : 128, height: tab === "slider1" ? 108 : tab === "slider4" ? 88 : 72, borderRadius: radius.sm, overflow: "hidden", backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" }}>
                     {sl.image_url ? <Thumb uri={fileUrl(sl.image_url)} recyclingKey={sl.id} style={{ width: "100%", height: "100%" }} /> : <Feather name="video" size={22} color={colors.muted} />}
                     {sl.type === "video" ? <View style={styles.playTag}><Feather name="play" size={10} color="#FFF" /></View> : null}
                   </View>
@@ -162,6 +162,7 @@ export function AdminHomeCms({ title, tabs }: { title: string; tabs: string[] })
               </View>
             ))}
             {tab === "slider1" ? <Text style={[s.bodyMuted, { marginBottom: spacing.sm }]}>Slider 1 is vertical: upload portrait artwork (2:3, e.g. 1000 × 1500 px). Images are shown complete, never cropped.</Text> : null}
+            {tab === "slider4" ? <Text style={[s.bodyMuted, { marginBottom: spacing.sm }]}>Album Categories appears directly below the top banner. Upload square album-cover images (1:1), enter the category name in Title, and set the button destination to /create/cover. Cards are managed here from the admin panel.</Text> : null}
             <Button testID="admin-slide-add" label="+ Add image slide" variant="outline" onPress={addSlide} />
             <Button testID="admin-slide-add-video" label="+ Add video slide (MP4, max 60MB)" variant="outline" onPress={addVideoSlide} style={{ marginTop: spacing.sm }} />
           </>
