@@ -28,7 +28,8 @@ class PhotoOrderRequest(BaseModel):
 
 
 class AlbumCreate(BaseModel):
-    cover_id: str
+    # Optional for the upload-first flow; omitted IDs resolve to the active Editorial Frame catalogue entry.
+    cover_id: Optional[str] = None
     name: Optional[str] = None
 
 
@@ -80,14 +81,22 @@ async def _save_design(album: dict, pages: list, kind: str, extra: Optional[dict
 
 @router.post("/albums")
 async def create_album(payload: AlbumCreate, customer: dict = Depends(get_current_customer)):
-    cover = await db.covers.find_one({"id": payload.cover_id, "active": True}, {"_id": 0})
-    if not cover:
-        raise HTTPException(400, "Invalid cover")
+    # Preserve explicit cover selection for existing clients. For upload-first creation,
+    # resolve Editorial Frame from the live catalogue rather than hardcoding a database ID.
+    if payload.cover_id:
+        cover = await db.covers.find_one({"id": payload.cover_id, "active": True}, {"_id": 0})
+        if not cover:
+            raise HTTPException(400, "Invalid cover")
+    else:
+        cover = await db.covers.find_one({"style": "editorial", "active": True}, {"_id": 0})
+        if not cover:
+            raise HTTPException(503, "Editorial Frame is not available right now. Please try again later.")
     cover = (await with_thumbnails([cover]))[0]
+    selected_cover_id = cover["id"]
     album = {
         "id": new_id(),
         "customer_id": customer["id"],
-        "cover_id": payload.cover_id,
+        "cover_id": selected_cover_id,
         "cover_snapshot": cover,
         "name": payload.name or f"My ClickBook {now_utc().strftime('%b %d')}",
         "status": "draft",  # draft | ordered | delivered
@@ -144,6 +153,19 @@ async def update_album(album_id: str, payload: AlbumUpdate, customer: dict = Dep
     update = {k: v for k, v in payload.dict().items() if v is not None}
     if "design_style" in update and update["design_style"] not in STYLE_RHYTHMS:
         raise HTTPException(400, "Invalid style")
+    # Keep the catalogue cover and editable cover style in sync when a customer changes
+    # Signature / Classic / Editorial in the cover editor. Existing albums are untouched
+    # unless an explicit cover-design update is submitted.
+    if "cover_design" in update:
+        cover_style = (update["cover_design"] or {}).get("style")
+        if cover_style:
+            matching_cover = await db.covers.find_one(
+                {"style": cover_style, "active": True}, {"_id": 0}
+            )
+            if not matching_cover:
+                raise HTTPException(400, "That cover style is not currently available.")
+            update["cover_id"] = matching_cover["id"]
+            update["cover_snapshot"] = (await with_thumbnails([matching_cover]))[0]
     if update:
         update["updated_at"] = now_iso()
         await db.albums.update_one({"id": album_id}, {"$set": update})
