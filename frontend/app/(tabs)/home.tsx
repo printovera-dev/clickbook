@@ -36,6 +36,13 @@ export default function Home() {
 
   useEffect(() => { getToken().then((t) => setLoggedIn(!!t)); }, []);
   useFocusEffect(useCallback(() => { getToken().then((t) => setLoggedIn(!!t)); }, []));
+
+  // Resume the upload-first creation journey after a guest signs in.
+  useEffect(() => {
+    if (loggedIn === true && params.login === "1" && params.next === "create") {
+      router.replace("/create/cover");
+    }
+  }, [loggedIn, params.login, params.next, router]);
   useEffect(() => {
     Animated.spring(pop, { toValue: 1, useNativeDriver: true, friction: 6 }).start();
     const t = setTimeout(() => Animated.timing(fade, { toValue: 0, duration: 450, useNativeDriver: true }).start(() => setSplash(false)), 1100);
