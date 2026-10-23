@@ -41,7 +41,10 @@ export function InstallBanner() {
     const dismissedAt = Number(localStorage.getItem(DISMISS_KEY) || 0);
     if (dismissedAt && Date.now() - dismissedAt < 7 * 24 * 3600 * 1000) return;
     const target = detectInstallTarget();
-    if (target === "ios-safari" || target === "ios-other" || target === "mac-safari") {
+    // iPhone / iPad: keep the site usable in Safari, but do not show the custom install popup.
+    // Android / desktop install behaviour remains unchanged.
+    if (target === "ios-safari" || target === "ios-other") return;
+    if (target === "mac-safari") {
       const t = setTimeout(() => setMode(target), 2000);
       return () => clearTimeout(t);
     }
