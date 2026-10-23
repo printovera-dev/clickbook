@@ -31,8 +31,8 @@ export function AlbumCategorySlider({ slides, intervalMs = 1800, onCreate }: { s
   if (!usable.length) return null;
   return (
     <View testID="home-album-categories" style={styles.wrap}>
-      <Text style={styles.heading}>Explore Our Album Designs</Text>
-      <Text style={styles.subtitle}>Beautifully designed albums for every special moment.</Text>
+      <Text style={styles.heading}>Pick Your ClickBook</Text>
+      <Text style={styles.subtitle}>Bring your memories to life.</Text>
       <View style={{ position: "relative" }}>
         <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.track}
           onScrollBeginDrag={() => { paused.current = true; }} onScrollEndDrag={() => { paused.current = false; }} scrollEventThrottle={16}>
