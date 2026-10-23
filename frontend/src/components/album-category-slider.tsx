@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { View, Text, ScrollView, Pressable, StyleSheet, useWindowDimensions } from "react-native";
 import Feather from "@react-native-vector-icons/feather";
 import { fileUrl } from "@/src/api";
@@ -7,7 +7,7 @@ import { MAX_CONTENT_W } from "@/src/layout";
 import { colors, fonts, radius, spacing } from "@/src/theme";
 
 type CategorySlide = { id: string; image_url?: string; title?: string; subtitle?: string; cta_route?: string; active?: boolean; order?: number };
-export function AlbumCategorySlider({ slides, intervalMs = 3200, onCreate }: { slides: CategorySlide[]; intervalMs?: number; onCreate: () => void }) {
+export function AlbumCategorySlider({ slides, intervalMs = 1800, onCreate }: { slides: CategorySlide[]; intervalMs?: number; onCreate: () => void }) {
   const { width } = useWindowDimensions();
   const contentW = Math.min(width, MAX_CONTENT_W);
   const cardW = Math.min(168, Math.max(86, (contentW - spacing.lg * 2 - spacing.md * 3) / 4));
@@ -25,7 +25,7 @@ export function AlbumCategorySlider({ slides, intervalMs = 3200, onCreate }: { s
       const value = next >= max - 2 ? 0 : next;
       offsetRef.current = value;
       scrollRef.current?.scrollTo({ x: value, animated: true });
-    }, Math.max(1800, intervalMs));
+    }, Math.max(900, Math.round(intervalMs / 1.8)));
     return () => clearInterval(timer);
   }, [usable.length, cardW, gap, intervalMs]);
   if (!usable.length) return null;
