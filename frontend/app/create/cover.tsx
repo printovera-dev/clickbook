@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator, useWindowDimensions } from "react-native";
 import { FluidImage } from "@/src/components/fluid-image";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { api, fileUrl } from "@/src/api";
+import { api, fileUrl, getToken } from "@/src/api";
 import { Button, s } from "@/src/ui";
 import { colors, spacing, radius, fonts } from "@/src/theme";
 import Feather from "@react-native-vector-icons/feather";
@@ -18,6 +18,25 @@ export default function ChooseCover() {
   const cardW = Math.min(width, 720) - spacing.xl * 2 - 2;
   const router = useRouter();
   const [selected, setSelected] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [authenticated, setAuthenticated] = useState(false);
+
+  // Protect the route itself; hiding the entry point alone is not authentication.
+  useEffect(() => {
+    let mounted = true;
+    getToken().then((token) => {
+      if (!mounted) return;
+      if (token) {
+        setAuthenticated(true);
+        setAuthChecked(true);
+      } else {
+        router.replace({ pathname: "/(tabs)/home", params: { login: "1", next: "create" } });
+      }
+    }).catch(() => {
+      if (mounted) router.replace({ pathname: "/(tabs)/home", params: { login: "1", next: "create" } });
+    });
+    return () => { mounted = false; };
+  }, [router]);
   const [busy, setBusy] = useState(false);
   // Infinite scroll: covers arrive 10 at a time, so an admin catalog of any size stays light.
   const q = useInfiniteQuery({
@@ -25,6 +44,7 @@ export default function ChooseCover() {
     queryFn: ({ pageParam }) => api.listCovers(pageParam, PAGE),
     initialPageParam: 0,
     getNextPageParam: (last) => last.next_offset ?? undefined,
+    enabled: authenticated,
   });
   const covers = q.data?.pages.flatMap((p) => p.covers) || [];
 
