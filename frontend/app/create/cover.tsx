@@ -1,138 +1,63 @@
-import { useEffect, useState } from "react";
-import { View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator, useWindowDimensions } from "react-native";
-import { FluidImage } from "@/src/components/fluid-image";
+import { useEffect, useRef, useState } from "react";
+import { View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { api, fileUrl, getToken } from "@/src/api";
-import { Button, s } from "@/src/ui";
-import { colors, spacing, radius, fonts } from "@/src/theme";
-import Feather from "@react-native-vector-icons/feather";
-
-const PAGE = 10;
+import { api, getToken } from "@/src/api";
+import { colors, spacing, fonts } from "@/src/theme";
 
 export default function ChooseCover() {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  // card = list padding (xl) each side + 1px card border each side; the artwork fills the card width at its own ratio
-  const cardW = Math.min(width, 720) - spacing.xl * 2 - 2;
   const router = useRouter();
-  const [selected, setSelected] = useState<string | null>(null);
-  const [authChecked, setAuthChecked] = useState(false);
-  const [authenticated, setAuthenticated] = useState(false);
+  const started = useRef(false);
+  const [error, setError] = useState("");
 
-  // Protect the route itself; hiding the entry point alone is not authentication.
   useEffect(() => {
     let mounted = true;
-    getToken().then((token) => {
-      if (!mounted) return;
-      if (token) {
-        setAuthenticated(true);
-        setAuthChecked(true);
-      } else {
-        router.replace({ pathname: "/(tabs)/home", params: { login: "1", next: "create" } });
+    const start = async () => {
+      try {
+        const token = await getToken();
+        if (!mounted) return;
+        if (!token) {
+          router.replace({ pathname: "/(tabs)/home", params: { login: "1", next: "create" } });
+          return;
+        }
+        if (started.current) return;
+        started.current = true;
+        const result = await api.createAlbum();
+        if (mounted) router.replace({ pathname: "/create/upload", params: { albumId: result.album.id } });
+      } catch (e: any) {
+        if (mounted) {
+          started.current = false;
+          setError(e?.message || "Could not start your ClickBook. Please try again.");
+        }
       }
-    }).catch(() => {
-      if (mounted) router.replace({ pathname: "/(tabs)/home", params: { login: "1", next: "create" } });
-    });
+    };
+    void start();
     return () => { mounted = false; };
   }, [router]);
-  const [busy, setBusy] = useState(false);
-  // Infinite scroll: covers arrive 10 at a time, so an admin catalog of any size stays light.
-  const q = useInfiniteQuery({
-    queryKey: ["covers"],
-    queryFn: ({ pageParam }) => api.listCovers(pageParam, PAGE),
-    initialPageParam: 0,
-    getNextPageParam: (last) => last.next_offset ?? undefined,
-    enabled: authenticated,
-  });
-  const covers = q.data?.pages.flatMap((p) => p.covers) || [];
-
-  const next = async () => {
-    if (!selected) return;
-    setBusy(true);
-    try {
-      const r = await api.createAlbum(selected);
-      router.replace({ pathname: "/create/upload", params: { albumId: r.album.id } });
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surface, paddingTop: insets.top }}>
-      <View style={styles.topbar}>
-        <Pressable onPress={() => router.back()} testID="cover-back"><Feather name="arrow-left" size={22} color={colors.onSurface} /></Pressable>
-        <Text style={s.label}>Step 1 of 3</Text>
-        <View style={{ width: 22 }} />
-      </View>
-      <FlatList
-        testID="cover-list"
-        data={covers}
-        keyExtractor={(c) => c.id}
-        extraData={selected}
-        initialNumToRender={4}
-        windowSize={5}
-        removeClippedSubviews
-        onEndReachedThreshold={0.6}
-        onEndReached={() => { if (q.hasNextPage && !q.isFetchingNextPage) q.fetchNextPage(); }}
-        contentContainerStyle={{ padding: spacing.xl, paddingBottom: 140, gap: spacing.lg, width: "100%", maxWidth: 720, alignSelf: "center" }}
-        ListHeaderComponent={
-          <View>
-            <Text style={s.h1}>Choose a cover</Text>
-            <Text style={[s.bodyMuted, { marginTop: spacing.sm, marginBottom: spacing.sm }]}>Every ClickBook comes as an 8 × 8 inch premium hardcover.</Text>
-          </View>
-        }
-        ListFooterComponent={q.isFetchingNextPage ? <ActivityIndicator color={colors.brandPrimary} style={{ marginVertical: spacing.md }} /> : null}
-        renderItem={({ item: c }) => (
-          <Pressable
-            testID={`cover-${c.id}`}
-            onPress={() => setSelected(c.id)}
-            style={[styles.card, selected === c.id && styles.cardSelected]}
-          >
-            {/* Actual cover artwork shown complete & proportional (contain) — never stretched or cropped */}
-            <FluidImage uri={fileUrl(c.image_url)} width={cardW} ratio={1} maxHeight={cardW} recyclingKey={c.id} style={styles.coverImg} testID={`cover-img-${c.id}`} />
-            <View style={{ padding: spacing.lg }}>
-              <Text style={s.h2}>{c.name}</Text>
-              <Text style={s.bodyMuted}>{c.description}</Text>
-              {selected === c.id && (
-                <View style={styles.selectedBadge}>
-                  <Feather name="check" size={14} color={colors.onBrandPrimary} />
-                  <Text style={{ color: colors.onBrandPrimary, marginLeft: 4, fontFamily: fonts.text }}>Selected</Text>
-                </View>
-              )}
-            </View>
-          </Pressable>
-        )}
-      />
-      <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
-        <Button testID="cover-continue" label="Continue" onPress={next} disabled={!selected} loading={busy} />
-      </View>
+    <View style={[styles.wrap, { paddingTop: insets.top + spacing.xl, paddingBottom: insets.bottom + spacing.xl }]}>
+      {error ? (
+        <>
+          <Text style={styles.title}>Couldn’t start your ClickBook</Text>
+          <Text style={styles.message}>{error}</Text>
+          <Text accessibilityRole="button" onPress={() => { setError(""); started.current = false; router.replace("/create/cover"); }} style={styles.retry}>Try again</Text>
+        </>
+      ) : (
+        <>
+          <ActivityIndicator size="large" color={colors.brandPrimary} />
+          <Text style={styles.title}>Let’s create your ClickBook</Text>
+          <Text style={styles.message}>Preparing your album with Editorial Frame. You can change the cover later.</Text>
+        </>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  topbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: spacing.xl },
-  card: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, overflow: "hidden", backgroundColor: colors.surfaceSecondary },
-  cardSelected: { borderColor: colors.brandPrimary, borderWidth: 2 },
-  coverImg: { alignSelf: "center", backgroundColor: colors.surfaceSecondary },
-  selectedBadge: {
-    marginTop: spacing.sm,
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    backgroundColor: colors.brandPrimary,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: radius.sm,
-  },
-  footer: {
-    position: "absolute",
-    left: 0, right: 0, bottom: 0,
-    padding: spacing.xl,
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
+  wrap: { flex: 1, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.xl },
+  title: { marginTop: spacing.xl, fontFamily: fonts.display, fontSize: 24, color: colors.onSurface, textAlign: "center" },
+  message: { marginTop: spacing.md, fontFamily: fonts.text, fontSize: 14, lineHeight: 21, color: colors.onSurfaceMuted, textAlign: "center" },
+  retry: { marginTop: spacing.xl, padding: spacing.md, color: colors.brandPrimary, fontFamily: fonts.text, fontWeight: "700" },
 });
