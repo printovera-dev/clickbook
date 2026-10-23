@@ -155,8 +155,8 @@ export const api = {
   getSettings: () => request<{ settings: any }>("/settings"),
 
   // Albums
-  createAlbum: (cover_id: string, name?: string) =>
-    request<{ album: any }>("/albums", { method: "POST", body: { cover_id, name } }),
+  createAlbum: (cover_id?: string, name?: string) =>
+    request<{ album: any }>("/albums", { method: "POST", body: { ...(cover_id ? { cover_id } : {}), name } }),
   listMyAlbums: () => request<{ albums: any[] }>("/albums"),
   getAlbum: (id: string) => request<{ album: any }>(`/albums/${id}`),
   autoGenerate: (id: string, style?: string, cover_photo_id?: string) =>
