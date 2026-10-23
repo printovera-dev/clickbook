@@ -88,9 +88,19 @@ async def create_album(payload: AlbumCreate, customer: dict = Depends(get_curren
         if not cover:
             raise HTTPException(400, "Invalid cover")
     else:
-        cover = await db.covers.find_one({"style": "editorial", "active": True}, {"_id": 0})
+        # Existing catalogues may contain Editorial Frame by display name but
+        # lack the style key (older/admin-created records). Prefer the canonical style,
+        # then fall back to a case-insensitive name match without inventing an ID.
+        cover = await db.covers.find_one(
+            {"style": "editorial", "active": True}, {"_id": 0}
+        )
         if not cover:
-            raise HTTPException(503, "Editorial Frame is not available right now. Please try again later.")
+            cover = await db.covers.find_one(
+                {"name": {"$regex": "^\\s*Editorial Frame\\s*$", "$options": "i"}, "active": True},
+                {"_id": 0},
+            )
+        if not cover:
+            raise HTTPException(503, "Editorial Frame is not available in the active cover catalogue. Please activate or restore it in Admin Covers.")
     cover = (await with_thumbnails([cover]))[0]
     selected_cover_id = cover["id"]
     album = {
