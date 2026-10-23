@@ -589,6 +589,42 @@ export default function UploadStep() {
             ) : null}
             <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>Pick from your gallery — as many as you like. We&apos;ll design the album automatically.</Text>
 
+            <View style={styles.stepsGuide} testID="upload-steps-guide">
+              <View style={[styles.stepCard, styles.stepCardBlue]}>
+                <View style={[styles.stepNumber, { backgroundColor: "#2587F7" }]}><Text style={styles.stepNumberText}>1</Text></View>
+                <View style={[styles.stepIcon, { backgroundColor: "#E8F4FF" }]}>
+                  <Feather name="upload-cloud" size={27} color="#2587F7" />
+                </View>
+                <View style={styles.stepCopy}>
+                  <Text style={styles.stepTitle}>Upload Your Photos</Text>
+                  <Text style={styles.stepDescription}>Select around 47–50 images from your phone.</Text>
+                </View>
+              </View>
+              <View style={styles.stepConnector}><Feather name="arrow-down" size={22} color="#F04487" /></View>
+              <View style={[styles.stepCard, styles.stepCardPink]}>
+                <View style={[styles.stepNumber, { backgroundColor: "#F04487" }]}><Text style={styles.stepNumberText}>2</Text></View>
+                <View style={[styles.stepIcon, { backgroundColor: "#FFF0F6" }]}>
+                  <Feather name="move" size={27} color="#F04487" />
+                </View>
+                <View style={styles.stepCopy}>
+                  <Text style={styles.stepTitle}>Arrange Your Sequence</Text>
+                  <Text style={styles.stepDescription}>Drag and drop photos to set the order as you wish.</Text>
+                </View>
+              </View>
+              <View style={styles.stepConnector}><Feather name="arrow-down" size={22} color="#10A879" /></View>
+              <View style={[styles.stepCard, styles.stepCardGreen]}>
+                <View style={[styles.stepNumber, { backgroundColor: "#10A879" }]}><Text style={styles.stepNumberText}>3</Text></View>
+                <View style={[styles.stepIcon, { backgroundColor: "#E8FBF4" }]}>
+                  <Feather name="cpu" size={27} color="#10A879" />
+                  <Text style={styles.aiIconLabel}>AI</Text>
+                </View>
+                <View style={styles.stepCopy}>
+                  <Text style={styles.stepTitle}>Get a Digital Preview</Text>
+                  <Text style={styles.stepDescription}>See your album design before final confirmation.</Text>
+                </View>
+              </View>
+            </View>
+
             <Pressable ref={attachDropzone as any} testID="upload-pick-button" onPress={pickAndUpload} disabled={uploading} style={[styles.dropzone, isDraggingFiles && styles.dropzoneDragging]}>
               {uploading ? (
                 <>
@@ -654,6 +690,19 @@ export default function UploadStep() {
 const styles = StyleSheet.create({
   topbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: spacing.xl },
   notice: { marginTop: spacing.md, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.brandTertiary, borderWidth: 1, borderColor: colors.brandSecondary },
+  stepsGuide: { marginTop: spacing.lg, marginBottom: spacing.sm, gap: 0 },
+  stepCard: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.md, borderRadius: 16, borderWidth: 1, minHeight: 104 },
+  stepCardBlue: { backgroundColor: "#F4FAFF", borderColor: "#D5EAFE" },
+  stepCardPink: { backgroundColor: "#FFF7FA", borderColor: "#FBE0EA" },
+  stepCardGreen: { backgroundColor: "#F3FCF8", borderColor: "#D4F4E7" },
+  stepNumber: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  stepNumberText: { color: "#FFFFFF", fontSize: 17, fontWeight: "800", fontFamily: fonts.text },
+  stepIcon: { width: 58, height: 58, borderRadius: 29, alignItems: "center", justifyContent: "center", flexShrink: 0, position: "relative" },
+  aiIconLabel: { position: "absolute", bottom: 5, right: 4, backgroundColor: "#10A879", color: "#FFFFFF", fontSize: 8, lineHeight: 11, fontWeight: "800", paddingHorizontal: 3, borderRadius: 3, overflow: "hidden" },
+  stepCopy: { flex: 1, minWidth: 0, gap: 4 },
+  stepTitle: { color: "#102747", fontFamily: fonts.text, fontSize: 16, fontWeight: "800", lineHeight: 21 },
+  stepDescription: { color: "#526174", fontFamily: fonts.text, fontSize: 13, lineHeight: 18 },
+  stepConnector: { height: 27, alignItems: "center", justifyContent: "center" },
   gridToolbar: { marginTop: spacing.xl, marginBottom: spacing.md, gap: spacing.sm },
   zoomControls: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" },
   zoomLabel: { fontFamily: fonts.text, fontSize: 12, color: colors.onSurfaceMuted },
