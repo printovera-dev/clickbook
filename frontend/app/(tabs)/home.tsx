@@ -43,6 +43,15 @@ export default function Home() {
       router.replace("/create/cover");
     }
   }, [loggedIn, params.login, params.next, router]);
+
+
+  const home = useQuery({ queryKey: ["home"], queryFn: () => api.homeContent(), staleTime: 5 * 60 * 1000 });
+  const albums = useQuery({ queryKey: ["albums"], queryFn: () => api.listMyAlbums(), enabled: loggedIn === true });
+  const orders = useQuery({ queryKey: ["orders"], queryFn: () => api.listMyOrders(), enabled: loggedIn === true });
+  const notifs = useQuery({ queryKey: ["notifications"], queryFn: () => api.listNotifications(), enabled: loggedIn === true, refetchInterval: 30000 });
+
+  const c = home.data?.content;
+
   useEffect(() => {
     Animated.spring(pop, { toValue: 1, useNativeDriver: true, friction: 6 }).start();
     // Give the CMS logo time to load so the opening screen can use the same uploaded asset.
@@ -51,12 +60,6 @@ export default function Home() {
     return () => clearTimeout(t);
   }, [fade, pop, c?.logo_url]);
 
-  const home = useQuery({ queryKey: ["home"], queryFn: () => api.homeContent(), staleTime: 5 * 60 * 1000 });
-  const albums = useQuery({ queryKey: ["albums"], queryFn: () => api.listMyAlbums(), enabled: loggedIn === true });
-  const orders = useQuery({ queryKey: ["orders"], queryFn: () => api.listMyOrders(), enabled: loggedIn === true });
-  const notifs = useQuery({ queryKey: ["notifications"], queryFn: () => api.listNotifications(), enabled: loggedIn === true, refetchInterval: 30000 });
-
-  const c = home.data?.content;
   const pricing = home.data?.pricing;
   const t = c?.texts || {};
   const hero = (key: string) => c?.heroes?.find((h: any) => h.key === key)?.image_url;
