@@ -113,7 +113,7 @@ export function AdminHomeCms({ title, tabs }: { title: string; tabs: string[] })
               <Text style={s.h2}>App logo</Text>
               <Text style={s.bodyMuted}>Shown in the home page header.</Text>
               <Thumb uri={fileUrl(doc.logo_url)} recyclingKey="logo" style={{ width: 220, height: 80, borderRadius: radius.sm, marginTop: spacing.sm }} />
-              <Pressable onPress={async () => { const img = await pickImage(); if (img) setDoc({ ...doc, logo_url: img.url }); }} style={[styles.miniBtn, { marginTop: spacing.sm, alignSelf: "flex-start" }]} testID="admin-brand-logo-replace"><Feather name="image" size={14} color={colors.brandPrimary} /><Text style={styles.miniTxt}>Replace logo</Text></Pressable>
+              <Pressable onPress={async () => { const img = await pickImage(); if (img) setDoc({ ...doc, logo_url: img.original_url || img.url }); }} style={[styles.miniBtn, { marginTop: spacing.sm, alignSelf: "flex-start" }]} testID="admin-brand-logo-replace"><Feather name="image" size={14} color={colors.brandPrimary} /><Text style={styles.miniTxt}>Replace logo</Text></Pressable>
             </View>
             <View style={styles.card} testID="admin-brand-last-page">
               <Text style={s.h2}>Album back cover</Text>
