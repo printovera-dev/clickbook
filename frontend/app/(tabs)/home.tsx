@@ -202,9 +202,13 @@ export default function Home() {
 
       {splash ? (
         <Animated.View pointerEvents="none" style={[styles.splash, { opacity: fade }]} testID="home-splash">
-          <Animated.View style={{ transform: [{ scale: pop }], alignItems: "center" }}>
-            <Text style={[styles.brand, { fontSize: 40 }]}>Click<Text style={{ color: colors.homePink }}>Book</Text><Text style={{ color: colors.homeRed }}>.</Text></Text>
-            <Text style={styles.tag}>Preserving memories</Text>
+          <Animated.View style={{ transform: [{ scale: pop }], alignItems: "center", justifyContent: "center" }}>
+            <Image
+              source={c?.logo_url ? { uri: fileUrl(c.logo_url) } : require("../../assets/images/splash-image.png")}
+              style={{ width: Math.min(240, width - 80), height: 150 }}
+              contentFit="contain"
+              cachePolicy="memory-disk"
+            />
           </Animated.View>
         </Animated.View>
       ) : null}
