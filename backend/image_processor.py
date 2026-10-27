@@ -36,39 +36,38 @@ def _encode(img: Image.Image, max_side: int, quality: int, fmt: str = "JPEG", sh
 
 
 def make_derivatives(data: bytes) -> dict:
-    """Returns {thumbnail, preview, print, width, height} as JPEG bytes.
-    Raises ValueError if the file is not a decodable image."""
+    """Returns alpha-preserving WebP thumbnail/preview and an opaque JPEG print file."""
     try:
         img = Image.open(io.BytesIO(data))
         img = ImageOps.exif_transpose(img)
-        if img.mode in ("RGBA", "LA", "P") and ("transparency" in img.info or img.mode != "P"):
-            # Flatten transparency onto white — converting straight to RGB turns transparent pixels black,
-            # which showed up as black backgrounds behind admin-uploaded hero/slider PNGs.
-            rgba = img.convert("RGBA")
-            bg = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
-            img = Image.alpha_composite(bg, rgba).convert("RGB")
-        elif img.mode != "RGB":
-            img = img.convert("RGB")
+        rgba = img.convert("RGBA")
+        alpha = rgba.getchannel("A")
+        rgb = Image.new("RGB", rgba.size, (255, 255, 255))
+        rgb.paste(rgba, mask=alpha)
     except Exception as e:
         raise ValueError(f"Not a valid image: {e}")
-    w, h = img.size
-    # Every generated derivative is capped at PRINT_MAX (3000px). Downsample the
-    # working copy once before enhancement so full-resolution camera files do not
-    # create several huge in-memory copies during each upload. The untouched original
-    # is already stored separately in S3 and remains available for future reprocessing.
-    img.thumbnail((PRINT_MAX, PRINT_MAX), Image.Resampling.LANCZOS)
 
-    # Gentle non-destructive auto-enhancement for generated previews/print derivatives.
-    # The uploaded original remains untouched for the customer.
-    enhanced = ImageOps.autocontrast(img, cutoff=0.3)
+    w, h = img.size
+    rgb.thumbnail((PRINT_MAX, PRINT_MAX), Image.Resampling.LANCZOS)
+    alpha = alpha.resize(rgb.size, Image.Resampling.LANCZOS)
+
+    enhanced = ImageOps.autocontrast(rgb, cutoff=0.3)
     enhanced = ImageEnhance.Color(enhanced).enhance(1.03)
     enhanced = ImageEnhance.Contrast(enhanced).enhance(1.02)
     enhanced = enhanced.filter(ImageFilter.UnsharpMask(radius=0.8, percent=45, threshold=4))
 
+    # Preserve the source alpha channel for browser/editor assets.
+    preview_rgba = enhanced.copy()
+    preview_rgba.putalpha(alpha)
+    thumb = preview_rgba.copy()
+    thumb.thumbnail((THUMB_MAX, THUMB_MAX), Image.Resampling.LANCZOS)
+    preview = preview_rgba.copy()
+    preview.thumbnail((PREVIEW_MAX, PREVIEW_MAX), Image.Resampling.LANCZOS)
+
     return {
-        "thumbnail": _encode(enhanced, THUMB_MAX, 80, "WEBP"),
-        "preview": _encode(enhanced, PREVIEW_MAX, 85, "WEBP"),
-        "print": _encode(enhanced, PRINT_MAX, 92, sharpen=True),  # gentle sharpening for print only
+        "thumbnail": _encode(thumb, THUMB_MAX, 80, "WEBP"),
+        "preview": _encode(preview, PREVIEW_MAX, 85, "WEBP"),
+        "print": _encode(enhanced, PRINT_MAX, 92, sharpen=True),
         "width": w,
         "height": h,
     }
