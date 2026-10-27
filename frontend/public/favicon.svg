@@ -1,12 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <title>ClickBook</title>
-  <g fill="none" stroke="#38AAE8" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M190 300V690H380M834 300V690H644"/>
-    <path d="M226 275C340 265 430 300 512 388C594 300 684 265 798 275"/>
-    <path d="M226 275C220 390 220 520 226 650C350 650 438 685 512 740C586 685 674 650 798 650C804 520 804 390 798 275"/>
-    <path d="M190 715H390C448 715 480 740 512 760C544 740 576 715 634 715H834"/>
-    <circle cx="512" cy="510" r="120" stroke-width="20"/>
-    <path d="M486 425L554 425L586 467L555 520L536 541L576 575L512 595L470 542L444 483L486 425Z" stroke-width="16"/>
-    <path d="M486 425L512 478L554 425M444 483H501L470 542M501 483L536 541L512 595M536 541H597L576 575M536 541L586 467" stroke-width="16"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#00d9b1"/>
+      <stop offset=".48" stop-color="#00aeea"/>
+      <stop offset="1" stop-color="#0755b8"/>
+    </linearGradient>
+    <clipPath id="round"><rect width="512" height="512" rx="96"/></clipPath>
+  </defs>
+  <g clip-path="url(#round)">
+    <rect width="512" height="512" fill="url(#bg)"/>
+    <path d="M280 168 512 400V512H188L84 408Z" fill="#003f9d" opacity=".32"/>
+    <g fill="none" stroke="#fff" stroke-width="25" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M88 132 Q157 105 224 135 L224 190 M88 132 V376 Q157 351 256 390 Q355 351 424 376 V132 Q357 105 292 125"/>
+      <path d="M88 376 Q166 352 256 390 Q346 352 424 376"/>
+    </g>
+    <g fill="#fff">
+      <path d="M247 190 214 223 235 269 277 218Z"/>
+      <path d="M291 174 260 211 333 218Q320 188 291 174Z"/>
+      <path d="M340 230 296 224 328 292Q350 262 340 230Z"/>
+      <path d="M313 306 281 263 245 317Q278 329 313 306Z"/>
+      <path d="M225 299 251 267 208 264Q207 282 225 299Z"/>
+      <path d="M209 247 231 235 213 213Q196 228 209 247Z"/>
+    </g>
+    <circle cx="256" cy="256" r="61" fill="none" stroke="#fff" stroke-width="2" opacity=".01"/>
   </g>
 </svg>
