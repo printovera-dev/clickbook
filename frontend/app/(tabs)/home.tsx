@@ -218,7 +218,7 @@ export default function Home() {
       { key: "login3", render: () => <HomeLogin testID="home-login3" title={t.cta_title} loggedIn={isIn} compact /> },
       { key: "footer", render: () => (
         <View style={styles.footer} testID="home-footer">
-          <Text style={styles.logoWordmark} testID="clickbook-footer-logo" accessibilityLabel="ClickBook"><Text style={styles.logoClick}>Click</Text><Text style={styles.logoDot}>.</Text><Text style={styles.logoBook}>Book</Text></Text>
+          {c?.logo_url ? <Image source={{ uri: fileUrl(c.logo_url) }} style={{ width: 190, height: 64 }} contentFit="contain" cachePolicy="memory-disk" testID="clickbook-footer-logo" accessibilityLabel="ClickBook logo" /> : null}
           <Text style={styles.tag}>Preserving memories</Text>
           <View style={styles.footerLinks}>
             {[["faq", "FAQ"], ["privacy", "Privacy"], ["terms", "Terms"], ["refund", "Refunds"], ["shipping", "Shipping"]].map(([k, l]) => (
@@ -260,9 +260,7 @@ export default function Home() {
         <View style={styles.headerInner}>
         <Pressable onPress={() => setMenu(true)} testID="home-menu" style={styles.iconBtn} hitSlop={8}><Feather name="menu" size={22} color={colors.homeCharcoal} /></Pressable>
         <View style={styles.headerLogoWrap} testID="clickbook-header-logo">
-          <Text style={[styles.logoWordmark, { fontSize: isDesktop ? 34 : 27 }]} accessibilityLabel="ClickBook">
-            <Text style={styles.logoClick}>Click</Text><Text style={styles.logoDot}>.</Text><Text style={styles.logoBook}>Book</Text>
-          </Text>
+          {c?.logo_url ? <Image source={{ uri: fileUrl(c.logo_url) }} style={{ width: Math.min(280, width - 120), height: isDesktop ? 76 : 60 }} contentFit="contain" cachePolicy="memory-disk" accessibilityLabel="ClickBook logo" /> : null}
         </View>
         <Pressable onPress={() => router.push(loggedIn ? "/notifications" : { pathname: "/(tabs)/home", params: { login: "1" } } as any)} testID="home-notifications-bell" style={styles.iconBtn} hitSlop={8}>
           <Feather name="bell" size={22} color={colors.homeCharcoal} />
@@ -298,9 +296,8 @@ export default function Home() {
 
       {splash ? (
         <Animated.View pointerEvents="none" style={[styles.splash, { opacity: fade }]} testID="home-splash">
-          <Animated.View style={{ transform: [{ scale: pop }], alignItems: "center" }}>
-            <Text style={[styles.brand, { fontSize: 40 }]}>Click<Text style={{ color: colors.homePink }}>Book</Text><Text style={{ color: colors.homeRed }}>.</Text></Text>
-            <Text style={styles.tag}>Preserving memories</Text>
+          <Animated.View style={{ transform: [{ scale: pop }], alignItems: "center", justifyContent: "center" }}>
+            {c?.logo_url ? <Image source={{ uri: fileUrl(c.logo_url) }} style={{ width: 260, height: 110 }} contentFit="contain" cachePolicy="memory-disk" accessibilityLabel="ClickBook logo" /> : null}
           </Animated.View>
         </Animated.View>
       ) : null}
