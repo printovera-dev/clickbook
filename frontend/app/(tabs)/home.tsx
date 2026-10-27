@@ -324,9 +324,7 @@ export default function Home() {
                 onLoad={() => setSplashLogoLoaded(true)}
                 accessibilityLabel="ClickBook logo"
               />
-            ) : (
-              <Text style={styles.brand}>Click<Text style={{ color: colors.homePink }}>Book</Text></Text>
-            )}
+            ) : null}
           </Animated.View>
         </Animated.View>
       ) : null}
