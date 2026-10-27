@@ -21,7 +21,12 @@ async function pickImage(): Promise<any | null> {
   const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 1, exif: false, base64: false });
   if (res.canceled || !res.assets?.[0]) return null;
   const a = res.assets[0];
-  const r = await api.adminUploadImage(a.uri, a.fileName || `home_${Date.now()}.jpg`, (a as any).file);
+  // Web pickers may omit fileName. Preserve the actual image format (especially WebP/PNG alpha)
+  // instead of labelling those bytes as JPEG.
+  const mime = String((a as any).mimeType || (a as any).file?.type || "").toLowerCase();
+  const extFromMime = mime.includes("webp") ? ".webp" : mime.includes("png") ? ".png" : mime.includes("jpeg") || mime.includes("jpg") ? ".jpg" : ".jpg";
+  const pickedName = a.fileName || (a as any).file?.name || `home_${Date.now()}${extFromMime}`;
+  const r = await api.adminUploadImage(a.uri, pickedName, (a as any).file);
   return r.image;
 }
 
