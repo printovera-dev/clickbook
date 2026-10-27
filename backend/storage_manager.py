@@ -207,13 +207,22 @@ def save_original(customer_id: str, album_id: str, filename: str, data: bytes) -
     from image_processor import make_derivatives
 
     ensure_dirs(customer_id, album_id)
-    ext = os.path.splitext(filename)[1].lower() or ".jpg"
+    # Trust the decoded file format, not a possibly missing/wrong browser filename.
+    try:
+        from PIL import Image
+        detected = Image.open(io.BytesIO(data)).format
+    except Exception as exc:
+        raise ValueError(f"Not a valid image: {exc}")
+    detected_ext = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp", "GIF": ".gif", "TIFF": ".tif"}.get(detected)
+    if not detected_ext:
+        raise ValueError(f"Unsupported image format: {detected}")
+    ext = detected_ext
     base = uuid.uuid4().hex
     key = f"{base}{ext}"
     jpg_key = f"{base}.jpg"
     webp_key = f"{base}.webp"
     rel = f"clickbook/customers/{customer_id}/albums/{album_id}"
-    content_type = "image/jpeg" if ext in (".jpg", ".jpeg") else "image/png" if ext == ".png" else "image/webp" if ext == ".webp" else "application/octet-stream"
+    content_type = {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp", "GIF": "image/gif", "TIFF": "image/tiff"}[detected]
     derivs = make_derivatives(data)
     _put(f"{rel}/originals/{key}", data, content_type)
     _put(f"{rel}/thumbnails/{webp_key}", derivs["thumbnail"], "image/webp")
