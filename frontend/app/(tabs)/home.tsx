@@ -31,6 +31,7 @@ export default function Home() {
   const [menu, setMenu] = useState(false);
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
   const [splash, setSplash] = useState(true);
+  const [splashLogoLoaded, setSplashLogoLoaded] = useState(false);
   const fade = useRef(new Animated.Value(1)).current;
   const pop = useRef(new Animated.Value(0.85)).current;
 
@@ -54,11 +55,24 @@ export default function Home() {
 
   useEffect(() => {
     Animated.spring(pop, { toValue: 1, useNativeDriver: true, friction: 6 }).start();
-    // Give the CMS logo time to load so the opening screen can use the same uploaded asset.
-    const delay = c?.logo_url ? 1100 : 3500;
-    const t = setTimeout(() => Animated.timing(fade, { toValue: 0, duration: 450, useNativeDriver: true }).start(() => setSplash(false)), delay);
-    return () => clearTimeout(t);
-  }, [fade, pop, c?.logo_url]);
+
+    // Keep the splash visible until the logo has actually loaded. Use a short,
+    // bounded fallback so a broken/unreachable logo can never block the app.
+    if (c?.logo_url && !splashLogoLoaded) {
+      const fallback = setTimeout(() => {
+        Animated.timing(fade, { toValue: 0, duration: 300, useNativeDriver: true })
+          .start(() => setSplash(false));
+      }, 3000);
+      return () => clearTimeout(fallback);
+    }
+
+    const delay = c?.logo_url ? 250 : 900;
+    const timer = setTimeout(() => {
+      Animated.timing(fade, { toValue: 0, duration: 300, useNativeDriver: true })
+        .start(() => setSplash(false));
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [fade, pop, c?.logo_url, splashLogoLoaded]);
 
   const pricing = home.data?.pricing;
   const t = c?.texts || {};
@@ -301,7 +315,18 @@ export default function Home() {
       {splash ? (
         <Animated.View pointerEvents="none" style={[styles.splash, { opacity: fade }]} testID="home-splash">
           <Animated.View style={{ transform: [{ scale: pop }], alignItems: "center", justifyContent: "center" }}>
-            {c?.logo_url ? <Image source={{ uri: fileUrl(c.logo_url) }} style={{ width: 260, height: 110 }} contentFit="contain" cachePolicy="memory-disk" accessibilityLabel="ClickBook logo" /> : null}
+            {c?.logo_url ? (
+              <Image
+                source={{ uri: fileUrl(c.logo_url) }}
+                style={{ width: 260, height: 110 }}
+                contentFit="contain"
+                cachePolicy="memory-disk"
+                onLoad={() => setSplashLogoLoaded(true)}
+                accessibilityLabel="ClickBook logo"
+              />
+            ) : (
+              <Text style={styles.brand}>Click<Text style={{ color: colors.homePink }}>Book</Text></Text>
+            )}
           </Animated.View>
         </Animated.View>
       ) : null}
