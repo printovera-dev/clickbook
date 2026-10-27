@@ -45,9 +45,11 @@ export default function Home() {
   }, [loggedIn, params.login, params.next, router]);
   useEffect(() => {
     Animated.spring(pop, { toValue: 1, useNativeDriver: true, friction: 6 }).start();
-    const t = setTimeout(() => Animated.timing(fade, { toValue: 0, duration: 450, useNativeDriver: true }).start(() => setSplash(false)), 1100);
+    // Give the CMS logo time to load so the opening screen can use the same uploaded asset.
+    const delay = c?.logo_url ? 1100 : 3500;
+    const t = setTimeout(() => Animated.timing(fade, { toValue: 0, duration: 450, useNativeDriver: true }).start(() => setSplash(false)), delay);
     return () => clearTimeout(t);
-  }, [fade, pop]);
+  }, [fade, pop, c?.logo_url]);
 
   const home = useQuery({ queryKey: ["home"], queryFn: () => api.homeContent(), staleTime: 5 * 60 * 1000 });
   const albums = useQuery({ queryKey: ["albums"], queryFn: () => api.listMyAlbums(), enabled: loggedIn === true });
