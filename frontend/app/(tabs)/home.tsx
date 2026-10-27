@@ -224,7 +224,6 @@ export default function Home() {
       { key: "footer", render: () => (
         <View style={styles.footer} testID="home-footer">
           {c?.logo_url ? <Image source={{ uri: fileUrl(c.logo_url) }} style={{ width: 190, height: 64 }} contentFit="contain" cachePolicy="memory-disk" testID="clickbook-footer-logo" accessibilityLabel="ClickBook logo" /> : null}
-          <Text style={styles.tag}>Preserving memories</Text>
           <View style={styles.footerLinks}>
             {[["faq", "FAQ"], ["privacy", "Privacy"], ["terms", "Terms"], ["refund", "Refunds"], ["shipping", "Shipping"]].map(([k, l]) => (
               <Pressable key={k} onPress={() => router.push({ pathname: "/policy/[key]", params: { key: k } })} testID={`footer-${k}`} hitSlop={8}><Text style={styles.footerLink}>{l}</Text></Pressable>
