@@ -73,8 +73,8 @@ const styles = StyleSheet.create({
   inputRow: { flexDirection: "row", alignItems: "center", alignSelf: "stretch", marginTop: spacing.lg, borderWidth: 1, borderColor: colors.borderStrong, borderRadius: radius.pill, paddingHorizontal: spacing.lg, height: 52, backgroundColor: colors.surfaceSecondary },
   prefix: { fontFamily: fonts.text, fontSize: 16, color: colors.homeCharcoal, marginRight: spacing.sm, fontWeight: "600" },
   input: { flex: 1, fontFamily: fonts.text, fontSize: 16, color: colors.homeCharcoal, height: 52 },
-  button: { alignSelf: "stretch", marginTop: spacing.md, height: 52, borderRadius: radius.pill, backgroundColor: colors.homeMint, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: spacing.sm },
-  buttonText: { color: "#FFF", fontFamily: fonts.text, fontSize: 16, fontWeight: "700" },
+  button: { alignSelf: "stretch", marginTop: spacing.md, height: 56, borderRadius: radius.pill, backgroundColor: colors.homeMint, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: spacing.sm },
+  buttonText: { color: "#FFF", fontFamily: fonts.text, fontSize: 18, fontWeight: "700" },
   hint: { fontFamily: fonts.text, fontSize: 12, color: colors.muted, marginTop: spacing.sm },
   err: { fontFamily: fonts.text, fontSize: 13, color: colors.error, marginTop: spacing.sm, alignSelf: "flex-start" },
 });
