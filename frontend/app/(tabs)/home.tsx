@@ -278,7 +278,7 @@ export default function Home() {
         <View style={styles.headerInner}>
         <Pressable onPress={() => setMenu(true)} testID="home-menu" style={styles.iconBtn} hitSlop={8}><Feather name="menu" size={22} color={colors.homeCharcoal} /></Pressable>
         <View style={styles.headerLogoWrap} testID="clickbook-header-logo">
-          {c?.logo_url ? <Image source={{ uri: fileUrl(c.logo_url) }} style={{ width: Math.min(280, width - 120), height: isDesktop ? 76 : 60 }} contentFit="contain" cachePolicy="memory-disk" accessibilityLabel="ClickBook logo" /> : null}
+          {c?.logo_url ? <Image source={{ uri: fileUrl(c.logo_url) }} style={{ width: Math.min(224, (width - 120) * 0.8), height: isDesktop ? 61 : 48 }} contentFit="contain" cachePolicy="memory-disk" accessibilityLabel="ClickBook logo" /> : null}
         </View>
         <Pressable onPress={() => router.push(loggedIn ? "/notifications" : { pathname: "/(tabs)/home", params: { login: "1" } } as any)} testID="home-notifications-bell" style={styles.iconBtn} hitSlop={8}>
           <Feather name="bell" size={22} color={colors.homeCharcoal} />
