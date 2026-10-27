@@ -76,6 +76,7 @@ export default function Root({ children }: PropsWithChildren) {
 
         {/* PWA */}
         <link rel="manifest" href="/manifest.json" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <meta name="theme-color" content="#2B2B2E" />
         <meta name="application-name" content="ClickBook" />
         <meta name="mobile-web-app-capable" content="yes" />
