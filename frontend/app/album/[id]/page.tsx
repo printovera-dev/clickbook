@@ -327,16 +327,19 @@ export default function PageEditor() {
       const r = isCover
         ? await api.updateAlbum(String(id), { cover_design: { ...pageToCover(page, album.cover_design), style: coverKey } })
         : await api.updatePages(String(id), album.pages.map((p: Page, i: number) => (i === pageIndex ? page : p)));
-      // The editor can be opened directly from a URL, where router.back()
-      // may not return to the album preview. Navigate there explicitly after
-      // the save succeeds so Save & Preview always has a deterministic destination.
+      // Do not leave the editor unless the server confirms the cover was persisted.
+      if (isCover && !r?.album?.cover_design) {
+        throw new Error("The server did not confirm the cover save. Your edits are still on this screen; please retry.");
+      }
       qc.setQueryData(["album", id], r);
-      void qc.invalidateQueries({ queryKey: ["album", id] });
-      void qc.invalidateQueries({ queryKey: ["albums"] });
+      await qc.invalidateQueries({ queryKey: ["album", id] });
+      await qc.invalidateQueries({ queryKey: ["albums"] });
       // Preserve the edited location when returning from the page/cover editor.
       router.replace({ pathname: "/album/[id]/preview", params: { id: String(id), focusIndex: isCover ? "cover" : String(pageIndex) } });
     } catch (e: any) {
-      Alert.alert("Could not save", e?.message || "Please try again");
+      const message = e?.message || "Please try again";
+      if (Platform.OS === "web" && typeof window !== "undefined") window.alert(`Could not save: ${message}`);
+      else Alert.alert("Could not save", message);
     } finally { setSaving(false); }
   };
   const cancel = () => {
