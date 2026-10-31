@@ -324,13 +324,25 @@ export default function PageEditor() {
     if (!album || !page) return;
     setSaving(true);
     try {
+      const coverDesign = isCover
+        ? { ...pageToCover(page, album.cover_design), style: coverKey }
+        : null;
       const r = isCover
-        ? await api.updateAlbum(String(id), { cover_design: { ...pageToCover(page, album.cover_design), style: coverKey } })
+        ? await api.updateAlbum(String(id), { cover_design: coverDesign })
         : await api.updatePages(String(id), album.pages.map((p: Page, i: number) => (i === pageIndex ? page : p)));
+      // Read the album back from the server before leaving the editor. This
+      // catches a successful-looking request whose cover was not persisted.
+      const verified = await api.getAlbum(String(id));
+      if (isCover) {
+        const saved = verified?.album?.cover_design;
+        if (!saved || saved.photo_id !== coverDesign?.photo_id || saved.style !== coverDesign?.style) {
+          throw new Error("The cover changes were not confirmed as saved. Please try again.");
+        }
+      }
       // The editor can be opened directly from a URL, where router.back()
-      // may not return to the album preview. Navigate there explicitly after
-      // the save succeeds so Save & Preview always has a deterministic destination.
-      qc.setQueryData(["album", id], r);
+      // may not return to the album preview. Navigate there explicitly only
+      // after the server read-back confirms the edited cover/page.
+      qc.setQueryData(["album", id], verified);
       void qc.invalidateQueries({ queryKey: ["album", id] });
       void qc.invalidateQueries({ queryKey: ["albums"] });
       // Preserve the edited location when returning from the page/cover editor.
