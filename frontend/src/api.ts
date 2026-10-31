@@ -6,6 +6,23 @@ export const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
 
 export const TOKEN_KEY = "clickbook.customerToken";
 export const ADMIN_TOKEN_KEY = "clickbook.adminToken";
+export const PENDING_OTP_KEY = "clickbook.pendingOtp";
+
+// Store only the pending challenge metadata (never the OTP) so a browser reload
+// or app switch can resume verification without requesting another code.
+export async function setPendingOtp(challenge: { mobile: string; provider?: string; devHint?: string } | null) {
+  if (challenge?.mobile) await AsyncStorage.setItem(PENDING_OTP_KEY, JSON.stringify(challenge));
+  else await AsyncStorage.removeItem(PENDING_OTP_KEY);
+}
+
+export async function getPendingOtp(): Promise<{ mobile: string; provider?: string; devHint?: string } | null> {
+  const raw = await AsyncStorage.getItem(PENDING_OTP_KEY);
+  if (!raw) return null;
+  try {
+    const value = JSON.parse(raw);
+    return value && /^\\d{10}$/.test(String(value.mobile || "")) ? value : null;
+  } catch { return null; }
+}
 
 let _memToken: string | null = null;
 let _memAdminToken: string | null = null;
