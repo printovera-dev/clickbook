@@ -1,26 +1,45 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, TextInput, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Pressable } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { api, setToken } from "@/src/api";
+import { api, getPendingOtp, setPendingOtp, setToken } from "@/src/api";
 import { Button, s } from "@/src/ui";
 import { colors, fonts, spacing, radius } from "@/src/theme";
 
 export default function Verify() {
   const { mobile, provider, devHint } = useLocalSearchParams<{ mobile: string; provider?: string; devHint?: string }>();
+  const [challenge, setChallenge] = useState({ mobile: String(mobile || ""), provider: String(provider || ""), devHint: String(devHint || "") });
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  useEffect(() => {
+    let active = true;
+    if (mobile) {
+      const current = { mobile: String(mobile), provider: String(provider || ""), devHint: String(devHint || "") };
+      setChallenge(current);
+      void setPendingOtp(current);
+    } else {
+      getPendingOtp().then((pending) => {
+        if (active && pending) setChallenge({
+          mobile: pending.mobile, provider: pending.provider || "", devHint: pending.devHint || "",
+        });
+      }).catch(() => {});
+    }
+    return () => { active = false; };
+  }, [mobile, provider, devHint]);
+
   const verify = async () => {
     setErr("");
+    if (!challenge.mobile) return setErr("Your verification session expired. Please request a new passcode.");
     if (otp.length < 4) return setErr("Enter the 6-digit code");
     setLoading(true);
     try {
-      const res = await api.verifyOtp(String(mobile), otp);
+      const res = await api.verifyOtp(challenge.mobile, otp);
       await setToken(res.token);
+      await setPendingOtp(null);
       // Home tabs are already underneath (public landing) — pop back to them instead of mounting a second tabs tree.
       router.dismissTo("/(tabs)/home");
     } catch (e: any) {
@@ -31,7 +50,7 @@ export default function Verify() {
   };
 
   const resend = async () => {
-    try { await api.sendOtp(String(mobile), "whatsapp"); } catch {}
+    try { const r = await api.sendOtp(challenge.mobile, "whatsapp"); await setPendingOtp({ mobile: challenge.mobile, provider: r.provider || challenge.provider, devHint: r.dev_hint || "" }); } catch {}
   };
 
   return (
@@ -43,10 +62,10 @@ export default function Verify() {
           </Pressable>
           <Text style={[s.h1, { marginTop: spacing.xl }]}>Enter your passcode</Text>
           <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>
-            {provider === "mock" || !provider
-              ? <>Sent a 6-digit code to +91 {mobile}. Use <Text style={{ color: colors.brandPrimary }}>123456</Text> (demo).</>
+            {challenge.provider === "mock" || !challenge.provider
+              ? <>Sent a 6-digit code to +91 {challenge.mobile}. Use <Text style={{ color: colors.brandPrimary }}>123456</Text> (demo).</>
               : provider === "aoc" && devHint
-              ? <>WhatsApp template not delivered yet. Use <Text style={{ color: colors.brandPrimary }}>{devHint}</Text> to continue.</>
+              ? <>WhatsApp template not delivered yet. Use <Text style={{ color: colors.brandPrimary }}>{challenge.devHint}</Text> to continue.</>
               : provider === "aoc"
               ? <>We&apos;ve sent a 6-digit code to your WhatsApp on +91 {mobile}.</>
               : <>Sent a 6-digit code to +91 {mobile}.</>}
