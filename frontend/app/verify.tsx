@@ -1,14 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, TextInput, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Pressable } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { api, setToken } from "@/src/api";
+import { api, setToken, getPendingOtpSession, clearPendingOtpSession } from "@/src/api";
 import { Button, s } from "@/src/ui";
 import { colors, fonts, spacing, radius } from "@/src/theme";
 
 export default function Verify() {
   const { mobile, provider, devHint } = useLocalSearchParams<{ mobile: string; provider?: string; devHint?: string }>();
   const [otp, setOtp] = useState("");
+  const [restoredMobile, setRestoredMobile] = useState("");
+  const activeMobile = String(mobile || restoredMobile);
+
+  useEffect(() => {
+    if (mobile) return;
+    getPendingOtpSession().then((pending) => { if (pending?.mobile) setRestoredMobile(pending.mobile); }).catch(() => {});
+  }, [mobile]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const router = useRouter();
@@ -19,8 +26,9 @@ export default function Verify() {
     if (otp.length < 4) return setErr("Enter the 6-digit code");
     setLoading(true);
     try {
-      const res = await api.verifyOtp(String(mobile), otp);
+      const res = await api.verifyOtp(activeMobile, otp);
       await setToken(res.token);
+      await clearPendingOtpSession();
       // Home tabs are already underneath (public landing) — pop back to them instead of mounting a second tabs tree.
       router.dismissTo("/(tabs)/home");
     } catch (e: any) {
@@ -31,7 +39,7 @@ export default function Verify() {
   };
 
   const resend = async () => {
-    try { await api.sendOtp(String(mobile), "whatsapp"); } catch {}
+    try { await api.sendOtp(activeMobile, "whatsapp"); } catch {}
   };
 
   return (
@@ -44,7 +52,7 @@ export default function Verify() {
           <Text style={[s.h1, { marginTop: spacing.xl }]}>Enter your passcode</Text>
           <Text style={[s.bodyMuted, { marginTop: spacing.sm }]}>
             {provider === "mock" || !provider
-              ? <>Sent a 6-digit code to +91 {mobile}. Use <Text style={{ color: colors.brandPrimary }}>123456</Text> (demo).</>
+              ? <>Sent a 6-digit code to +91 {activeMobile}. Use <Text style={{ color: colors.brandPrimary }}>123456</Text> (demo).</>
               : provider === "aoc" && devHint
               ? <>WhatsApp template not delivered yet. Use <Text style={{ color: colors.brandPrimary }}>{devHint}</Text> to continue.</>
               : provider === "aoc"
