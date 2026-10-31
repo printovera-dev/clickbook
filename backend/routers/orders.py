@@ -10,7 +10,9 @@ from production import schedule_production_package
 from otp_provider import send_payment_confirmation
 import razorpay_provider as rzp
 
-router = APIRouter(tags=["orders"])\n\n
+router = APIRouter(tags=["orders"])
+
+
 _BAD_GIFT_TERMS = (
  "fuck","fucking","motherfucker","shit","bullshit","bitch","bastard","asshole","arsehole","dickhead","cunt",
  "chutiya","chutiye","chutia","bhenchod","behenchod","madarchod","madharchod","gaand","gand","bhosdi","bhosdike","bhosad","lund","lauda","lawda","randi","harami","kamina","kamine","kutti","kutte",
