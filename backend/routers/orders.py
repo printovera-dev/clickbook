@@ -10,7 +10,40 @@ from production import schedule_production_package
 from otp_provider import send_payment_confirmation
 import razorpay_provider as rzp
 
-router = APIRouter(tags=["orders"])
+router = APIRouter(tags=["orders"])\n\n
+_BAD_GIFT_TERMS = (
+ "fuck","fucking","motherfucker","shit","bullshit","bitch","bastard","asshole","arsehole","dickhead","cunt",
+ "chutiya","chutiye","chutia","bhenchod","behenchod","madarchod","madharchod","gaand","gand","bhosdi","bhosdike","bhosad","lund","lauda","lawda","randi","harami","kamina","kamine","kutti","kutte",
+ "चूतिया","चूतिये","भेनचोद","बहनचोद","मादरचोद","मदरचोद","भोसड़ी","भोसड़ीके","गांड","लंड","रंडी","हरामी","कमीना","कुत्ता",
+)
+def _compact_text(value: str) -> str:
+    import unicodedata
+    return "".join(ch for ch in unicodedata.normalize("NFKC", value or "").casefold() if ch.isalnum())
+
+def _contains_abusive_gift_note(value: str) -> bool:
+    compact = _compact_text(value)
+    return any(_compact_text(term) in compact for term in _BAD_GIFT_TERMS)
+
+def _validate_checkout_address(address: dict) -> None:
+    import re
+    name = str(address.get("name") or "").strip()
+    line1 = str(address.get("line1") or "").strip()
+    city = str(address.get("city") or "").strip()
+    state = str(address.get("state") or "").strip()
+    pin = str(address.get("pincode") or address.get("pin") or "").strip()
+    words = re.findall(r"[A-Za-z\u0900-\u097F]+", line1)
+    if len(name) < 2 or not any(ch.isalpha() for ch in name):
+        raise HTTPException(400, "Please enter a valid recipient name.")
+    if len(line1) < 15 or len(words) < 2 or (len(words) < 3 and not any(ch.isdigit() for ch in line1)):
+        raise HTTPException(400, "Please enter a complete delivery address with house/building details and a street or locality.")
+    if len(city) < 2 or not any(ch.isalpha() for ch in city):
+        raise HTTPException(400, "Please enter a valid city.")
+    if len(state) < 2 or not any(ch.isalpha() for ch in state):
+        raise HTTPException(400, "Please enter a valid state.")
+    if not re.fullmatch(r"\d{6}", pin):
+        raise HTTPException(400, "Please enter a valid 6-digit Indian PIN code.")
+
+
 
 
 class OrderCreate(BaseModel):
@@ -46,6 +79,12 @@ async def mark_order_paid(order: dict, payment_id: str, method: str, extra: Opti
 
 @router.post("/orders")
 async def create_order(payload: OrderCreate, customer: dict = Depends(get_current_customer)):
+    _validate_checkout_address(payload.address or {})
+    if payload.gift_wrap and payload.gift_note and _contains_abusive_gift_note(payload.gift_note):
+        raise HTTPException(400, "Please remove abusive or inappropriate language from the gift message.")
+    if payload.gift_wrap and len(payload.gift_note or "") > 160:
+        raise HTTPException(400, "Gift message must be 160 characters or fewer.")
+
     album = await db.albums.find_one({"id": payload.album_id, "customer_id": customer["id"]}, {"_id": 0})
     if not album:
         raise HTTPException(404, "Album not found")
