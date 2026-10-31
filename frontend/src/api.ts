@@ -6,6 +6,17 @@ export const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
 
 export const TOKEN_KEY = "clickbook.customerToken";
 export const ADMIN_TOKEN_KEY = "clickbook.adminToken";
+export const PENDING_OTP_KEY = "clickbook.pendingOtp";
+
+export async function savePendingOtpSession(session: { mobile: string; provider?: string; devHint?: string }) {
+  await AsyncStorage.setItem(PENDING_OTP_KEY, JSON.stringify(session));
+}
+export async function getPendingOtpSession(): Promise<{ mobile: string; provider?: string; devHint?: string } | null> {
+  const raw = await AsyncStorage.getItem(PENDING_OTP_KEY);
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { await AsyncStorage.removeItem(PENDING_OTP_KEY); return null; }
+}
+export async function clearPendingOtpSession() { await AsyncStorage.removeItem(PENDING_OTP_KEY); }
 
 let _memToken: string | null = null;
 let _memAdminToken: string | null = null;
@@ -204,8 +215,8 @@ export const api = {
         const blob = await resp.blob();
         file = new File([blob], filename, { type: blob.type || "image/jpeg" });
       }
-      if (typeof file.size === "number" && file.size > 20 * 1024 * 1024) {
-        throw new Error("File too large (max 20MB)");
+      if (typeof file.size === "number" && file.size > 50 * 1024 * 1024) {
+        throw new Error("File too large (max 50MB)");
       }
       fileBody = file;
       contentType = file.type || "image/jpeg";
@@ -213,7 +224,7 @@ export const api = {
       const { File: ExpoFile } = await import("expo-file-system");
       fileBody = new ExpoFile(uri);
       const size = Number((fileBody as any).size || 0);
-      if (size > 20 * 1024 * 1024) throw new Error("File too large (max 20MB)");
+      if (size > 50 * 1024 * 1024) throw new Error("File too large (max 50MB)");
       contentType = (fileBody as any).type || "image/jpeg";
     }
 
