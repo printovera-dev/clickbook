@@ -9,6 +9,17 @@ import { colors, spacing, radius, fonts } from "@/src/theme";
 import Feather from "@react-native-vector-icons/feather";
 import { RazorpayCheckout } from "@/src/components/razorpay-checkout";
 
+const INDIA_STATES_AND_UTS = [
+  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
+  "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka",
+  "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram",
+  "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
+  "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal",
+  "Andaman and Nicobar Islands", "Chandigarh", "Dadra and Nagar Haveli and Daman and Diu",
+  "Delhi", "Jammu and Kashmir", "Ladakh", "Lakshadweep", "Puducherry",
+] as const;
+
+
 export default function Checkout() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
@@ -27,6 +38,7 @@ export default function Checkout() {
   const [line1, setLine1] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
+  const [stateDropdownOpen, setStateDropdownOpen] = useState(false);
   const [pin, setPin] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -198,7 +210,24 @@ export default function Checkout() {
           <TextInput testID="checkout-line1-input" value={line1} onChangeText={setLine1} placeholder="Address" placeholderTextColor={colors.muted} style={styles.input} />
           <View style={{ flexDirection: "row", gap: spacing.md }}>
             <TextInput testID="checkout-city-input" value={city} onChangeText={setCity} placeholder="City" placeholderTextColor={colors.muted} style={[styles.input, { flex: 1 }]} />
-            <TextInput testID="checkout-state-input" value={state} onChangeText={setState} placeholder="State" placeholderTextColor={colors.muted} style={[styles.input, { flex: 1 }]} />
+            <View style={{ flex: 1 }}>
+              <Pressable testID="checkout-state-input" accessibilityRole="button" accessibilityLabel="Select state or union territory" accessibilityState={{ expanded: stateDropdownOpen }} onPress={() => setStateDropdownOpen((open) => !open)} style={[styles.input, styles.stateSelect]}>
+                <Text style={{ color: state ? colors.onSurface : colors.muted, fontFamily: fonts.text, fontSize: 15, flex: 1 }}>{state || "Select state"}</Text>
+                <Feather name={stateDropdownOpen ? "chevron-up" : "chevron-down"} size={18} color={colors.muted} />
+              </Pressable>
+              {stateDropdownOpen ? (
+                <View testID="checkout-state-options" style={styles.stateOptions}>
+                  <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                    {INDIA_STATES_AND_UTS.map((item) => (
+                      <Pressable key={item} testID={"checkout-state-option-" + item} onPress={() => { setState(item); setStateDropdownOpen(false); }} style={styles.stateOption}>
+                        <Text style={{ color: colors.onSurface, fontFamily: fonts.text }}>{item}</Text>
+                        {state === item ? <Feather name="check" size={16} color={colors.brandPrimary} /> : null}
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                </View>
+              ) : null}
+            </View>
           </View>
           <TextInput testID="checkout-pin-input" value={pin} onChangeText={setPin} placeholder="PIN code" placeholderTextColor={colors.muted} keyboardType="number-pad" maxLength={6} style={styles.input} />
 
@@ -246,6 +275,9 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 6 },
   input: { marginTop: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, fontSize: 15, fontFamily: fonts.text, color: colors.onSurface, backgroundColor: colors.surfaceSecondary },
   couponRow: { flexDirection: "row", marginTop: spacing.sm, gap: spacing.md },
+  stateSelect: { flexDirection: "row", alignItems: "center", minHeight: 48 },
+  stateOptions: { position: "absolute", top: 54, left: 0, right: 0, maxHeight: 230, zIndex: 30, elevation: 8, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, overflow: "hidden" },
+  stateOption: { minHeight: 42, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   couponInput: { flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, fontFamily: fonts.text, color: colors.onSurface, backgroundColor: colors.surfaceSecondary, letterSpacing: 1 },
   applyBtn: { justifyContent: "center", paddingHorizontal: spacing.lg, borderWidth: 1, borderColor: colors.brandPrimary, borderRadius: radius.md },
   giftCard: { flexDirection: "row", alignItems: "center", marginTop: spacing.xl, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surfaceSecondary },
