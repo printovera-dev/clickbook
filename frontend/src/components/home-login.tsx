@@ -1,10 +1,10 @@
 // Inline sign-in block for the home page. Reuses the existing WhatsApp OTP flow (POST /auth/otp/send → /verify).
 // When the customer is already signed in it becomes the "Start Making Your ClickBook" CTA.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import Feather from "@react-native-vector-icons/feather";
-import { api } from "@/src/api";
+import { api, getPendingOtpSession, savePendingOtpSession } from "@/src/api";
 import { colors, fonts, radius, spacing } from "@/src/theme";
 
 export function HomeLogin({ title, accent, subtitle, loggedIn, testID, compact }: {
@@ -15,13 +15,25 @@ export function HomeLogin({ title, accent, subtitle, loggedIn, testID, compact }
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
+  useEffect(() => {
+    let active = true;
+    getPendingOtpSession().then((pending) => {
+      if (active && pending?.mobile) {
+        router.replace({ pathname: "/verify", params: { mobile: pending.mobile, provider: pending.provider || "aoc", devHint: pending.devHint || "" } });
+      }
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [router]);
+
   const send = async () => {
     const m = mobile.replace(/\D/g, "");
     if (m.length !== 10) { setErr("Enter your 10-digit mobile number"); return; }
     setErr(""); setBusy(true);
     try {
       const r = await api.sendOtp(m, "whatsapp");
-      router.push({ pathname: "/verify", params: { mobile: m, provider: r.provider || "mock", devHint: r.dev_hint || "" } });
+      const session = { mobile: m, provider: r.provider || "mock", devHint: r.dev_hint || "" };
+      await savePendingOtpSession(session);
+      router.push({ pathname: "/verify", params: { mobile: m, provider: session.provider, devHint: session.devHint } });
     } catch (e: any) {
       setErr(e.message || "Could not send passcode");
     } finally { setBusy(false); }
