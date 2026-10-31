@@ -67,6 +67,30 @@ export default function Checkout() {
 
   const placeOrder = async () => {
     setErr("");
+    const addressWords = line1.trim().split(/[\\s,]+/).filter(Boolean);
+    const hasLetters = (value: string) => /[A-Za-z\\u0900-\\u097F]/.test(value);
+    if (name.trim().length < 2 || !hasLetters(name)) {
+      setErr("Please enter a valid recipient name."); return;
+    }
+    if (line1.trim().length < 15 || addressWords.length < 2 || (addressWords.length < 3 && !/\\d/.test(line1))) {
+      setErr("Please enter a complete address with house/building details and street or locality."); return;
+    }
+    if (city.trim().length < 2 || !hasLetters(city)) {
+      setErr("Please enter a valid city."); return;
+    }
+    if (state.trim().length < 2 || !hasLetters(state)) {
+      setErr("Please enter a valid state."); return;
+    }
+    if (!/^\\d{6}$/.test(pin.trim())) {
+      setErr("Please enter a valid 6-digit Indian PIN code."); return;
+    }
+    if (giftWrap && giftNote.trim().length > 0) {
+      const normalized = giftNote.normalize("NFKC").toLocaleLowerCase().replace(/[^a-z0-9\\u0900-\\u097f]/g, "");
+      const blocked = ["fuck","fucking","motherfucker","shit","bullshit","bitch","bastard","asshole","arsehole","dickhead","cunt","chutiya","chutiye","chutia","bhenchod","behenchod","madarchod","madharchod","gaand","gand","bhosdi","bhosdike","bhosad","lund","lauda","lawda","randi","harami","kamina","kamine","kutti","kutte","चूतिया","चूतिये","भेनचोद","बहनचोद","मादरचोद","मदरचोद","भोसड़ी","भोसड़ीके","गांड","लंड","रंडी","हरामी","कमीना","कुत्ता"];
+      if (blocked.some(word => normalized.includes(word.replace(/[^a-z0-9\\u0900-\\u097f]/g, "")))) {
+        setErr("Please remove abusive or inappropriate language from the gift message."); return;
+      }
+    }
     if (!name || !line1 || !city || !state || !pin) {
       setErr("Please fill your name and address");
       return;
