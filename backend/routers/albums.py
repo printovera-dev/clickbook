@@ -6,7 +6,7 @@ from typing import List, Optional, Any, Dict
 from core import db, now_utc, now_iso, new_id, get_current_customer, get_settings_doc
 from storage_manager import save_original, public_url, create_presigned_upload, finalize_presigned_upload
 from routers.catalog import with_thumbnails
-from design import STYLE_RHYTHMS, DEFAULT_STYLE, default_transform, default_cover_design
+from design import STYLE_RHYTHMS, DEFAULT_STYLE, COVER_STYLES, default_transform, default_cover_design
 
 router = APIRouter(tags=["albums"])
 
@@ -169,11 +169,30 @@ async def update_album(album_id: str, payload: AlbumUpdate, customer: dict = Dep
     if "cover_design" in update:
         cover_style = (update["cover_design"] or {}).get("style")
         if cover_style:
+            # Prefer the stable style key. Older/admin-created catalogue entries may
+            # have the correct visible name but no style key because the admin form
+            # intentionally edits only name, description, image, active and order.
             matching_cover = await db.covers.find_one(
                 {"style": cover_style, "active": True}, {"_id": 0}
             )
+            if not matching_cover and cover_style in COVER_STYLES:
+                canonical_name = COVER_STYLES[cover_style]["name"]
+                matching_cover = await db.covers.find_one(
+                    {"name": canonical_name, "active": True}, {"_id": 0}
+                )
+                if matching_cover:
+                    # Repair the legacy catalogue record so future lookups use its
+                    # canonical key. Do not create a duplicate or overwrite its image.
+                    await db.covers.update_one(
+                        {"id": matching_cover["id"]}, {"$set": {"style": cover_style}}
+                    )
+                    matching_cover["style"] = cover_style
             if not matching_cover:
-                raise HTTPException(400, "That cover style is not currently available.")
+                raise HTTPException(
+                    400,
+                    f"The active '{COVER_STYLES.get(cover_style, {}).get('name', cover_style)}' cover "
+                    "is missing from the catalogue. Check Admin → Covers.",
+                )
             update["cover_id"] = matching_cover["id"]
             update["cover_snapshot"] = (await with_thumbnails([matching_cover]))[0]
     if update:
