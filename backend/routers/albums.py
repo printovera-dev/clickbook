@@ -10,7 +10,7 @@ from design import STYLE_RHYTHMS, DEFAULT_STYLE, default_transform, default_cove
 
 router = APIRouter(tags=["albums"])
 
-MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 ALLOWED_EXT = (".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif")
 
 
@@ -258,7 +258,7 @@ async def upload_photo(album_id: str, file: UploadFile = File(...), customer: di
     _ensure_locked(await _owned_album(album_id, customer))
     data = await file.read()
     if len(data) > MAX_UPLOAD_BYTES:
-        raise HTTPException(400, "File too large (max 20MB)")
+        raise HTTPException(400, "File too large (max 50MB)")
     filename = file.filename or "photo.jpg"
     if not filename.lower().endswith(ALLOWED_EXT):
         raise HTTPException(400, "Unsupported file type")
