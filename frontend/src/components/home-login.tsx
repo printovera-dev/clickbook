@@ -1,10 +1,10 @@
 // Inline sign-in block for the home page. Reuses the existing WhatsApp OTP flow (POST /auth/otp/send → /verify).
 // When the customer is already signed in it becomes the "Start Making Your ClickBook" CTA.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import Feather from "@react-native-vector-icons/feather";
-import { api } from "@/src/api";
+import { api, getPendingOtp, setPendingOtp } from "@/src/api";
 import { colors, fonts, radius, spacing } from "@/src/theme";
 
 export function HomeLogin({ title, accent, subtitle, loggedIn, testID, compact }: {
@@ -15,12 +15,27 @@ export function HomeLogin({ title, accent, subtitle, loggedIn, testID, compact }
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
+  // If Chrome discarded the tab while the customer was reading WhatsApp,
+  // resume the still-valid OTP challenge instead of asking for a new code.
+  useEffect(() => {
+    let active = true;
+    getPendingOtp().then((pending) => {
+      if (!active || !pending || loggedIn) return;
+      router.replace({ pathname: "/verify", params: {
+        mobile: pending.mobile, provider: pending.provider || "aoc",
+        devHint: pending.devHint || "",
+      } });
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [loggedIn, router]);
+
   const send = async () => {
     const m = mobile.replace(/\D/g, "");
     if (m.length !== 10) { setErr("Enter your 10-digit mobile number"); return; }
     setErr(""); setBusy(true);
     try {
       const r = await api.sendOtp(m, "whatsapp");
+      await setPendingOtp({ mobile: m, provider: r.provider || "mock", devHint: r.dev_hint || "" });
       router.push({ pathname: "/verify", params: { mobile: m, provider: r.provider || "mock", devHint: r.dev_hint || "" } });
     } catch (e: any) {
       setErr(e.message || "Could not send passcode");
