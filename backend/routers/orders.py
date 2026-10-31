@@ -13,6 +13,45 @@ import razorpay_provider as rzp
 router = APIRouter(tags=["orders"])
 
 
+INDIA_STATES_AND_UTS = {
+    "Andhra Pradesh",
+    "Arunachal Pradesh",
+    "Assam",
+    "Bihar",
+    "Chhattisgarh",
+    "Goa",
+    "Gujarat",
+    "Haryana",
+    "Himachal Pradesh",
+    "Jharkhand",
+    "Karnataka",
+    "Kerala",
+    "Madhya Pradesh",
+    "Maharashtra",
+    "Manipur",
+    "Meghalaya",
+    "Mizoram",
+    "Nagaland",
+    "Odisha",
+    "Punjab",
+    "Rajasthan",
+    "Sikkim",
+    "Tamil Nadu",
+    "Telangana",
+    "Tripura",
+    "Uttar Pradesh",
+    "Uttarakhand",
+    "West Bengal",
+    "Andaman and Nicobar Islands",
+    "Chandigarh",
+    "Dadra and Nagar Haveli and Daman and Diu",
+    "Delhi",
+    "Jammu and Kashmir",
+    "Ladakh",
+    "Lakshadweep",
+    "Puducherry",
+}
+
 _BAD_GIFT_TERMS = (
  "fuck","fucking","motherfucker","shit","bullshit","bitch","bastard","asshole","arsehole","dickhead","cunt",
  "chutiya","chutiye","chutia","bhenchod","behenchod","madarchod","madharchod","gaand","gand","bhosdi","bhosdike","bhosad","lund","lauda","lawda","randi","harami","kamina","kamine","kutti","kutte",
@@ -40,8 +79,8 @@ def _validate_checkout_address(address: dict) -> None:
         raise HTTPException(400, "Please enter a complete delivery address with house/building details and a street or locality.")
     if len(city) < 2 or not any(ch.isalpha() for ch in city):
         raise HTTPException(400, "Please enter a valid city.")
-    if len(state) < 2 or not any(ch.isalpha() for ch in state):
-        raise HTTPException(400, "Please enter a valid state.")
+    if state not in INDIA_STATES_AND_UTS:
+        raise HTTPException(400, "Please select a valid Indian state or union territory from the list.")
     if not re.fullmatch(r"\d{6}", pin):
         raise HTTPException(400, "Please enter a valid 6-digit Indian PIN code.")
 
