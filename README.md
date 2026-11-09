@@ -30,3 +30,6 @@ Web client: `cd frontend && npx expo export -p web` → copy `dist/` into the ng
 - `albums.cover_design {style, photo_id, image, frame, background, texts}`, `albums.design_style`, `albums.locked` (after payment)
 - `design_versions` kinds: auto / edit / cover / approved; `orders.album_snapshot` = frozen production design; `orders.album_name` = "Cover Title / dd-mm-yyyy" or "Client / dd-mm-yyyy"
 - Files: `storage/clickbook/customers/{cid}/albums/{aid}/{originals,thumbnails,previews,print,pdf}` — Mongo stores paths only
+
+
+<!-- Deployment refresh check: 2026-11-09 -->
